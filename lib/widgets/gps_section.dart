@@ -15,6 +15,8 @@ class GpsSection extends StatefulWidget {
   final Map<String, double>? target;
   final List<LogItem> logItems;
   final double magneticDeclination;
+  final VoidCallback onClearTarget;
+  final VoidCallback onClearWaypoint;
 
   const GpsSection({
     super.key,
@@ -28,6 +30,8 @@ class GpsSection extends StatefulWidget {
     required this.target,
     required this.logItems,
     required this.magneticDeclination,
+    required this.onClearTarget,
+    required this.onClearWaypoint,
   });
 
   @override
@@ -164,66 +168,76 @@ class _GpsSectionState extends State<GpsSection> {
     if (widget.distanceToTarget.value == null || widget.target == null) {
       return const SizedBox(height: minH);
     }
-    return ValueListenableBuilder<double?>(
-      valueListenable: widget.distanceToTarget,
-      builder: (context, dist, _) {
-        return ValueListenableBuilder<double?>(
-          valueListenable: widget.bearingToTarget,
-          builder: (context, bear, _) {
-            if (bear == null || dist == null) return const SizedBox(height: minH);
-            final distText =
-                dist > 1000 ? '${(dist / 1000).toStringAsFixed(2)} km' : '${dist.round()} m';
-            final text =
-                'ДО ЦЕЛИ: -> $distText, ${bear.round().toString()}°';
-            return Container(
-              height: minH,
-              alignment: Alignment.center,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  text,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(color: Colors.blueAccent, fontWeight: FontWeight.bold),
-                ),
-              ),
-            );
-          },
-        );
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        widget.onClearTarget();
       },
+      child: ValueListenableBuilder<double?>(
+        valueListenable: widget.distanceToTarget,
+        builder: (context, dist, _) {
+          return ValueListenableBuilder<double?>(
+            valueListenable: widget.bearingToTarget,
+            builder: (context, bear, _) {
+              if (bear == null || dist == null) return const SizedBox(height: minH);
+              final distText = 
+                  dist > 1000 ? '${(dist / 1000).toStringAsFixed(2)} km' : '${dist.round()} m';
+              final text =
+                  'ДО ЦЕЛИ: -> $distText, ${bear.round().toString()}°';
+              return Container(
+                height: minH,
+                alignment: Alignment.center,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    text,
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineSmall
+                        ?.copyWith(color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
   Widget _buildWaypointInfo() {
     const minH = 48.0;
     if (widget.waypoint == null) return const SizedBox(height: minH);
-    return ValueListenableBuilder<double?>(
-      valueListenable: widget.distanceToWaypoint,
-      builder: (context, dist, _) {
-        return ValueListenableBuilder<double?>(
-          valueListenable: widget.bearingToWaypoint,
-          builder: (context, bear, _) {
-            if (dist == null || bear == null) return const SizedBox(height: minH);
-            final n = widget.logItems.whereType<LogEntry>().length + 1;
-            final distText =
-                dist > 1000 ? '${(dist / 1000).toStringAsFixed(2)} km' : '${dist.round()} m';
-            final text = 'ОТ КП$n: -> $distText, ${bear.round()}°';
-            return Container(
-              height: minH,
-              alignment: Alignment.center,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(text,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall
-                        ?.copyWith(color: Colors.orange, fontWeight: FontWeight.bold)),
-              ),
-            );
-          },
-        );
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        widget.onClearWaypoint();
       },
+      child: ValueListenableBuilder<double?>(
+        valueListenable: widget.distanceToWaypoint,
+        builder: (context, dist, _) {
+          return ValueListenableBuilder<double?>(
+            valueListenable: widget.bearingToWaypoint,
+            builder: (context, bear, _) {
+              if (dist == null || bear == null) return const SizedBox(height: minH);
+              final n = widget.logItems.whereType<LogEntry>().length + 1;
+              final distText =
+                  dist > 1000 ? '${(dist / 1000).toStringAsFixed(2)} km' : '${dist.round()} m';
+              final text = 'ОТ КП$n: -> $distText, ${bear.round()}°';
+              return Container(
+                height: minH,
+                alignment: Alignment.center,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(text,
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(color: Colors.orange, fontWeight: FontWeight.bold)),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

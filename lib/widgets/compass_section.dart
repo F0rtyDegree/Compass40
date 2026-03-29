@@ -37,7 +37,6 @@ class CompassSection extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: setWaypoint,
-      onLongPress: clearWaypoint,
       onVerticalDragEnd: onVerticalDragEnd,
       child: ValueListenableBuilder<double>(
         valueListenable: headingNotifier,

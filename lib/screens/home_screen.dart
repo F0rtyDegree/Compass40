@@ -247,15 +247,12 @@ class _MyHomePageState extends State<MyHomePage> {
       return; 
     }
 
-    // Загружаем актуальный список логов
     await _loadLogEntries();
 
-    // Находим последнюю "незавершенную" запись (КП, для которой еще не посчитали дистанцию)
     final lastIncompleteEntry = _logItems.lastWhereOrNull(
       (item) => item is LogEntry && item.distance == null
     ) as LogEntry?;
 
-    // Если такая запись есть, "завершаем" ее
     if (lastIncompleteEntry != null) {
       final distance = calculateDistance(
         lastIncompleteEntry.latitude,
@@ -269,12 +266,10 @@ class _MyHomePageState extends State<MyHomePage> {
         currentGpsData.latitude!,
         currentGpsData.longitude!,
       );
-      // Пересчитываем в магнитный азимут для сохранения
       lastIncompleteEntry.distance = distance;
       lastIncompleteEntry.bearing = (bearing - _magneticDeclination + 360) % 360;
     }
 
-    // Создаем НОВУЮ "незавершенную" запись для ТЕКУЩЕЙ точки
     final existingTrackEntries = _logItems.whereType<LogEntry>();
     final newId = existingTrackEntries.isEmpty
         ? 1
@@ -284,20 +279,17 @@ class _MyHomePageState extends State<MyHomePage> {
       id: newId,
       latitude: currentGpsData.latitude!,
       longitude: currentGpsData.longitude!,
-      // distance и bearing остаются null, т.к. это новая точка
     );
     
     setState(() {
       _logItems.add(newEntry);
-      _waypoint = currentGpsData; // Обновляем _waypoint для UI
+      _waypoint = currentGpsData;
     });
 
-    // Сохраняем весь обновленный список логов
     await _saveLogEntries();
   }
 
   Future<void> _clearWaypoint() async {
-    // Эта функция теперь удаляет последнюю созданную, но не завершенную точку.
     await _loadLogEntries();
     final lastIncompleteEntry = _logItems.lastWhereOrNull(
       (item) => item is LogEntry && item.distance == null
@@ -306,7 +298,6 @@ class _MyHomePageState extends State<MyHomePage> {
     if (lastIncompleteEntry != null) {
       setState(() {
         _logItems.remove(lastIncompleteEntry);
-        // Обновляем _waypoint на предпоследнюю точку или null
         final previousEntry = _logItems.lastWhereOrNull((item) => item is LogEntry) as LogEntry?;
         if (previousEntry != null) {
             _waypoint = GpsData(latitude: previousEntry.latitude, longitude: previousEntry.longitude);
@@ -318,7 +309,6 @@ class _MyHomePageState extends State<MyHomePage> {
       });
       await _saveLogEntries();
     } else {
-       // Если незавершенных нет, просто чистим UI
        setState(() {
         _waypoint = null;
         _distanceToWaypoint.value = null;
@@ -327,7 +317,14 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
   
-  // Функция для логгирования создания цели, если понадобится
+  void _clearTarget() {
+    setState(() {
+      _target = null;
+      _distanceToTarget.value = null;
+      _bearingToTarget.value = null;
+    });
+  }
+
   Future<void> _addTargetCreationLogEntry({
     required double baseLatitude,
     required double baseLongitude,
@@ -521,6 +518,8 @@ class _MyHomePageState extends State<MyHomePage> {
             target: _target,
             logItems: _logItems,
             magneticDeclination: _magneticDeclination,
+            onClearTarget: _clearTarget,
+            onClearWaypoint: _clearWaypoint, 
           ),
         ],
       ),
