@@ -40,6 +40,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _uiUpdatePeriodController.text =
           (prefs.getInt('uiUpdatePeriod') ?? 250).toString();
       _smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
+      if (_smoothingFactor < 0.01) {
+        _smoothingFactor = 0.01;
+      }
+      if (_smoothingFactor > 0.99) {
+        _smoothingFactor = 0.99;
+      }
     });
   }
 
@@ -211,9 +217,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               Slider(
                 value: _smoothingFactor,
-                min: 0.0,
-                max: 1.0,
-                divisions: 100,
+                min: 0.01,
+                max: 0.99,
+                divisions: 98,
                 label: _smoothingFactor.toStringAsFixed(2),
                 onChanged: (value) {
                   setState(() {
