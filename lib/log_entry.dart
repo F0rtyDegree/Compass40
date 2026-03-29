@@ -59,15 +59,15 @@ class LogEntry extends LogItem {
   final int id;
   final double latitude;
   final double longitude;
-  final double distance;
-  final double bearing;
+  double? distance;
+  double? bearing;
 
   LogEntry({
     required this.id,
     required this.latitude,
     required this.longitude,
-    required this.distance,
-    required this.bearing,
+    this.distance,
+    this.bearing,
   }) : super(type: 'track');
 
   @override

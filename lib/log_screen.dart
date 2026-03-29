@@ -44,7 +44,6 @@ class _LogScreenState extends State<LogScreen> {
         textToCopy =
             '${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
       }
-      // ✅ Используем entry.id вместо timestamp
       entryId = entry.id;
       entryType = 'target';
     }
@@ -81,8 +80,12 @@ class _LogScreenState extends State<LogScreen> {
     if (entry is LogEntry) {
       final isCopied =
           entry.id == _copiedEntryId && _copiedEntryType == 'track';
+      // --- Исправлено --- 
+      final distanceText = entry.distance != null ? '${entry.distance!.round()}m' : '--m';
+      final bearingText = entry.bearing != null ? '${entry.bearing!.round()}°' : '--°';
       final text =
-          '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} ${entry.distance.round()}m ${entry.bearing.round()}°';
+          '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
+      // --- Конец исправления ---
       return InkWell(
         onTap: () => _handleTap(entry),
         child: AnimatedContainer(
@@ -100,7 +103,6 @@ class _LogScreenState extends State<LogScreen> {
         ),
       );
     } else if (entry is TargetCreationLogEntry) {
-      // ✅ Используем entry.id для сравнения
       final isStartCopied =
           entry.id == _copiedEntryId &&
           _copiedEntryType == 'target' &&

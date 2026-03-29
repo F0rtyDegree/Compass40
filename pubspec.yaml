@@ -1,7 +1,7 @@
 name: compass40
 description: "Compass 40°"
 publish_to: 'none'
-version: 2.3.6
+version: 2.3.7
 environment:
   sdk: ^3.9.0
 
@@ -19,6 +19,7 @@ dependencies:
   shared_preferences: ^2.5.4
   provider: ^6.1.5+1
   package_info_plus: ^9.0.0
+  collection: ^1.19.1
 
 dev_dependencies:
   flutter_test:

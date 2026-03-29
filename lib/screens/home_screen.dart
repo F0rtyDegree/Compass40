@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:developer' as developer;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:collection/collection.dart';
 
 import '../about_screen.dart';
 import '../settings_screen.dart';
@@ -69,8 +70,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // ----------------------------------------------------------------------
   // ----------------------- МАГНИТНАЯ СИСТЕМА ----------------------------
-  // Компас и азимуты работают в магнитных градусах.
-  // Перевод в истинные выполняется ТОЛЬКО при расчётах координат цели.
   // ----------------------------------------------------------------------
 
   void _startUiUpdateTimer() {
@@ -105,7 +104,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _filteredHeading += _smoothingFactor * diff;
     _filteredHeading = (_filteredHeading + 360) % 360;
 
-    _headingNotifier.value = _filteredHeading; // магнитный heading
+    _headingNotifier.value = _filteredHeading;
   }
 
   Future<void> _loadAllSettings() async {
@@ -171,7 +170,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   // ----------------------------------------------------------------------
-  // Расчёты навигации (магнитная система)
+  // Расчёты навигации
   // ----------------------------------------------------------------------
 
   void _calculateWaypointData() {
@@ -184,9 +183,9 @@ class _MyHomePageState extends State<MyHomePage> {
       nowData.longitude!,
    );
     final trueBearing = calculateTrueBearing(
-      _waypoint!.latitude!,     // ОТ КП
+      _waypoint!.latitude!,
       _waypoint!.longitude!,
-      nowData.latitude!,        // НА текущую
+      nowData.latitude!,
       nowData.longitude!,
     );
     _bearingToWaypoint.value = (trueBearing - _magneticDeclination + 360) % 360;
@@ -212,45 +211,29 @@ class _MyHomePageState extends State<MyHomePage> {
 
 
   // ----------------------------------------------------------------------
-  // --- Работа с логами и контрольными точками ---------------------------
+  // --- Работа с логами и контрольными точками --------------------------
   // ----------------------------------------------------------------------
 
   Future<void> _loadLogEntries() async {
     final prefs = await SharedPreferences.getInstance();
     final String? logJson = prefs.getString('log_items');
-    if (!mounted) return;
-    setState(() {
-      if (logJson != null) {
-        final List<dynamic> decodedList = jsonDecode(logJson);
-        _logItems = decodedList.map((e) => logItemFromJson(e)).toList();
-      } else {
-        _logItems = [];
-      }
-    });
+    if (mounted) {
+      setState(() {
+        if (logJson != null) {
+          try {
+            final List<dynamic> decodedList = jsonDecode(logJson);
+            _logItems = decodedList.map((e) => logItemFromJson(e)).toList();
+          } catch (e) {
+            _logItems = [];
+          }
+        } else {
+          _logItems = [];
+        }
+      });
+    }
   }
 
-  Future<void> _addTrackPointLogEntry(
-    double distance,
-    double bearing,
-    GpsData previousPoint,
-  ) async {
-    await _loadLogEntries();
-    final newId = _logItems.whereType<LogEntry>().isNotEmpty
-        ? _logItems.whereType<LogEntry>().map((e) => e.id).reduce(math.max) + 1
-        : 1;
-
-    final entry = LogEntry(
-      id: newId,
-      latitude: previousPoint.latitude!,
-      longitude: previousPoint.longitude!,
-      distance: distance,
-      bearing: bearing,
-    );
-
-    setState(() {
-      _logItems.add(entry);
-    });
-
+  Future<void> _saveLogEntries() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'log_items',
@@ -258,6 +241,93 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  Future<void> _setWaypoint() async {
+    final currentGpsData = _gpsDataNotifier.value;
+    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
+      return; 
+    }
+
+    // Загружаем актуальный список логов
+    await _loadLogEntries();
+
+    // Находим последнюю "незавершенную" запись (КП, для которой еще не посчитали дистанцию)
+    final lastIncompleteEntry = _logItems.lastWhereOrNull(
+      (item) => item is LogEntry && item.distance == null
+    ) as LogEntry?;
+
+    // Если такая запись есть, "завершаем" ее
+    if (lastIncompleteEntry != null) {
+      final distance = calculateDistance(
+        lastIncompleteEntry.latitude,
+        lastIncompleteEntry.longitude,
+        currentGpsData.latitude!,
+        currentGpsData.longitude!,
+      );
+      final bearing = calculateTrueBearing(
+        lastIncompleteEntry.latitude,
+        lastIncompleteEntry.longitude,
+        currentGpsData.latitude!,
+        currentGpsData.longitude!,
+      );
+      // Пересчитываем в магнитный азимут для сохранения
+      lastIncompleteEntry.distance = distance;
+      lastIncompleteEntry.bearing = (bearing - _magneticDeclination + 360) % 360;
+    }
+
+    // Создаем НОВУЮ "незавершенную" запись для ТЕКУЩЕЙ точки
+    final existingTrackEntries = _logItems.whereType<LogEntry>();
+    final newId = existingTrackEntries.isEmpty
+        ? 1
+        : existingTrackEntries.map((e) => e.id).reduce(math.max) + 1;
+
+    final newEntry = LogEntry(
+      id: newId,
+      latitude: currentGpsData.latitude!,
+      longitude: currentGpsData.longitude!,
+      // distance и bearing остаются null, т.к. это новая точка
+    );
+    
+    setState(() {
+      _logItems.add(newEntry);
+      _waypoint = currentGpsData; // Обновляем _waypoint для UI
+    });
+
+    // Сохраняем весь обновленный список логов
+    await _saveLogEntries();
+  }
+
+  Future<void> _clearWaypoint() async {
+    // Эта функция теперь удаляет последнюю созданную, но не завершенную точку.
+    await _loadLogEntries();
+    final lastIncompleteEntry = _logItems.lastWhereOrNull(
+      (item) => item is LogEntry && item.distance == null
+    );
+
+    if (lastIncompleteEntry != null) {
+      setState(() {
+        _logItems.remove(lastIncompleteEntry);
+        // Обновляем _waypoint на предпоследнюю точку или null
+        final previousEntry = _logItems.lastWhereOrNull((item) => item is LogEntry) as LogEntry?;
+        if (previousEntry != null) {
+            _waypoint = GpsData(latitude: previousEntry.latitude, longitude: previousEntry.longitude);
+        } else {
+            _waypoint = null;
+        }
+        _distanceToWaypoint.value = null;
+        _bearingToWaypoint.value = null;
+      });
+      await _saveLogEntries();
+    } else {
+       // Если незавершенных нет, просто чистим UI
+       setState(() {
+        _waypoint = null;
+        _distanceToWaypoint.value = null;
+        _bearingToWaypoint.value = null;
+      });
+    }
+  }
+  
+  // Функция для логгирования создания цели, если понадобится
   Future<void> _addTargetCreationLogEntry({
     required double baseLatitude,
     required double baseLongitude,
@@ -284,39 +354,9 @@ class _MyHomePageState extends State<MyHomePage> {
       targetLongitude: targetLongitude,
     );
     setState(() => _logItems.add(entry));
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'log_items',
-      jsonEncode(_logItems.map((e) => e.toJson()).toList()),
-    );
+    await _saveLogEntries();
   }
 
-  void _setWaypoint() {
-    final data = _gpsDataNotifier.value;
-    if (data.latitude == null || data.longitude == null) return;
-
-    if (_waypoint == null) {
-      setState(() => _waypoint = data);
-    } else {
-      if (_distanceToWaypoint.value != null && _bearingToWaypoint.value != null) {
-        _addTrackPointLogEntry(
-          _distanceToWaypoint.value!,
-          _bearingToWaypoint.value!,
-          _waypoint!,
-        );
-      }
-      setState(() => _waypoint = data);
-    }
-  }
-
-  void _clearWaypoint() {
-    setState(() {
-      _waypoint = null;
-      _distanceToWaypoint.value = null;
-      _bearingToWaypoint.value = null;
-    });
-  }
 
   // ----------------------------------------------------------------------
   // --- Сервисная информация и цвета ------------------------------------
@@ -427,7 +467,6 @@ class _MyHomePageState extends State<MyHomePage> {
                   MaterialPageRoute(builder: (c) => LogScreen(logItems: _logItems)),
                 ).then((_) => _loadLogEntries());
               } else if (details.primaryVelocity! > 0) {
-                // запуск TargetScreen
                 _targetCalculationStartPoint = _gpsDataNotifier.value;
                 final result = await Navigator.push<Map<String, dynamic>>(
                   context,
