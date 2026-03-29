@@ -168,10 +168,11 @@ class _GpsSectionState extends State<GpsSection> {
     if (widget.distanceToTarget.value == null || widget.target == null) {
       return const SizedBox(height: minH);
     }
-    return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        widget.onClearTarget();
-      },
+    return Dismissible(
+      key: const Key('target_info'),
+      onDismissed: (direction) => widget.onClearTarget(),
+      background: Container(color: Colors.transparent),
+      secondaryBackground: Container(color: Colors.transparent),
       child: ValueListenableBuilder<double?>(
         valueListenable: widget.distanceToTarget,
         builder: (context, dist, _) {
@@ -207,10 +208,11 @@ class _GpsSectionState extends State<GpsSection> {
   Widget _buildWaypointInfo() {
     const minH = 48.0;
     if (widget.waypoint == null) return const SizedBox(height: minH);
-    return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        widget.onClearWaypoint();
-      },
+    return Dismissible(
+      key: const Key('waypoint_info'),
+      onDismissed: (direction) => widget.onClearWaypoint(),
+      background: Container(color: Colors.transparent),
+      secondaryBackground: Container(color: Colors.transparent),
       child: ValueListenableBuilder<double?>(
         valueListenable: widget.distanceToWaypoint,
         builder: (context, dist, _) {
