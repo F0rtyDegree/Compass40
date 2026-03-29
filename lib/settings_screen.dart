@@ -12,6 +12,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  late Future<void> _settingsFuture;
   bool _useManualDeclination = false;
   final TextEditingController _declinationController = TextEditingController();
   final TextEditingController _averagingPeriodController =
@@ -24,29 +25,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    _settingsFuture = _loadSettings();
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
-      _declinationController.text =
-          (prefs.getDouble('manualDeclination') ?? '').toString();
-      _averagingPeriodController.text =
-          (prefs.getInt('averagingPeriod') ?? 500).toString();
-      _gpsIntervalController.text =
-          (prefs.getInt('gpsUpdateInterval') ?? 1).toString();
-      _uiUpdatePeriodController.text =
-          (prefs.getInt('uiUpdatePeriod') ?? 250).toString();
-      _smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
-      if (_smoothingFactor < 0.01) {
-        _smoothingFactor = 0.01;
-      }
-      if (_smoothingFactor > 0.99) {
-        _smoothingFactor = 0.99;
-      }
-    });
+
+    _useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
+    _declinationController.text = (prefs.getDouble('manualDeclination') ?? '').toString();
+    _averagingPeriodController.text = (prefs.getInt('averagingPeriod') ?? 500).toString();
+    _gpsIntervalController.text = (prefs.getInt('gpsUpdateInterval') ?? 1).toString();
+    _uiUpdatePeriodController.text = (prefs.getInt('uiUpdatePeriod') ?? 250).toString();
+    double smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
+    if (smoothingFactor < 0.01) {
+      smoothingFactor = 0.01;
+    }
+    if (smoothingFactor > 0.99) {
+      smoothingFactor = 0.99;
+    }
+    _smoothingFactor = smoothingFactor;
   }
 
   Future<void> _saveSettings() async {
@@ -124,123 +121,137 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Настройки'),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1-я строка: Тема
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Тема', style: Theme.of(context).textTheme.titleLarge),
-                  SegmentedButton<ThemeMode>(
-                    segments: const <ButtonSegment<ThemeMode>>[
-                      ButtonSegment<ThemeMode>(
-                          value: ThemeMode.light, 
-                          label: Text('Светлая'), 
-                          icon: Icon(Icons.light_mode)),
-                      ButtonSegment<ThemeMode>(
-                          value: ThemeMode.dark, 
-                          label: Text('Темная'),
-                          icon: Icon(Icons.dark_mode)),
-                    ],
-                    selected: <ThemeMode>{themeProvider.themeMode == ThemeMode.system ? ThemeMode.light : themeProvider.themeMode},
-                    onSelectionChanged: (Set<ThemeMode> newSelection) {
-                      themeProvider.setThemeMode(newSelection.first);
-                    },
-                    showSelectedIcon: false,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+      body: FutureBuilder(
+        future: _settingsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox.shrink(); // Показываем пустой виджет во время загрузки
+          } else if (snapshot.hasError) {
+            return const Center(child: Text('Ошибка загрузки настроек'));
+          } else {
+            return SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 1-я строка: Тема
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Тема', style: Theme.of(context).textTheme.titleLarge),
+                        SegmentedButton<ThemeMode>(
+                          segments: const <ButtonSegment<ThemeMode>>[
+                            ButtonSegment<ThemeMode>(
+                                value: ThemeMode.light, 
+                                label: Text('Светлая'), 
+                                icon: Icon(Icons.light_mode)),
+                            ButtonSegment<ThemeMode>(
+                                value: ThemeMode.dark, 
+                                label: Text('Темная'),
+                                icon: Icon(Icons.dark_mode)),
+                          ],
+                          selected: <ThemeMode>{themeProvider.themeMode == ThemeMode.system ? ThemeMode.light : themeProvider.themeMode},
+                          onSelectionChanged: (Set<ThemeMode> newSelection) {
+                            themeProvider.setThemeMode(newSelection.first);
+                          },
+                          showSelectedIcon: false,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
 
-              // 2-я строка: Интервал обновления GPS
-              _buildTextFieldRow(
-                'Интервал обновления GPS (сек):',
-                _gpsIntervalController,
-                '1',
-              ),
-              const SizedBox(height: 16),
+                    // 2-я строка: Интервал обновления GPS
+                    _buildTextFieldRow(
+                      'Интервал обновления GPS (сек):',
+                      _gpsIntervalController,
+                      '1',
+                    ),
+                    const SizedBox(height: 16),
 
-              // 3-я строка: Магнитное склонение
-              Row(
-                children: [
-                  Text('Магнитное склонение:', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _useManualDeclination
-                        ? TextField(
-                            controller: _declinationController,
-                            textAlign: TextAlign.end,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              hintText: '°',
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                            onChanged: (value) => _saveSettings(),
-                          )
-                        : const Text('авто', textAlign: TextAlign.end, style: TextStyle(color: Colors.grey)),
-                  ),
-                  const SizedBox(width: 8),
-                  Switch(
-                    value: _useManualDeclination,
-                    onChanged: (value) {
-                      setState(() {
-                        _useManualDeclination = value;
-                      });
-                      _saveSettings();
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                    // 3-я строка: Магнитное склонение
+                    Row(
+                      children: [
+                        Text('Магнитное склонение:', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _useManualDeclination
+                              ? TextField(
+                                  controller: _declinationController,
+                                  textAlign: TextAlign.end,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    hintText: '°',
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (value) => _saveSettings(),
+                                )
+                              : const Text('авто', textAlign: TextAlign.end, style: TextStyle(color: Colors.grey)),
+                        ),
+                        const SizedBox(width: 8),
+                        Switch(
+                          value: _useManualDeclination,
+                          onChanged: (value) {
+                            setState(() {
+                              _useManualDeclination = value;
+                            });
+                            _saveSettings();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
 
-              // 4-я строка: Усреднение
-              _buildTextFieldRow(
-                'Усреднение: Период (мс):',
-                _averagingPeriodController,
-                '500',
-              ),
-              const SizedBox(height: 16),
+                    // 4-я строка: Усреднение
+                    _buildTextFieldRow(
+                      'Усреднение: Период (мс):',
+                      _averagingPeriodController,
+                      '500',
+                    ),
+                    const SizedBox(height: 16),
 
-              // 5-я и 6-я строки: Сглаживание
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('Сглаживание: Фильтр:', style: Theme.of(context).textTheme.titleMedium),
-                  Text(_smoothingFactor.toStringAsFixed(2), style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey)),
-                ],
-              ),
-              Slider(
-                value: _smoothingFactor,
-                min: 0.01,
-                max: 0.99,
-                divisions: 98,
-                label: _smoothingFactor.toStringAsFixed(2),
-                onChanged: (value) {
-                  setState(() {
-                    _smoothingFactor = value;
-                  });
-                },
-                onChangeEnd: (value) {
-                  _saveSettings();
-                },
-              ),
-              const SizedBox(height: 8),
+                    // 5-я и 6-я строки: Сглаживание (Новый дизайн)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text('плавная', style: Theme.of(context).textTheme.bodySmall),
+                        Text('Стрелка', style: Theme.of(context).textTheme.titleMedium),
+                        Text('быстрая', style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ),
+                    Slider(
+                      value: _smoothingFactor,
+                      min: 0.01,
+                      max: 0.99,
+                      divisions: 98,
+                      label: _smoothingFactor.toStringAsFixed(2),
+                      onChanged: (value) {
+                        setState(() {
+                          _smoothingFactor = value;
+                        });
+                      },
+                      onChangeEnd: (value) {
+                        _saveSettings();
+                      },
+                    ),
+                    const SizedBox(height: 8),
 
-              // 7-я строка: Частота обновления UI
-              _buildTextFieldRow(
-                'Частота обновления UI (мс):',
-                _uiUpdatePeriodController,
-                '250',
+                    // 7-я строка: Частота обновления UI
+                    _buildTextFieldRow(
+                      'Частота обновления UI (мс):',
+                      _uiUpdatePeriodController,
+                      '250',
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
+            );
+          }
+        },
       ),
     );
   }
