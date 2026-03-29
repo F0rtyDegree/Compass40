@@ -1,0 +1,30 @@
+name: compass40
+description: "Compass 40°"
+publish_to: 'none'
+version: 2.3.6
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  permission_handler: ^11.0.1
+
+  gps_info:
+    path: packages/gps_info
+  my_compass:
+    path: packages/my_compass
+  shared_preferences: ^2.5.4
+  provider: ^6.1.5+1
+  package_info_plus: ^9.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
