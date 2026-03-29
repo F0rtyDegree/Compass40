@@ -73,13 +73,16 @@ class _GpsSectionState extends State<GpsSection> {
                   if (!mounted) return;
                   setState(() => _isCoordinatesCopied = true);
                   Timer(const Duration(milliseconds: 200), () {
-                    if (mounted) setState(() => _isCoordinatesCopied = false);
+                    if (mounted) {
+                      setState(() => _isCoordinatesCopied = false);
+                    }
                   });
                 }
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: copied ? origColor : Colors.transparent,
                   borderRadius: BorderRadius.circular(4),
@@ -100,8 +103,8 @@ class _GpsSectionState extends State<GpsSection> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
               child: Column(
                 children: [
-                  _buildTargetInfo(),
                   _buildWaypointInfo(),
+                  _buildTargetInfo(),
                   const Divider(),
                   _buildIconValue(
                     context,
@@ -165,7 +168,7 @@ class _GpsSectionState extends State<GpsSection> {
 
   Widget _buildTargetInfo() {
     const minH = 48.0;
-    if (widget.distanceToTarget.value == null || widget.target == null) {
+    if (widget.target == null) {
       return const SizedBox(height: minH);
     }
     return Dismissible(
@@ -179,9 +182,12 @@ class _GpsSectionState extends State<GpsSection> {
           return ValueListenableBuilder<double?>(
             valueListenable: widget.bearingToTarget,
             builder: (context, bear, _) {
-              if (bear == null || dist == null) return const SizedBox(height: minH);
-              final distText = 
-                  dist > 1000 ? '${(dist / 1000).toStringAsFixed(2)} km' : '${dist.round()} m';
+              if (bear == null || dist == null) {
+                return const SizedBox(height: minH);
+              }
+              final distText = dist > 1000
+                  ? '${(dist / 1000).toStringAsFixed(2)} km'
+                  : '${dist.round()} m';
               final text =
                   'ДО ЦЕЛИ: -> $distText, ${bear.round().toString()}°';
               return Container(
@@ -191,10 +197,9 @@ class _GpsSectionState extends State<GpsSection> {
                   fit: BoxFit.scaleDown,
                   child: Text(
                     text,
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineSmall
-                        ?.copyWith(color: Colors.blueAccent, fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: Colors.blueAccent,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               );
@@ -207,7 +212,9 @@ class _GpsSectionState extends State<GpsSection> {
 
   Widget _buildWaypointInfo() {
     const minH = 48.0;
-    if (widget.waypoint == null) return const SizedBox(height: minH);
+    if (widget.waypoint == null) {
+      return const SizedBox(height: minH);
+    }
     return Dismissible(
       key: const Key('waypoint_info'),
       onDismissed: (direction) => widget.onClearWaypoint(),
@@ -219,10 +226,13 @@ class _GpsSectionState extends State<GpsSection> {
           return ValueListenableBuilder<double?>(
             valueListenable: widget.bearingToWaypoint,
             builder: (context, bear, _) {
-              if (dist == null || bear == null) return const SizedBox(height: minH);
-              final n = widget.logItems.whereType<LogEntry>().length + 1;
-              final distText =
-                  dist > 1000 ? '${(dist / 1000).toStringAsFixed(2)} km' : '${dist.round()} m';
+              if (dist == null || bear == null) {
+                return const SizedBox(height: minH);
+              }
+              final n = widget.logItems.whereType<LogEntry>().length;
+              final distText = dist > 1000
+                  ? '${(dist / 1000).toStringAsFixed(2)} km'
+                  : '${dist.round()} m';
               final text = 'ОТ КП$n: -> $distText, ${bear.round()}°';
               return Container(
                 height: minH,
@@ -233,7 +243,9 @@ class _GpsSectionState extends State<GpsSection> {
                       style: Theme.of(context)
                           .textTheme
                           .headlineSmall
-                          ?.copyWith(color: Colors.orange, fontWeight: FontWeight.bold)),
+                          ?.copyWith(
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold)),
                 ),
               );
             },
