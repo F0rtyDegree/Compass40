@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:my_compass/my_compass.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -439,106 +440,135 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Compass 40°'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-              ).then((_) => _loadAllSettings());
-            },
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) {
+        if (didPop) return;
+        showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Вы уверены?'),
+            content: const Text('Вы хотите закрыть приложение?'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Нет'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Да'),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AboutScreen()),
-              );
-            },
-          )
-        ],
-      ),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          CompassSection(
-            headingNotifier: _headingNotifier,
-            accuracyNotifier: _accuracyNotifier,
-            bearingToTarget: _bearingToTarget,
-            bearingToWaypoint: _bearingToWaypoint,
-            logItems: _logItems,
-            setWaypoint: _setWaypoint,
-            clearWaypoint: _clearWaypoint,
-            onVerticalDragEnd: (details) async {
-              if (details.primaryVelocity! < 0) {
-                await Navigator.push(
+        ).then((exit) {
+          if (exit == true) {
+            _clearWaypoint().then((_) {
+              SystemNavigator.pop();
+            });
+          }
+        });
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Compass 40°'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () {
+                Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (c) => LogScreen(logItems: _logItems)),
-                ).then((_) => _loadLogEntries());
-              } else if (details.primaryVelocity! > 0) {
-                _targetCalculationStartPoint = _gpsDataNotifier.value;
-                final result = await Navigator.push<Map<String, dynamic>>(
+                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                ).then((_) => _loadAllSettings());
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.info_outline),
+              onPressed: () {
+                Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const TargetScreen()),
+                  MaterialPageRoute(builder: (context) => const AboutScreen()),
                 );
-                if (result == null) return;
+              },
+            )
+          ],
+        ),
+        body: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            CompassSection(
+              headingNotifier: _headingNotifier,
+              accuracyNotifier: _accuracyNotifier,
+              bearingToTarget: _bearingToTarget,
+              bearingToWaypoint: _bearingToWaypoint,
+              logItems: _logItems,
+              setWaypoint: _setWaypoint,
+              clearWaypoint: _clearWaypoint,
+              onVerticalDragEnd: (details) async {
+                if (details.primaryVelocity! < 0) {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (c) => LogScreen(logItems: _logItems)),
+                  ).then((_) => _loadLogEntries());
+                } else if (details.primaryVelocity! > 0) {
+                  _targetCalculationStartPoint = _gpsDataNotifier.value;
+                  final result = await Navigator.push<Map<String, dynamic>>(
+                    context,
+                    MaterialPageRoute(builder: (context) => const TargetScreen()),
+                  );
+                  if (result == null) return;
 
-                final useClipboardAsBase = result['useClipboardAsBase'] as bool? ?? false;
-                double startLat, startLon;
-                if (useClipboardAsBase) {
-                  startLat = result['base_latitude'] as double;
-                  startLon = result['base_longitude'] as double;
-                } else {
-                  if (_targetCalculationStartPoint?.latitude == null) return;
-                  startLat = _targetCalculationStartPoint!.latitude!;
-                  startLon = _targetCalculationStartPoint!.longitude!;
+                  final useClipboardAsBase = result['useClipboardAsBase'] as bool? ?? false;
+                  double startLat, startLon;
+                  if (useClipboardAsBase) {
+                    startLat = result['base_latitude'] as double;
+                    startLon = result['base_longitude'] as double;
+                  } else {
+                    if (_targetCalculationStartPoint?.latitude == null) return;
+                    startLat = _targetCalculationStartPoint!.latitude!;
+                    startLon = _targetCalculationStartPoint!.longitude!;
+                  }
+
+                  final magneticAzimuth = result['azimuth'] as double;
+                  final trueBearing = (magneticAzimuth + _magneticDeclination + 360) % 360;
+                  final coords = calculateTargetCoordinates(
+                    startLat: startLat,
+                    startLon: startLon,
+                    distanceMeters: result['distance'] as double,
+                    trueBearingDegrees: trueBearing,
+                  );
+                  setState(() => _target = coords);
+
+                  await _addTargetCreationLogEntry(
+                    baseLatitude: startLat,
+                    baseLongitude: startLon,
+                    azimuth: magneticAzimuth,
+                    distance: result['distance'] as double,
+                    targetLatitude: coords['latitude']!,
+                    targetLongitude: coords['longitude']!,
+                  );
                 }
+              },
+              getCardinalDirection: _getCardinalDirection,
+              getAccuracyStatusColor: _getAccuracyStatusColor,
+              getAccuracyText: _getAccuracyText,
 
-                final magneticAzimuth = result['azimuth'] as double;
-                final trueBearing = (magneticAzimuth + _magneticDeclination + 360) % 360;
-                final coords = calculateTargetCoordinates(
-                  startLat: startLat,
-                  startLon: startLon,
-                  distanceMeters: result['distance'] as double,
-                  trueBearingDegrees: trueBearing,
-                );
-                setState(() => _target = coords);
-
-                await _addTargetCreationLogEntry(
-                  baseLatitude: startLat,
-                  baseLongitude: startLon,
-                  azimuth: magneticAzimuth,
-                  distance: result['distance'] as double,
-                  targetLatitude: coords['latitude']!,
-                  targetLongitude: coords['longitude']!,
-                );
-              }
-            },
-            getCardinalDirection: _getCardinalDirection,
-            getAccuracyStatusColor: _getAccuracyStatusColor,
-            getAccuracyText: _getAccuracyText,
-
-          ),
-          GpsSection(
-            gpsDataNotifier: _gpsDataNotifier,
-            accuracyNotifier: _accuracyNotifier,
-            distanceToTarget: _distanceToTarget,
-            bearingToTarget: _bearingToTarget,
-            distanceToWaypoint: _distanceToWaypoint,
-            bearingToWaypoint: _bearingToWaypoint,
-            waypoint: _waypoint,
-            target: _target,
-            logItems: _logItems,
-            magneticDeclination: _magneticDeclination,
-            onClearTarget: _clearTarget,
-            onClearWaypoint: _clearWaypoint, 
-          ),
-        ],
+            ),
+            GpsSection(
+              gpsDataNotifier: _gpsDataNotifier,
+              accuracyNotifier: _accuracyNotifier,
+              distanceToTarget: _distanceToTarget,
+              bearingToTarget: _bearingToTarget,
+              distanceToWaypoint: _distanceToWaypoint,
+              bearingToWaypoint: _bearingToWaypoint,
+              waypoint: _waypoint,
+              target: _target,
+              logItems: _logItems,
+              magneticDeclination: _magneticDeclination,
+              onClearTarget: _clearTarget,
+              onClearWaypoint: _clearWaypoint, 
+            ),
+          ],
+        ),
       ),
     );
   }
