@@ -291,30 +291,47 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<void> _clearWaypoint() async {
     await _loadLogEntries();
+
     final lastIncompleteEntry = _logItems.lastWhereOrNull(
       (item) => item is LogEntry && item.distance == null
-    );
+    ) as LogEntry?;
 
-    if (lastIncompleteEntry != null) {
+    if (lastIncompleteEntry == null) {
       setState(() {
-        _logItems.remove(lastIncompleteEntry);
-        final previousEntry = _logItems.lastWhereOrNull((item) => item is LogEntry) as LogEntry?;
-        if (previousEntry != null) {
-            _waypoint = GpsData(latitude: previousEntry.latitude, longitude: previousEntry.longitude);
-        } else {
-            _waypoint = null;
-        }
-        _distanceToWaypoint.value = null;
-        _bearingToWaypoint.value = null;
-      });
-      await _saveLogEntries();
-    } else {
-       setState(() {
         _waypoint = null;
         _distanceToWaypoint.value = null;
         _bearingToWaypoint.value = null;
       });
+      return;
     }
+
+    final currentGpsData = _gpsDataNotifier.value;
+    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
+      return;
+    }
+
+    final distance = calculateDistance(
+      lastIncompleteEntry.latitude,
+      lastIncompleteEntry.longitude,
+      currentGpsData.latitude!,
+      currentGpsData.longitude!,
+    );
+    final bearing = calculateTrueBearing(
+      lastIncompleteEntry.latitude,
+      lastIncompleteEntry.longitude,
+      currentGpsData.latitude!,
+      currentGpsData.longitude!,
+    );
+    lastIncompleteEntry.distance = distance;
+    lastIncompleteEntry.bearing = (bearing - _magneticDeclination + 360) % 360;
+
+    await _saveLogEntries();
+
+    setState(() {
+      _waypoint = null;
+      _distanceToWaypoint.value = null;
+      _bearingToWaypoint.value = null;
+    });
   }
   
   void _clearTarget() {
