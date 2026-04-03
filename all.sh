@@ -12,6 +12,12 @@ echo ""
 echo "=== lib/app/my_app.dart ===" && cat -n lib/app/my_app.dart
 echo ""
 
+# 
+echo "=== lib/controllers/home_logic.dart ===" && cat -n lib/controllers/home_logic.dart
+echo ""
+echo "=== lib/controllers/home_state.dart ===" && cat -n lib/controllers/home_state.dart
+echo ""
+
 # Screens
 echo "=== lib/screens/home_screen.dart ===" && cat -n lib/screens/home_screen.dart
 echo ""
