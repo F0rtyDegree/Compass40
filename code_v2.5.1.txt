@@ -2,7 +2,7 @@
      1	name: compass40
      2	description: "Compass 40°"
      3	publish_to: 'none'
-     4	version: 2.5.0
+     4	version: 2.5.1
      5	environment:
      6	  sdk: ^3.9.0
      7	
@@ -131,460 +131,362 @@
 
 === lib/controllers/home_logic.dart ===
      1	import 'dart:async';
-     2	import 'dart:convert';
-     3	import 'dart:developer' as developer;
-     4	import 'dart:math' as math;
-     5	
-     6	import 'package:collection/collection.dart';
-     7	import 'package:flutter/material.dart';
-     8	import 'package:gps_info/gps_info.dart';
-     9	import 'package:my_compass/my_compass.dart';
-    10	import 'package:permission_handler/permission_handler.dart';
-    11	import 'package:shared_preferences/shared_preferences.dart';
-    12	
-    13	import '../log_entry.dart';
-    14	import '../utils/geo_utils.dart';
-    15	import 'home_state.dart';
-    16	
-    17	class HomeLogic {
-    18	  final HomeState state;
-    19	  final State hostState;
-    20	
-    21	  HomeLogic({
-    22	    required this.state,
-    23	    required this.hostState,
-    24	  });
-    25	
-    26	  bool get mounted => hostState.mounted;
-    27	
-    28	  void setState(VoidCallback fn) {
-    29	    if (mounted) {
-    30	      // ignore: invalid_use_of_protected_member
-    31	      hostState.setState(fn);
-    32	    }
-    33	  }
-    34	
-    35	  Future<void> init() async {
-    36	    await _loadAllSettings();
-    37	    await _loadLogEntries();
-    38	    _requestPermissions();
-    39	  }
-    40	
-    41	  void dispose() {
-    42	    state.uiUpdateTimer?.cancel();
-    43	    state.gpsDataSubscription.cancel();
-    44	    state.compassSubscription.cancel();
-    45	    state.disposeNotifiers();
-    46	  }
-    47	
-    48	  // ----------------------------------------------------------------------
-    49	  // ----------------------- МАГНИТНАЯ СИСТЕМА ----------------------------
-    50	  // ----------------------------------------------------------------------
-    51	
-    52	  void startUiUpdateTimer() {
-    53	    state.uiUpdateTimer?.cancel();
-    54	    state.uiUpdateTimer = Timer.periodic(
-    55	      Duration(milliseconds: state.uiUpdatePeriod),
-    56	      (timer) {
-    57	        if (mounted) {
-    58	          _updateHeading();
-    59	          _calculateWaypointData();
-    60	          _calculateTargetData();
-    61	        }
-    62	      },
-    63	    );
-    64	  }
-    65	
-    66	  void _updateHeading() {
-    67	    final now = DateTime.now().millisecondsSinceEpoch;
-    68	    state.headingSamples.removeWhere(
-    69	      (s) => now - s.$2 > state.averagingPeriod,
-    70	    );
-    71	    if (state.headingSamples.isEmpty) return;
-    72	
-    73	    double sinSum = 0, cosSum = 0;
-    74	    for (var s in state.headingSamples) {
-    75	      final a = s.$1 * math.pi / 180;
-    76	      sinSum += math.sin(a);
-    77	      cosSum += math.cos(a);
-    78	    }
-    79	
-    80	    final avgSin = sinSum / state.headingSamples.length;
-    81	    final avgCos = cosSum / state.headingSamples.length;
-    82	    final avgHeading = math.atan2(avgSin, avgCos) * 180 / math.pi;
-    83	
-    84	    double diff = avgHeading - state.filteredHeading;
-    85	    if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
-    86	
-    87	    state.filteredHeading += state.smoothingFactor * diff;
-    88	    state.filteredHeading = (state.filteredHeading + 360) % 360;
-    89	
-    90	    state.headingNotifier.value = state.filteredHeading;
-    91	  }
-    92	
-    93	  Future<void> _loadAllSettings() async {
-    94	    final prefs = await SharedPreferences.getInstance();
-    95	    if (!mounted) return;
-    96	
-    97	    setState(() {
-    98	      state.useManualDeclination =
-    99	          prefs.getBool('useManualDeclination') ?? false;
-   100	      if (state.useManualDeclination) {
-   101	        state.magneticDeclination =
-   102	            prefs.getDouble('manualDeclination') ?? 0.0;
-   103	      } else {
-   104	        state.magneticDeclination = 0.0;
-   105	      }
-   106	      state.averagingPeriod = prefs.getInt('averagingPeriod') ?? 500;
-   107	      state.smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
-   108	      state.uiUpdatePeriod = prefs.getInt('uiUpdatePeriod') ?? 250;
-   109	    });
-   110	
-   111	    startUiUpdateTimer();
-   112	  }
-   113	
-   114	  Future<void> reloadSettings() async {
-   115	    await _loadAllSettings();
-   116	  }
-   117	
-   118	  void _requestPermissions() async {
-   119	    if (await Permission.location.request().isGranted) {
-   120	      _subscribeToGpsDataStream();
-   121	      _subscribeToCompassStream();
-   122	    }
-   123	  }
-   124	
-   125	  void _subscribeToGpsDataStream() async {
-   126	    final prefs = await SharedPreferences.getInstance();
-   127	    final interval = prefs.getInt('gpsUpdateInterval') ?? 1;
-   128	
-   129	    state.gpsDataSubscription = state.gpsInfo
-   130	        .getGpsDataStream(interval * 1000)
-   131	        .handleError((error, stack) {
-   132	      developer.log(
-   133	        'Error in GPS stream',
-   134	        name: 'by.fortydegree.testgps',
-   135	        error: error,
-   136	        stackTrace: stack,
-   137	      );
-   138	    }).listen((gpsData) {
-   139	      if (!mounted) return;
-   140	      state.gpsDataNotifier.value = gpsData;
-   141	      if (!state.useManualDeclination) {
-   142	        setState(() {
-   143	          state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
-   144	        });
-   145	      }
-   146	    });
-   147	  }
-   148	
-   149	  void _subscribeToCompassStream() {
-   150	    state.compassSubscription = MyCompass.events.listen((data) {
-   151	      if (!mounted || data.isEmpty) return;
-   152	
-   153	      final heading = data[0];
-   154	      final accuracy = data.length > 1 ? data[1] : 0.0;
-   155	      if (accuracy < 2) return;
-   156	
-   157	      state.headingSamples.add((heading, DateTime.now().millisecondsSinceEpoch));
-   158	      if (state.headingSamples.length > HomeState.maxSamples) {
-   159	        state.headingSamples.removeAt(0);
-   160	      }
-   161	
-   162	      state.accuracyNotifier.value = accuracy;
-   163	
-   164	      if (state.headingSamples.length == 1) {
-   165	        state.filteredHeading = heading;
-   166	        state.headingNotifier.value = heading;
-   167	      }
-   168	    });
-   169	  }
-   170	
-   171	  // ----------------------------------------------------------------------
-   172	  // Расчёты навигации
-   173	  // ----------------------------------------------------------------------
-   174	
-   175	  void _calculateWaypointData() {
-   176	    if (state.waypoint == null || state.gpsDataNotifier.value.latitude == null) {
-   177	      return;
-   178	    }
-   179	
-   180	    final nowData = state.gpsDataNotifier.value;
-   181	
-   182	    state.distanceToWaypoint.value = calculateDistance(
-   183	      state.waypoint!.latitude!,
-   184	      state.waypoint!.longitude!,
-   185	      nowData.latitude!,
-   186	      nowData.longitude!,
-   187	    );
-   188	
-   189	    final trueBearing = calculateTrueBearing(
-   190	      state.waypoint!.latitude!,
-   191	      state.waypoint!.longitude!,
-   192	      nowData.latitude!,
-   193	      nowData.longitude!,
-   194	    );
-   195	
-   196	    state.bearingToWaypoint.value =
-   197	        (trueBearing - state.magneticDeclination + 360) % 360;
-   198	  }
-   199	
-   200	  void _calculateTargetData() {
-   201	    if (state.target == null || state.gpsDataNotifier.value.latitude == null) {
-   202	      return;
-   203	    }
-   204	
-   205	    final nowData = state.gpsDataNotifier.value;
-   206	
-   207	    state.distanceToTarget.value = calculateDistance(
-   208	      nowData.latitude!,
-   209	      nowData.longitude!,
-   210	      state.target!['latitude']!,
-   211	      state.target!['longitude']!,
-   212	    );
-   213	
-   214	    final trueBearing = calculateTrueBearing(
-   215	      nowData.latitude!,
-   216	      nowData.longitude!,
-   217	      state.target!['latitude']!,
-   218	      state.target!['longitude']!,
-   219	    );
-   220	
-   221	    state.bearingToTarget.value =
-   222	        (trueBearing - state.magneticDeclination + 360) % 360;
-   223	  }
-   224	
-   225	  // ----------------------------------------------------------------------
-   226	  // --- Работа с логами и контрольными точками --------------------------
-   227	  // ----------------------------------------------------------------------
-   228	
-   229	  Future<void> _loadLogEntries() async {
-   230	    final prefs = await SharedPreferences.getInstance();
-   231	    final String? logJson = prefs.getString('log_items');
-   232	
-   233	    if (mounted) {
-   234	      setState(() {
-   235	        if (logJson != null) {
-   236	          try {
-   237	            final List<dynamic> decodedList = jsonDecode(logJson);
-   238	            state.logItems = decodedList.map((e) => logItemFromJson(e)).toList();
-   239	          } catch (e) {
-   240	            state.logItems = [];
-   241	          }
-   242	        } else {
-   243	          state.logItems = [];
-   244	        }
-   245	      });
-   246	    }
-   247	  }
-   248	
-   249	  Future<void> loadLogEntries() async {
-   250	    await _loadLogEntries();
-   251	  }
-   252	
-   253	  Future<void> _saveLogEntries() async {
-   254	    final prefs = await SharedPreferences.getInstance();
-   255	    await prefs.setString(
-   256	      'log_items',
-   257	      jsonEncode(state.logItems.map((e) => e.toJson()).toList()),
-   258	    );
-   259	  }
+     2	import 'dart:developer' as developer;
+     3	import 'dart:math' as math;
+     4	
+     5	import 'package:flutter/material.dart';
+     6	import 'package:my_compass/my_compass.dart';
+     7	import 'package:permission_handler/permission_handler.dart';
+     8	import 'package:shared_preferences/shared_preferences.dart';
+     9	
+    10	import '../utils/geo_utils.dart';
+    11	import '../services/log_service.dart';
+    12	import 'home_state.dart';
+    13	
+    14	class HomeLogic {
+    15	  final HomeState state;
+    16	  final State hostState;
+    17	  final LogService logService;
+    18	
+    19	  HomeLogic({
+    20	    required this.state,
+    21	    required this.hostState,
+    22	    required this.logService,
+    23	  });
+    24	
+    25	  bool get mounted => hostState.mounted;
+    26	
+    27	  void setState(VoidCallback fn) {
+    28	    if (mounted) {
+    29	      // ignore: invalid_use_of_protected_member
+    30	      hostState.setState(fn);
+    31	    }
+    32	  }
+    33	
+    34	  Future<void> init() async {
+    35	    await _loadAllSettings();
+    36	    await loadLogEntries();
+    37	    _requestPermissions();
+    38	  }
+    39	
+    40	  void dispose() {
+    41	    state.uiUpdateTimer?.cancel();
+    42	    state.gpsDataSubscription.cancel();
+    43	    state.compassSubscription.cancel();
+    44	    state.disposeNotifiers();
+    45	  }
+    46	
+    47	  // ----------------------------------------------------------------------
+    48	  // ----------------------- МАГНИТНАЯ СИСТЕМА ----------------------------
+    49	  // ----------------------------------------------------------------------
+    50	
+    51	  void startUiUpdateTimer() {
+    52	    state.uiUpdateTimer?.cancel();
+    53	    state.uiUpdateTimer = Timer.periodic(
+    54	      Duration(milliseconds: state.uiUpdatePeriod),
+    55	      (timer) {
+    56	        if (mounted) {
+    57	          _updateHeading();
+    58	          _calculateWaypointData();
+    59	          _calculateTargetData();
+    60	        }
+    61	      },
+    62	    );
+    63	  }
+    64	
+    65	  void _updateHeading() {
+    66	    final now = DateTime.now().millisecondsSinceEpoch;
+    67	    state.headingSamples.removeWhere(
+    68	      (s) => now - s.$2 > state.averagingPeriod,
+    69	    );
+    70	    if (state.headingSamples.isEmpty) return;
+    71	
+    72	    double sinSum = 0, cosSum = 0;
+    73	    for (var s in state.headingSamples) {
+    74	      final a = s.$1 * math.pi / 180;
+    75	      sinSum += math.sin(a);
+    76	      cosSum += math.cos(a);
+    77	    }
+    78	
+    79	    final avgSin = sinSum / state.headingSamples.length;
+    80	    final avgCos = cosSum / state.headingSamples.length;
+    81	    final avgHeading = math.atan2(avgSin, avgCos) * 180 / math.pi;
+    82	
+    83	    double diff = avgHeading - state.filteredHeading;
+    84	    if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
+    85	
+    86	    state.filteredHeading += state.smoothingFactor * diff;
+    87	    state.filteredHeading = (state.filteredHeading + 360) % 360;
+    88	
+    89	    state.headingNotifier.value = state.filteredHeading;
+    90	  }
+    91	
+    92	  Future<void> _loadAllSettings() async {
+    93	    final prefs = await SharedPreferences.getInstance();
+    94	    if (!mounted) return;
+    95	
+    96	    setState(() {
+    97	      state.useManualDeclination =
+    98	          prefs.getBool('useManualDeclination') ?? false;
+    99	      if (state.useManualDeclination) {
+   100	        state.magneticDeclination =
+   101	            prefs.getDouble('manualDeclination') ?? 0.0;
+   102	      } else {
+   103	        state.magneticDeclination = 0.0;
+   104	      }
+   105	      state.averagingPeriod = prefs.getInt('averagingPeriod') ?? 500;
+   106	      state.smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
+   107	      state.uiUpdatePeriod = prefs.getInt('uiUpdatePeriod') ?? 250;
+   108	    });
+   109	
+   110	    startUiUpdateTimer();
+   111	  }
+   112	
+   113	  Future<void> reloadSettings() async {
+   114	    await _loadAllSettings();
+   115	  }
+   116	
+   117	  void _requestPermissions() async {
+   118	    if (await Permission.location.request().isGranted) {
+   119	      _subscribeToGpsDataStream();
+   120	      _subscribeToCompassStream();
+   121	    }
+   122	  }
+   123	
+   124	  void _subscribeToGpsDataStream() async {
+   125	    final prefs = await SharedPreferences.getInstance();
+   126	    final interval = prefs.getInt('gpsUpdateInterval') ?? 1;
+   127	
+   128	    state.gpsDataSubscription = state.gpsInfo
+   129	        .getGpsDataStream(interval * 1000)
+   130	        .handleError((error, stack) {
+   131	      developer.log(
+   132	        'Error in GPS stream',
+   133	        name: 'by.fortydegree.testgps',
+   134	        error: error,
+   135	        stackTrace: stack,
+   136	      );
+   137	    }).listen((gpsData) {
+   138	      if (!mounted) return;
+   139	      state.gpsDataNotifier.value = gpsData;
+   140	      if (!state.useManualDeclination) {
+   141	        setState(() {
+   142	          state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
+   143	        });
+   144	      }
+   145	    });
+   146	  }
+   147	
+   148	  void _subscribeToCompassStream() {
+   149	    state.compassSubscription = MyCompass.events.listen((data) {
+   150	      if (!mounted || data.isEmpty) return;
+   151	
+   152	      final heading = data[0];
+   153	      final accuracy = data.length > 1 ? data[1] : 0.0;
+   154	      if (accuracy < 2) return;
+   155	
+   156	      state.headingSamples.add((heading, DateTime.now().millisecondsSinceEpoch));
+   157	      if (state.headingSamples.length > HomeState.maxSamples) {
+   158	        state.headingSamples.removeAt(0);
+   159	      }
+   160	
+   161	      state.accuracyNotifier.value = accuracy;
+   162	
+   163	      if (state.headingSamples.length == 1) {
+   164	        state.filteredHeading = heading;
+   165	        state.headingNotifier.value = heading;
+   166	      }
+   167	    });
+   168	  }
+   169	
+   170	  // ----------------------------------------------------------------------
+   171	  // Расчёты навигации
+   172	  // ----------------------------------------------------------------------
+   173	
+   174	  void _calculateWaypointData() {
+   175	    if (state.waypoint == null || state.gpsDataNotifier.value.latitude == null) {
+   176	      return;
+   177	    }
+   178	
+   179	    final nowData = state.gpsDataNotifier.value;
+   180	
+   181	    state.distanceToWaypoint.value = calculateDistance(
+   182	      state.waypoint!.latitude!,
+   183	      state.waypoint!.longitude!,
+   184	      nowData.latitude!,
+   185	      nowData.longitude!,
+   186	    );
+   187	
+   188	    final trueBearing = calculateTrueBearing(
+   189	      state.waypoint!.latitude!,
+   190	      state.waypoint!.longitude!,
+   191	      nowData.latitude!,
+   192	      nowData.longitude!,
+   193	    );
+   194	
+   195	    state.bearingToWaypoint.value =
+   196	        (trueBearing - state.magneticDeclination + 360) % 360;
+   197	  }
+   198	
+   199	  void _calculateTargetData() {
+   200	    if (state.target == null || state.gpsDataNotifier.value.latitude == null) {
+   201	      return;
+   202	    }
+   203	
+   204	    final nowData = state.gpsDataNotifier.value;
+   205	
+   206	    state.distanceToTarget.value = calculateDistance(
+   207	      nowData.latitude!,
+   208	      nowData.longitude!,
+   209	      state.target!['latitude']!,
+   210	      state.target!['longitude']!,
+   211	    );
+   212	
+   213	    final trueBearing = calculateTrueBearing(
+   214	      nowData.latitude!,
+   215	      nowData.longitude!,
+   216	      state.target!['latitude']!,
+   217	      state.target!['longitude']!,
+   218	    );
+   219	
+   220	    state.bearingToTarget.value =
+   221	        (trueBearing - state.magneticDeclination + 360) % 360;
+   222	  }
+   223	
+   224	  // ----------------------------------------------------------------------
+   225	  // --- Работа с логами и контрольными точками --------------------------
+   226	  // ----------------------------------------------------------------------
+   227	
+   228	  Future<void> loadLogEntries() async {
+   229	    final items = await logService.loadLogEntries();
+   230	    if (!mounted) return;
+   231	
+   232	    setState(() {
+   233	      state.logItems = items;
+   234	    });
+   235	  }
+   236	
+   237	  Future<void> setWaypoint() async {
+   238	    final result = await logService.setWaypoint(
+   239	      currentLogItems: state.logItems,
+   240	      currentGpsData: state.gpsDataNotifier.value,
+   241	      magneticDeclination: state.magneticDeclination,
+   242	    );
+   243	
+   244	    if (result == null || !mounted) return;
+   245	
+   246	    setState(() {
+   247	      state.logItems = result.logItems;
+   248	      state.waypoint = result.waypoint;
+   249	    });
+   250	  }
+   251	
+   252	  Future<void> clearWaypoint() async {
+   253	    final result = await logService.clearWaypoint(
+   254	      currentLogItems: state.logItems,
+   255	      currentGpsData: state.gpsDataNotifier.value,
+   256	      magneticDeclination: state.magneticDeclination,
+   257	    );
+   258	
+   259	    if (!mounted) return;
    260	
-   261	  Future<void> setWaypoint() async {
-   262	    final currentGpsData = state.gpsDataNotifier.value;
-   263	    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
-   264	      return;
-   265	    }
-   266	
-   267	    await _loadLogEntries();
+   261	    setState(() {
+   262	      state.logItems = result.logItems;
+   263	      state.waypoint = result.waypoint;
+   264	      state.distanceToWaypoint.value = null;
+   265	      state.bearingToWaypoint.value = null;
+   266	    });
+   267	  }
    268	
-   269	    final lastIncompleteEntry = state.logItems.lastWhereOrNull(
-   270	      (item) => item is LogEntry && item.distance == null,
-   271	    ) as LogEntry?;
-   272	
-   273	    if (lastIncompleteEntry != null) {
-   274	      final distance = calculateDistance(
-   275	        lastIncompleteEntry.latitude,
-   276	        lastIncompleteEntry.longitude,
-   277	        currentGpsData.latitude!,
-   278	        currentGpsData.longitude!,
-   279	      );
-   280	
-   281	      final bearing = calculateTrueBearing(
-   282	        lastIncompleteEntry.latitude,
-   283	        lastIncompleteEntry.longitude,
-   284	        currentGpsData.latitude!,
-   285	        currentGpsData.longitude!,
-   286	      );
-   287	
-   288	      lastIncompleteEntry.distance = distance;
-   289	      lastIncompleteEntry.bearing =
-   290	          (bearing - state.magneticDeclination + 360) % 360;
-   291	    }
-   292	
-   293	    final existingTrackEntries = state.logItems.whereType<LogEntry>();
-   294	    final newId = existingTrackEntries.isEmpty
-   295	        ? 1
-   296	        : existingTrackEntries.map((e) => e.id).reduce(math.max) + 1;
-   297	
-   298	    final newEntry = LogEntry(
-   299	      id: newId,
-   300	      latitude: currentGpsData.latitude!,
-   301	      longitude: currentGpsData.longitude!,
-   302	    );
-   303	
-   304	    setState(() {
-   305	      state.logItems.add(newEntry);
-   306	      state.waypoint = currentGpsData;
-   307	    });
-   308	
-   309	    await _saveLogEntries();
+   269	  void clearTarget() {
+   270	    setState(() {
+   271	      state.target = null;
+   272	      state.distanceToTarget.value = null;
+   273	      state.bearingToTarget.value = null;
+   274	    });
+   275	  }
+   276	
+   277	  Future<void> addTargetCreationLogEntry({
+   278	    required double baseLatitude,
+   279	    required double baseLongitude,
+   280	    required double azimuth,
+   281	    required double distance,
+   282	    required double targetLatitude,
+   283	    required double targetLongitude,
+   284	  }) async {
+   285	    final items = await logService.addTargetCreationLogEntry(
+   286	      currentLogItems: state.logItems,
+   287	      baseLatitude: baseLatitude,
+   288	      baseLongitude: baseLongitude,
+   289	      azimuth: azimuth,
+   290	      distance: distance,
+   291	      targetLatitude: targetLatitude,
+   292	      targetLongitude: targetLongitude,
+   293	    );
+   294	
+   295	    if (!mounted) return;
+   296	
+   297	    setState(() {
+   298	      state.logItems = items;
+   299	    });
+   300	  }
+   301	
+   302	  void setTarget(Map<String, double>? target) {
+   303	    setState(() {
+   304	      state.target = target;
+   305	    });
+   306	  }
+   307	
+   308	  void setTargetCalculationStartPoint(gpsData) {
+   309	    state.targetCalculationStartPoint = gpsData;
    310	  }
    311	
-   312	  Future<void> clearWaypoint() async {
-   313	    await _loadLogEntries();
-   314	
-   315	    final lastIncompleteEntry = state.logItems.lastWhereOrNull(
-   316	      (item) => item is LogEntry && item.distance == null,
-   317	    ) as LogEntry?;
-   318	
-   319	    if (lastIncompleteEntry == null) {
-   320	      setState(() {
-   321	        state.waypoint = null;
-   322	        state.distanceToWaypoint.value = null;
-   323	        state.bearingToWaypoint.value = null;
-   324	      });
-   325	      return;
-   326	    }
-   327	
-   328	    final currentGpsData = state.gpsDataNotifier.value;
-   329	    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
-   330	      return;
-   331	    }
-   332	
-   333	    final distance = calculateDistance(
-   334	      lastIncompleteEntry.latitude,
-   335	      lastIncompleteEntry.longitude,
-   336	      currentGpsData.latitude!,
-   337	      currentGpsData.longitude!,
-   338	    );
-   339	
-   340	    final bearing = calculateTrueBearing(
-   341	      lastIncompleteEntry.latitude,
-   342	      lastIncompleteEntry.longitude,
-   343	      currentGpsData.latitude!,
-   344	      currentGpsData.longitude!,
-   345	    );
-   346	
-   347	    lastIncompleteEntry.distance = distance;
-   348	    lastIncompleteEntry.bearing =
-   349	        (bearing - state.magneticDeclination + 360) % 360;
-   350	
-   351	    await _saveLogEntries();
-   352	
-   353	    setState(() {
-   354	      state.waypoint = null;
-   355	      state.distanceToWaypoint.value = null;
-   356	      state.bearingToWaypoint.value = null;
-   357	    });
-   358	  }
-   359	
-   360	  void clearTarget() {
-   361	    setState(() {
-   362	      state.target = null;
-   363	      state.distanceToTarget.value = null;
-   364	      state.bearingToTarget.value = null;
-   365	    });
-   366	  }
-   367	
-   368	  Future<void> addTargetCreationLogEntry({
-   369	    required double baseLatitude,
-   370	    required double baseLongitude,
-   371	    required double azimuth,
-   372	    required double distance,
-   373	    required double targetLatitude,
-   374	    required double targetLongitude,
-   375	  }) async {
-   376	    await _loadLogEntries();
-   377	
-   378	    final newId = state.logItems.whereType<TargetCreationLogEntry>().isNotEmpty
-   379	        ? state.logItems
-   380	                .whereType<TargetCreationLogEntry>()
-   381	                .map((e) => e.id)
-   382	                .reduce(math.max) +
-   383	            1
-   384	        : 1;
-   385	
-   386	    final entry = TargetCreationLogEntry(
-   387	      id: newId,
-   388	      baseLatitude: baseLatitude,
-   389	      baseLongitude: baseLongitude,
-   390	      azimuth: azimuth,
-   391	      distance: distance,
-   392	      targetLatitude: targetLatitude,
-   393	      targetLongitude: targetLongitude,
-   394	    );
-   395	
-   396	    setState(() => state.logItems.add(entry));
-   397	    await _saveLogEntries();
-   398	  }
-   399	
-   400	  void setTarget(Map<String, double>? target) {
-   401	    setState(() {
-   402	      state.target = target;
-   403	    });
-   404	  }
-   405	
-   406	  void setTargetCalculationStartPoint(GpsData gpsData) {
-   407	    state.targetCalculationStartPoint = gpsData;
-   408	  }
-   409	
-   410	  // ----------------------------------------------------------------------
-   411	  // --- Сервисная информация и цвета ------------------------------------
-   412	  // ----------------------------------------------------------------------
-   413	
-   414	  String getAccuracyText(double accuracy) {
-   415	    switch (accuracy.toInt()) {
-   416	      case 0:
-   417	        return 'Низкая (калибруйте)';
-   418	      case 1:
-   419	        return 'Средняя';
-   420	      case 2:
-   421	        return 'Высокая';
-   422	      case 3:
-   423	        return 'Отличная';
-   424	      default:
-   425	        return 'Неизвестно';
-   426	    }
-   427	  }
-   428	
-   429	  Color getAccuracyStatusColor(double accuracy) {
-   430	    switch (accuracy.toInt()) {
-   431	      case 0:
-   432	        return Colors.red;
-   433	      case 1:
-   434	        return Colors.orange;
-   435	      case 2:
-   436	        return Colors.yellow;
-   437	      case 3:
-   438	        return Colors.green;
-   439	      default:
-   440	        return Colors.grey;
-   441	    }
-   442	  }
-   443	
-   444	  String getCardinalDirection(double heading) {
-   445	    if (heading >= 337.5 || heading < 22.5) return 'Север';
-   446	    if (heading >= 22.5 && heading < 67.5) return 'С-Восток';
-   447	    if (heading >= 67.5 && heading < 112.5) return 'Восток';
-   448	    if (heading >= 112.5 && heading < 157.5) return 'Ю-Восток';
-   449	    if (heading >= 157.5 && heading < 202.5) return 'Юг';
-   450	    if (heading >= 202.5 && heading < 247.5) return 'Ю-Запад';
-   451	    if (heading >= 247.5 && heading < 292.5) return 'Запад';
-   452	    if (heading >= 292.5 && heading < 337.5) return 'С-Запад';
-   453	    return '--';
-   454	  }
-   455	}
+   312	  // ----------------------------------------------------------------------
+   313	  // --- Сервисная информация и цвета ------------------------------------
+   314	  // ----------------------------------------------------------------------
+   315	
+   316	  String getAccuracyText(double accuracy) {
+   317	    switch (accuracy.toInt()) {
+   318	      case 0:
+   319	        return 'Низкая (калибруйте)';
+   320	      case 1:
+   321	        return 'Средняя';
+   322	      case 2:
+   323	        return 'Высокая';
+   324	      case 3:
+   325	        return 'Отличная';
+   326	      default:
+   327	        return 'Неизвестно';
+   328	    }
+   329	  }
+   330	
+   331	  Color getAccuracyStatusColor(double accuracy) {
+   332	    switch (accuracy.toInt()) {
+   333	      case 0:
+   334	        return Colors.red;
+   335	      case 1:
+   336	        return Colors.orange;
+   337	      case 2:
+   338	        return Colors.yellow;
+   339	      case 3:
+   340	        return Colors.green;
+   341	      default:
+   342	        return Colors.grey;
+   343	    }
+   344	  }
+   345	
+   346	  String getCardinalDirection(double heading) {
+   347	    if (heading >= 337.5 || heading < 22.5) return 'Север';
+   348	    if (heading >= 22.5 && heading < 67.5) return 'С-Восток';
+   349	    if (heading >= 67.5 && heading < 112.5) return 'Восток';
+   350	    if (heading >= 112.5 && heading < 157.5) return 'Ю-Восток';
+   351	    if (heading >= 157.5 && heading < 202.5) return 'Юг';
+   352	    if (heading >= 202.5 && heading < 247.5) return 'Ю-Запад';
+   353	    if (heading >= 247.5 && heading < 292.5) return 'Запад';
+   354	    if (heading >= 292.5 && heading < 337.5) return 'С-Запад';
+   355	    return '--';
+   356	  }
+   357	}
 
 === lib/controllers/home_state.dart ===
      1	import 'dart:async';
@@ -639,6 +541,207 @@
     50	  }
     51	}
 
+=== lib/services/log_service.dart ===
+     1	import 'dart:convert';
+     2	import 'dart:math' as math;
+     3	
+     4	import 'package:collection/collection.dart';
+     5	import 'package:gps_info/gps_info.dart';
+     6	import 'package:shared_preferences/shared_preferences.dart';
+     7	
+     8	import '../log_entry.dart';
+     9	import '../utils/geo_utils.dart';
+    10	
+    11	class LogService {
+    12	  Future<List<LogItem>> loadLogEntries() async {
+    13	    final prefs = await SharedPreferences.getInstance();
+    14	    final String? logJson = prefs.getString('log_items');
+    15	
+    16	    if (logJson != null) {
+    17	      try {
+    18	        final List<dynamic> decodedList = jsonDecode(logJson);
+    19	        return decodedList.map((e) => logItemFromJson(e)).toList();
+    20	      } catch (e) {
+    21	        return [];
+    22	      }
+    23	    }
+    24	
+    25	    return [];
+    26	  }
+    27	
+    28	  Future<void> saveLogEntries(List<LogItem> logItems) async {
+    29	    final prefs = await SharedPreferences.getInstance();
+    30	    await prefs.setString(
+    31	      'log_items',
+    32	      jsonEncode(logItems.map((e) => e.toJson()).toList()),
+    33	    );
+    34	  }
+    35	
+    36	  Future<SetWaypointResult?> setWaypoint({
+    37	    required List<LogItem> currentLogItems,
+    38	    required GpsData currentGpsData,
+    39	    required double magneticDeclination,
+    40	  }) async {
+    41	    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
+    42	      return null;
+    43	    }
+    44	
+    45	    final logItems = await loadLogEntries();
+    46	
+    47	    final lastIncompleteEntry = logItems.lastWhereOrNull(
+    48	      (item) => item is LogEntry && item.distance == null,
+    49	    ) as LogEntry?;
+    50	
+    51	    if (lastIncompleteEntry != null) {
+    52	      final distance = calculateDistance(
+    53	        lastIncompleteEntry.latitude,
+    54	        lastIncompleteEntry.longitude,
+    55	        currentGpsData.latitude!,
+    56	        currentGpsData.longitude!,
+    57	      );
+    58	
+    59	      final bearing = calculateTrueBearing(
+    60	        lastIncompleteEntry.latitude,
+    61	        lastIncompleteEntry.longitude,
+    62	        currentGpsData.latitude!,
+    63	        currentGpsData.longitude!,
+    64	      );
+    65	
+    66	      lastIncompleteEntry.distance = distance;
+    67	      lastIncompleteEntry.bearing =
+    68	          (bearing - magneticDeclination + 360) % 360;
+    69	    }
+    70	
+    71	    final existingTrackEntries = logItems.whereType<LogEntry>();
+    72	    final newId = existingTrackEntries.isEmpty
+    73	        ? 1
+    74	        : existingTrackEntries.map((e) => e.id).reduce(math.max) + 1;
+    75	
+    76	    final newEntry = LogEntry(
+    77	      id: newId,
+    78	      latitude: currentGpsData.latitude!,
+    79	      longitude: currentGpsData.longitude!,
+    80	    );
+    81	
+    82	    logItems.add(newEntry);
+    83	    await saveLogEntries(logItems);
+    84	
+    85	    return SetWaypointResult(
+    86	      logItems: logItems,
+    87	      waypoint: currentGpsData,
+    88	    );
+    89	  }
+    90	
+    91	  Future<ClearWaypointResult> clearWaypoint({
+    92	    required List<LogItem> currentLogItems,
+    93	    required GpsData currentGpsData,
+    94	    required double magneticDeclination,
+    95	  }) async {
+    96	    final logItems = await loadLogEntries();
+    97	
+    98	    final lastIncompleteEntry = logItems.lastWhereOrNull(
+    99	      (item) => item is LogEntry && item.distance == null,
+   100	    ) as LogEntry?;
+   101	
+   102	    if (lastIncompleteEntry == null) {
+   103	      return ClearWaypointResult(
+   104	        logItems: logItems,
+   105	        waypoint: null,
+   106	        clearedOnly: true,
+   107	      );
+   108	    }
+   109	
+   110	    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
+   111	      return ClearWaypointResult(
+   112	        logItems: currentLogItems,
+   113	        waypoint: null,
+   114	        clearedOnly: true,
+   115	      );
+   116	    }
+   117	
+   118	    final distance = calculateDistance(
+   119	      lastIncompleteEntry.latitude,
+   120	      lastIncompleteEntry.longitude,
+   121	      currentGpsData.latitude!,
+   122	      currentGpsData.longitude!,
+   123	    );
+   124	
+   125	    final bearing = calculateTrueBearing(
+   126	      lastIncompleteEntry.latitude,
+   127	      lastIncompleteEntry.longitude,
+   128	      currentGpsData.latitude!,
+   129	      currentGpsData.longitude!,
+   130	    );
+   131	
+   132	    lastIncompleteEntry.distance = distance;
+   133	    lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
+   134	
+   135	    await saveLogEntries(logItems);
+   136	
+   137	    return ClearWaypointResult(
+   138	      logItems: logItems,
+   139	      waypoint: null,
+   140	      clearedOnly: true,
+   141	    );
+   142	  }
+   143	
+   144	  Future<List<LogItem>> addTargetCreationLogEntry({
+   145	    required List<LogItem> currentLogItems,
+   146	    required double baseLatitude,
+   147	    required double baseLongitude,
+   148	    required double azimuth,
+   149	    required double distance,
+   150	    required double targetLatitude,
+   151	    required double targetLongitude,
+   152	  }) async {
+   153	    final logItems = await loadLogEntries();
+   154	
+   155	    final newId = logItems.whereType<TargetCreationLogEntry>().isNotEmpty
+   156	        ? logItems
+   157	                .whereType<TargetCreationLogEntry>()
+   158	                .map((e) => e.id)
+   159	                .reduce(math.max) +
+   160	            1
+   161	        : 1;
+   162	
+   163	    final entry = TargetCreationLogEntry(
+   164	      id: newId,
+   165	      baseLatitude: baseLatitude,
+   166	      baseLongitude: baseLongitude,
+   167	      azimuth: azimuth,
+   168	      distance: distance,
+   169	      targetLatitude: targetLatitude,
+   170	      targetLongitude: targetLongitude,
+   171	    );
+   172	
+   173	    logItems.add(entry);
+   174	    await saveLogEntries(logItems);
+   175	    return logItems;
+   176	  }
+   177	}
+   178	
+   179	class SetWaypointResult {
+   180	  final List<LogItem> logItems;
+   181	  final GpsData waypoint;
+   182	
+   183	  SetWaypointResult({
+   184	    required this.logItems,
+   185	    required this.waypoint,
+   186	  });
+   187	}
+   188	
+   189	class ClearWaypointResult {
+   190	  final List<LogItem> logItems;
+   191	  final GpsData? waypoint;
+   192	  final bool clearedOnly;
+   193	
+   194	  ClearWaypointResult({
+   195	    required this.logItems,
+   196	    required this.waypoint,
+   197	    required this.clearedOnly,
+   198	  });
+   199	}
+
 === lib/screens/home_screen.dart ===
      1	import 'package:flutter/material.dart';
      2	import 'package:flutter/services.dart';
@@ -654,188 +757,195 @@
     12	import '../widgets/gps_section.dart';
     13	import '../controllers/home_logic.dart';
     14	import '../controllers/home_state.dart';
-    15	
-    16	class MyHomePage extends StatefulWidget {
-    17	  const MyHomePage({super.key});
-    18	
-    19	  @override
-    20	  State<MyHomePage> createState() => _MyHomePageState();
-    21	}
-    22	
-    23	class _MyHomePageState extends State<MyHomePage> {
-    24	  late final HomeState _state;
-    25	  late final HomeLogic _logic;
-    26	
-    27	  @override
-    28	  void initState() {
-    29	    super.initState();
-    30	    _state = HomeState();
-    31	    _logic = HomeLogic(state: _state, hostState: this);
-    32	
-    33	    Provider.of<ThemeProvider>(context, listen: false).loadTheme();
-    34	    _logic.init();
-    35	  }
-    36	
-    37	  @override
-    38	  void dispose() {
-    39	    _logic.dispose();
-    40	    super.dispose();
-    41	  }
-    42	
-    43	  @override
-    44	  Widget build(BuildContext context) {
-    45	    return PopScope(
-    46	      canPop: false,
-    47	      onPopInvokedWithResult: (bool didPop, dynamic result) {
-    48	        if (didPop) return;
+    15	import '../services/log_service.dart';
+    16	
+    17	class MyHomePage extends StatefulWidget {
+    18	  const MyHomePage({super.key});
+    19	
+    20	  @override
+    21	  State<MyHomePage> createState() => _MyHomePageState();
+    22	}
+    23	
+    24	class _MyHomePageState extends State<MyHomePage> {
+    25	  late final HomeState _state;
+    26	  late final HomeLogic _logic;
+    27	  late final LogService _logService;
+    28	
+    29	  @override
+    30	  void initState() {
+    31	    super.initState();
+    32	    _state = HomeState();
+    33	    _logService = LogService();
+    34	    _logic = HomeLogic(
+    35	      state: _state,
+    36	      hostState: this,
+    37	      logService: _logService,
+    38	    );
+    39	
+    40	    Provider.of<ThemeProvider>(context, listen: false).loadTheme();
+    41	    _logic.init();
+    42	  }
+    43	
+    44	  @override
+    45	  void dispose() {
+    46	    _logic.dispose();
+    47	    super.dispose();
+    48	  }
     49	
-    50	        showDialog<bool>(
-    51	          context: context,
-    52	          builder: (context) => AlertDialog(
-    53	            title: const Text('Вы уверены?'),
-    54	            content: const Text('Вы хотите закрыть приложение?'),
-    55	            actions: <Widget>[
-    56	              TextButton(
-    57	                onPressed: () => Navigator.of(context).pop(false),
-    58	                child: const Text('Нет'),
-    59	              ),
-    60	              TextButton(
-    61	                onPressed: () => Navigator.of(context).pop(true),
-    62	                child: const Text('Да'),
-    63	              ),
-    64	            ],
-    65	          ),
-    66	        ).then((exit) {
-    67	          if (exit == true) {
-    68	            _logic.clearWaypoint().then((_) {
-    69	              SystemNavigator.pop();
-    70	            });
-    71	          }
-    72	        });
-    73	      },
-    74	      child: Scaffold(
-    75	        appBar: AppBar(
-    76	          title: const Text('Compass 40°'),
-    77	          actions: [
-    78	            IconButton(
-    79	              icon: const Icon(Icons.settings),
-    80	              onPressed: () {
-    81	                Navigator.push(
-    82	                  context,
-    83	                  MaterialPageRoute(
-    84	                    builder: (context) => const SettingsScreen(),
-    85	                  ),
-    86	                ).then((_) => _logic.reloadSettings());
-    87	              },
-    88	            ),
-    89	            IconButton(
-    90	              icon: const Icon(Icons.info_outline),
-    91	              onPressed: () {
-    92	                Navigator.push(
-    93	                  context,
-    94	                  MaterialPageRoute(
-    95	                    builder: (context) => const AboutScreen(),
-    96	                  ),
-    97	                );
-    98	              },
-    99	            ),
-   100	          ],
-   101	        ),
-   102	        body: Column(
-   103	          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-   104	          children: [
-   105	            CompassSection(
-   106	              headingNotifier: _state.headingNotifier,
-   107	              accuracyNotifier: _state.accuracyNotifier,
-   108	              bearingToTarget: _state.bearingToTarget,
-   109	              bearingToWaypoint: _state.bearingToWaypoint,
-   110	              logItems: _state.logItems,
-   111	              setWaypoint: _logic.setWaypoint,
-   112	              clearWaypoint: _logic.clearWaypoint,
-   113	              onVerticalDragEnd: (details) async {
-   114	                if (details.primaryVelocity! < 0) {
-   115	                  await Navigator.push(
-   116	                    context,
-   117	                    MaterialPageRoute(
-   118	                      builder: (c) => LogScreen(logItems: _state.logItems),
-   119	                    ),
-   120	                  ).then((_) => _logic.loadLogEntries());
-   121	                } else if (details.primaryVelocity! > 0) {
-   122	                  _logic.setTargetCalculationStartPoint(
-   123	                    _state.gpsDataNotifier.value,
-   124	                  );
-   125	
-   126	                  final result = await Navigator.push<Map<String, dynamic>>(
-   127	                    context,
-   128	                    MaterialPageRoute(
-   129	                      builder: (context) => const TargetScreen(),
-   130	                    ),
+    50	  @override
+    51	  Widget build(BuildContext context) {
+    52	    return PopScope(
+    53	      canPop: false,
+    54	      onPopInvokedWithResult: (bool didPop, dynamic result) {
+    55	        if (didPop) return;
+    56	
+    57	        showDialog<bool>(
+    58	          context: context,
+    59	          builder: (context) => AlertDialog(
+    60	            title: const Text('Вы уверены?'),
+    61	            content: const Text('Вы хотите закрыть приложение?'),
+    62	            actions: <Widget>[
+    63	              TextButton(
+    64	                onPressed: () => Navigator.of(context).pop(false),
+    65	                child: const Text('Нет'),
+    66	              ),
+    67	              TextButton(
+    68	                onPressed: () => Navigator.of(context).pop(true),
+    69	                child: const Text('Да'),
+    70	              ),
+    71	            ],
+    72	          ),
+    73	        ).then((exit) {
+    74	          if (exit == true) {
+    75	            _logic.clearWaypoint().then((_) {
+    76	              SystemNavigator.pop();
+    77	            });
+    78	          }
+    79	        });
+    80	      },
+    81	      child: Scaffold(
+    82	        appBar: AppBar(
+    83	          title: const Text('Compass 40°'),
+    84	          actions: [
+    85	            IconButton(
+    86	              icon: const Icon(Icons.settings),
+    87	              onPressed: () {
+    88	                Navigator.push(
+    89	                  context,
+    90	                  MaterialPageRoute(
+    91	                    builder: (context) => const SettingsScreen(),
+    92	                  ),
+    93	                ).then((_) => _logic.reloadSettings());
+    94	              },
+    95	            ),
+    96	            IconButton(
+    97	              icon: const Icon(Icons.info_outline),
+    98	              onPressed: () {
+    99	                Navigator.push(
+   100	                  context,
+   101	                  MaterialPageRoute(
+   102	                    builder: (context) => const AboutScreen(),
+   103	                  ),
+   104	                );
+   105	              },
+   106	            ),
+   107	          ],
+   108	        ),
+   109	        body: Column(
+   110	          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+   111	          children: [
+   112	            CompassSection(
+   113	              headingNotifier: _state.headingNotifier,
+   114	              accuracyNotifier: _state.accuracyNotifier,
+   115	              bearingToTarget: _state.bearingToTarget,
+   116	              bearingToWaypoint: _state.bearingToWaypoint,
+   117	              logItems: _state.logItems,
+   118	              setWaypoint: _logic.setWaypoint,
+   119	              clearWaypoint: _logic.clearWaypoint,
+   120	              onVerticalDragEnd: (details) async {
+   121	                if (details.primaryVelocity! < 0) {
+   122	                  await Navigator.push(
+   123	                    context,
+   124	                    MaterialPageRoute(
+   125	                      builder: (c) => LogScreen(logItems: _state.logItems),
+   126	                    ),
+   127	                  ).then((_) => _logic.loadLogEntries());
+   128	                } else if (details.primaryVelocity! > 0) {
+   129	                  _logic.setTargetCalculationStartPoint(
+   130	                    _state.gpsDataNotifier.value,
    131	                  );
    132	
-   133	                  if (result == null) return;
-   134	
-   135	                  final useClipboardAsBase =
-   136	                      result['useClipboardAsBase'] as bool? ?? false;
-   137	
-   138	                  double startLat, startLon;
-   139	                  if (useClipboardAsBase) {
-   140	                    startLat = result['base_latitude'] as double;
-   141	                    startLon = result['base_longitude'] as double;
-   142	                  } else {
-   143	                    if (_state.targetCalculationStartPoint?.latitude == null) {
-   144	                      return;
-   145	                    }
-   146	                    startLat = _state.targetCalculationStartPoint!.latitude!;
-   147	                    startLon = _state.targetCalculationStartPoint!.longitude!;
-   148	                  }
-   149	
-   150	                  final magneticAzimuth = result['azimuth'] as double;
-   151	                  final trueBearing =
-   152	                      (magneticAzimuth + _state.magneticDeclination + 360) % 360;
-   153	
-   154	                  final coords = calculateTargetCoordinates(
-   155	                    startLat: startLat,
-   156	                    startLon: startLon,
-   157	                    distanceMeters: result['distance'] as double,
-   158	                    trueBearingDegrees: trueBearing,
-   159	                  );
+   133	                  final result = await Navigator.push<Map<String, dynamic>>(
+   134	                    context,
+   135	                    MaterialPageRoute(
+   136	                      builder: (context) => const TargetScreen(),
+   137	                    ),
+   138	                  );
+   139	
+   140	                  if (result == null) return;
+   141	
+   142	                  final useClipboardAsBase =
+   143	                      result['useClipboardAsBase'] as bool? ?? false;
+   144	
+   145	                  double startLat, startLon;
+   146	                  if (useClipboardAsBase) {
+   147	                    startLat = result['base_latitude'] as double;
+   148	                    startLon = result['base_longitude'] as double;
+   149	                  } else {
+   150	                    if (_state.targetCalculationStartPoint?.latitude == null) {
+   151	                      return;
+   152	                    }
+   153	                    startLat = _state.targetCalculationStartPoint!.latitude!;
+   154	                    startLon = _state.targetCalculationStartPoint!.longitude!;
+   155	                  }
+   156	
+   157	                  final magneticAzimuth = result['azimuth'] as double;
+   158	                  final trueBearing =
+   159	                      (magneticAzimuth + _state.magneticDeclination + 360) % 360;
    160	
-   161	                  _logic.setTarget(coords);
-   162	
-   163	                  await _logic.addTargetCreationLogEntry(
-   164	                    baseLatitude: startLat,
-   165	                    baseLongitude: startLon,
-   166	                    azimuth: magneticAzimuth,
-   167	                    distance: result['distance'] as double,
-   168	                    targetLatitude: coords['latitude']!,
-   169	                    targetLongitude: coords['longitude']!,
-   170	                  );
-   171	                }
-   172	              },
-   173	              getCardinalDirection: _logic.getCardinalDirection,
-   174	              getAccuracyStatusColor: _logic.getAccuracyStatusColor,
-   175	              getAccuracyText: _logic.getAccuracyText,
-   176	            ),
-   177	            GpsSection(
-   178	              gpsDataNotifier: _state.gpsDataNotifier,
-   179	              accuracyNotifier: _state.accuracyNotifier,
-   180	              distanceToTarget: _state.distanceToTarget,
-   181	              bearingToTarget: _state.bearingToTarget,
-   182	              distanceToWaypoint: _state.distanceToWaypoint,
-   183	              bearingToWaypoint: _state.bearingToWaypoint,
-   184	              waypoint: _state.waypoint,
-   185	              target: _state.target,
-   186	              logItems: _state.logItems,
-   187	              magneticDeclination: _state.magneticDeclination,
-   188	              onClearTarget: _logic.clearTarget,
-   189	              onClearWaypoint: _logic.clearWaypoint,
-   190	            ),
-   191	          ],
-   192	        ),
-   193	      ),
-   194	    );
-   195	  }
-   196	}
+   161	                  final coords = calculateTargetCoordinates(
+   162	                    startLat: startLat,
+   163	                    startLon: startLon,
+   164	                    distanceMeters: result['distance'] as double,
+   165	                    trueBearingDegrees: trueBearing,
+   166	                  );
+   167	
+   168	                  _logic.setTarget(coords);
+   169	
+   170	                  await _logic.addTargetCreationLogEntry(
+   171	                    baseLatitude: startLat,
+   172	                    baseLongitude: startLon,
+   173	                    azimuth: magneticAzimuth,
+   174	                    distance: result['distance'] as double,
+   175	                    targetLatitude: coords['latitude']!,
+   176	                    targetLongitude: coords['longitude']!,
+   177	                  );
+   178	                }
+   179	              },
+   180	              getCardinalDirection: _logic.getCardinalDirection,
+   181	              getAccuracyStatusColor: _logic.getAccuracyStatusColor,
+   182	              getAccuracyText: _logic.getAccuracyText,
+   183	            ),
+   184	            GpsSection(
+   185	              gpsDataNotifier: _state.gpsDataNotifier,
+   186	              accuracyNotifier: _state.accuracyNotifier,
+   187	              distanceToTarget: _state.distanceToTarget,
+   188	              bearingToTarget: _state.bearingToTarget,
+   189	              distanceToWaypoint: _state.distanceToWaypoint,
+   190	              bearingToWaypoint: _state.bearingToWaypoint,
+   191	              waypoint: _state.waypoint,
+   192	              target: _state.target,
+   193	              logItems: _state.logItems,
+   194	              magneticDeclination: _state.magneticDeclination,
+   195	              onClearTarget: _logic.clearTarget,
+   196	              onClearWaypoint: _logic.clearWaypoint,
+   197	            ),
+   198	          ],
+   199	        ),
+   200	      ),
+   201	    );
+   202	  }
+   203	}
 
 === lib/about_screen.dart ===
      1	

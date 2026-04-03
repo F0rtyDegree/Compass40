@@ -17,6 +17,8 @@ echo "=== lib/controllers/home_logic.dart ===" && cat -n lib/controllers/home_lo
 echo ""
 echo "=== lib/controllers/home_state.dart ===" && cat -n lib/controllers/home_state.dart
 echo ""
+echo "=== lib/services/log_service.dart ===" && cat -n lib/services/log_service.dart
+echo ""
 
 # Screens
 echo "=== lib/screens/home_screen.dart ===" && cat -n lib/screens/home_screen.dart

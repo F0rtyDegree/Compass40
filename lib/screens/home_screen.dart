@@ -12,6 +12,7 @@ import '../widgets/compass_section.dart';
 import '../widgets/gps_section.dart';
 import '../controllers/home_logic.dart';
 import '../controllers/home_state.dart';
+import '../services/log_service.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -23,12 +24,18 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   late final HomeState _state;
   late final HomeLogic _logic;
+  late final LogService _logService;
 
   @override
   void initState() {
     super.initState();
     _state = HomeState();
-    _logic = HomeLogic(state: _state, hostState: this);
+    _logService = LogService();
+    _logic = HomeLogic(
+      state: _state,
+      hostState: this,
+      logService: _logService,
+    );
 
     Provider.of<ThemeProvider>(context, listen: false).loadTheme();
     _logic.init();

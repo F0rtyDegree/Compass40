@@ -1,26 +1,25 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math' as math;
 
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
-import 'package:gps_info/gps_info.dart';
 import 'package:my_compass/my_compass.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../log_entry.dart';
 import '../utils/geo_utils.dart';
+import '../services/log_service.dart';
 import 'home_state.dart';
 
 class HomeLogic {
   final HomeState state;
   final State hostState;
+  final LogService logService;
 
   HomeLogic({
     required this.state,
     required this.hostState,
+    required this.logService,
   });
 
   bool get mounted => hostState.mounted;
@@ -34,7 +33,7 @@ class HomeLogic {
 
   Future<void> init() async {
     await _loadAllSettings();
-    await _loadLogEntries();
+    await loadLogEntries();
     _requestPermissions();
   }
 
@@ -226,132 +225,42 @@ class HomeLogic {
   // --- Работа с логами и контрольными точками --------------------------
   // ----------------------------------------------------------------------
 
-  Future<void> _loadLogEntries() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? logJson = prefs.getString('log_items');
-
-    if (mounted) {
-      setState(() {
-        if (logJson != null) {
-          try {
-            final List<dynamic> decodedList = jsonDecode(logJson);
-            state.logItems = decodedList.map((e) => logItemFromJson(e)).toList();
-          } catch (e) {
-            state.logItems = [];
-          }
-        } else {
-          state.logItems = [];
-        }
-      });
-    }
-  }
-
   Future<void> loadLogEntries() async {
-    await _loadLogEntries();
-  }
+    final items = await logService.loadLogEntries();
+    if (!mounted) return;
 
-  Future<void> _saveLogEntries() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'log_items',
-      jsonEncode(state.logItems.map((e) => e.toJson()).toList()),
-    );
+    setState(() {
+      state.logItems = items;
+    });
   }
 
   Future<void> setWaypoint() async {
-    final currentGpsData = state.gpsDataNotifier.value;
-    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
-      return;
-    }
-
-    await _loadLogEntries();
-
-    final lastIncompleteEntry = state.logItems.lastWhereOrNull(
-      (item) => item is LogEntry && item.distance == null,
-    ) as LogEntry?;
-
-    if (lastIncompleteEntry != null) {
-      final distance = calculateDistance(
-        lastIncompleteEntry.latitude,
-        lastIncompleteEntry.longitude,
-        currentGpsData.latitude!,
-        currentGpsData.longitude!,
-      );
-
-      final bearing = calculateTrueBearing(
-        lastIncompleteEntry.latitude,
-        lastIncompleteEntry.longitude,
-        currentGpsData.latitude!,
-        currentGpsData.longitude!,
-      );
-
-      lastIncompleteEntry.distance = distance;
-      lastIncompleteEntry.bearing =
-          (bearing - state.magneticDeclination + 360) % 360;
-    }
-
-    final existingTrackEntries = state.logItems.whereType<LogEntry>();
-    final newId = existingTrackEntries.isEmpty
-        ? 1
-        : existingTrackEntries.map((e) => e.id).reduce(math.max) + 1;
-
-    final newEntry = LogEntry(
-      id: newId,
-      latitude: currentGpsData.latitude!,
-      longitude: currentGpsData.longitude!,
+    final result = await logService.setWaypoint(
+      currentLogItems: state.logItems,
+      currentGpsData: state.gpsDataNotifier.value,
+      magneticDeclination: state.magneticDeclination,
     );
 
-    setState(() {
-      state.logItems.add(newEntry);
-      state.waypoint = currentGpsData;
-    });
+    if (result == null || !mounted) return;
 
-    await _saveLogEntries();
+    setState(() {
+      state.logItems = result.logItems;
+      state.waypoint = result.waypoint;
+    });
   }
 
   Future<void> clearWaypoint() async {
-    await _loadLogEntries();
-
-    final lastIncompleteEntry = state.logItems.lastWhereOrNull(
-      (item) => item is LogEntry && item.distance == null,
-    ) as LogEntry?;
-
-    if (lastIncompleteEntry == null) {
-      setState(() {
-        state.waypoint = null;
-        state.distanceToWaypoint.value = null;
-        state.bearingToWaypoint.value = null;
-      });
-      return;
-    }
-
-    final currentGpsData = state.gpsDataNotifier.value;
-    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
-      return;
-    }
-
-    final distance = calculateDistance(
-      lastIncompleteEntry.latitude,
-      lastIncompleteEntry.longitude,
-      currentGpsData.latitude!,
-      currentGpsData.longitude!,
+    final result = await logService.clearWaypoint(
+      currentLogItems: state.logItems,
+      currentGpsData: state.gpsDataNotifier.value,
+      magneticDeclination: state.magneticDeclination,
     );
 
-    final bearing = calculateTrueBearing(
-      lastIncompleteEntry.latitude,
-      lastIncompleteEntry.longitude,
-      currentGpsData.latitude!,
-      currentGpsData.longitude!,
-    );
-
-    lastIncompleteEntry.distance = distance;
-    lastIncompleteEntry.bearing =
-        (bearing - state.magneticDeclination + 360) % 360;
-
-    await _saveLogEntries();
+    if (!mounted) return;
 
     setState(() {
-      state.waypoint = null;
+      state.logItems = result.logItems;
+      state.waypoint = result.waypoint;
       state.distanceToWaypoint.value = null;
       state.bearingToWaypoint.value = null;
     });
@@ -373,18 +282,8 @@ class HomeLogic {
     required double targetLatitude,
     required double targetLongitude,
   }) async {
-    await _loadLogEntries();
-
-    final newId = state.logItems.whereType<TargetCreationLogEntry>().isNotEmpty
-        ? state.logItems
-                .whereType<TargetCreationLogEntry>()
-                .map((e) => e.id)
-                .reduce(math.max) +
-            1
-        : 1;
-
-    final entry = TargetCreationLogEntry(
-      id: newId,
+    final items = await logService.addTargetCreationLogEntry(
+      currentLogItems: state.logItems,
       baseLatitude: baseLatitude,
       baseLongitude: baseLongitude,
       azimuth: azimuth,
@@ -393,8 +292,11 @@ class HomeLogic {
       targetLongitude: targetLongitude,
     );
 
-    setState(() => state.logItems.add(entry));
-    await _saveLogEntries();
+    if (!mounted) return;
+
+    setState(() {
+      state.logItems = items;
+    });
   }
 
   void setTarget(Map<String, double>? target) {
@@ -403,7 +305,7 @@ class HomeLogic {
     });
   }
 
-  void setTargetCalculationStartPoint(GpsData gpsData) {
+  void setTargetCalculationStartPoint(gpsData) {
     state.targetCalculationStartPoint = gpsData;
   }
 
