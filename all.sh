@@ -12,12 +12,16 @@ echo ""
 echo "=== lib/app/my_app.dart ===" && cat -n lib/app/my_app.dart
 echo ""
 
-# 
+#
+echo "=== lib/controllers/home_navigation_actions.dart ===" && cat -n lib/controllers/home_navigation_actions.dart
+echo ""
 echo "=== lib/controllers/home_logic.dart ===" && cat -n lib/controllers/home_logic.dart
 echo ""
 echo "=== lib/controllers/home_state.dart ===" && cat -n lib/controllers/home_state.dart
 echo ""
 echo "=== lib/services/log_service.dart ===" && cat -n lib/services/log_service.dart
+echo ""
+echo "=== lib/services/sensor_service.dart ===" && cat -n lib/services/sensor_service.dart
 echo ""
 
 # Screens
@@ -45,8 +49,6 @@ echo "=== lib/utils/geo_utils.dart ===" && cat -n lib/utils/geo_utils.dart
 echo ""
 
 # Models and Providers
-echo "=== lib/models.dart ===" && cat -n lib/models.dart
-echo ""
 echo "=== lib/log_entry.dart ===" && cat -n lib/log_entry.dart
 echo ""
 echo "=== lib/theme_provider.dart ===" && cat -n lib/theme_provider.dart

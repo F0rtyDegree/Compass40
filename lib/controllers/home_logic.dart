@@ -1,25 +1,25 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:my_compass/my_compass.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:gps_info/gps_info.dart';
 
-import '../utils/geo_utils.dart';
 import '../services/log_service.dart';
+import '../services/sensor_service.dart';
+import '../utils/geo_utils.dart';
 import 'home_state.dart';
 
 class HomeLogic {
   final HomeState state;
   final State hostState;
   final LogService logService;
+  final SensorService sensorService;
 
   HomeLogic({
     required this.state,
     required this.hostState,
     required this.logService,
+    required this.sensorService,
   });
 
   bool get mounted => hostState.mounted;
@@ -48,6 +48,77 @@ class HomeLogic {
   // ----------------------- МАГНИТНАЯ СИСТЕМА ----------------------------
   // ----------------------------------------------------------------------
 
+  Future<void> _loadAllSettings() async {
+    final settings = await sensorService.loadSettings();
+    if (!mounted) return;
+
+    setState(() {
+      state.useManualDeclination = settings.useManualDeclination;
+      state.magneticDeclination = settings.magneticDeclination;
+      state.averagingPeriod = settings.averagingPeriod;
+      state.smoothingFactor = settings.smoothingFactor;
+      state.uiUpdatePeriod = settings.uiUpdatePeriod;
+    });
+
+    startUiUpdateTimer();
+  }
+
+  Future<void> reloadSettings() async {
+    await _loadAllSettings();
+  }
+
+  void _requestPermissions() async {
+    if (await sensorService.requestLocationPermission()) {
+      _subscribeToGpsDataStream();
+      _subscribeToCompassStream();
+    }
+  }
+
+  void _subscribeToGpsDataStream() async {
+    final settings = await sensorService.loadSettings();
+
+    state.gpsDataSubscription = sensorService.subscribeToGps(
+      gpsInfo: state.gpsInfo,
+      intervalSeconds: settings.gpsInterval,
+      onData: (gpsData) {
+        if (!mounted) return;
+        state.gpsDataNotifier.value = gpsData;
+        if (!state.useManualDeclination) {
+          setState(() {
+            state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
+          });
+        }
+      },
+    );
+  }
+
+  void _subscribeToCompassStream() {
+    state.compassSubscription = sensorService.subscribeToCompass(
+      onData: (data) {
+        if (!mounted || data.isEmpty) return;
+
+        final heading = data[0];
+        final accuracy = data.length > 1 ? data[1] : 0.0;
+        if (accuracy < 2) return;
+
+        state.headingSamples.add(
+          (heading, DateTime.now().millisecondsSinceEpoch),
+        );
+
+        if (state.headingSamples.length > HomeState.maxSamples) {
+          state.headingSamples.removeAt(0);
+        }
+
+        state.accuracyNotifier.value = accuracy;
+
+        if (state.headingSamples.length == 1) {
+          state.filteredHeading = heading;
+          state.headingNotifier.value = heading;
+        }
+      },
+    );
+  }
+
   void startUiUpdateTimer() {
     state.uiUpdateTimer?.cancel();
     state.uiUpdateTimer = Timer.periodic(
@@ -67,6 +138,7 @@ class HomeLogic {
     state.headingSamples.removeWhere(
       (s) => now - s.$2 > state.averagingPeriod,
     );
+
     if (state.headingSamples.isEmpty) return;
 
     double sinSum = 0, cosSum = 0;
@@ -87,84 +159,6 @@ class HomeLogic {
     state.filteredHeading = (state.filteredHeading + 360) % 360;
 
     state.headingNotifier.value = state.filteredHeading;
-  }
-
-  Future<void> _loadAllSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted) return;
-
-    setState(() {
-      state.useManualDeclination =
-          prefs.getBool('useManualDeclination') ?? false;
-      if (state.useManualDeclination) {
-        state.magneticDeclination =
-            prefs.getDouble('manualDeclination') ?? 0.0;
-      } else {
-        state.magneticDeclination = 0.0;
-      }
-      state.averagingPeriod = prefs.getInt('averagingPeriod') ?? 500;
-      state.smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
-      state.uiUpdatePeriod = prefs.getInt('uiUpdatePeriod') ?? 250;
-    });
-
-    startUiUpdateTimer();
-  }
-
-  Future<void> reloadSettings() async {
-    await _loadAllSettings();
-  }
-
-  void _requestPermissions() async {
-    if (await Permission.location.request().isGranted) {
-      _subscribeToGpsDataStream();
-      _subscribeToCompassStream();
-    }
-  }
-
-  void _subscribeToGpsDataStream() async {
-    final prefs = await SharedPreferences.getInstance();
-    final interval = prefs.getInt('gpsUpdateInterval') ?? 1;
-
-    state.gpsDataSubscription = state.gpsInfo
-        .getGpsDataStream(interval * 1000)
-        .handleError((error, stack) {
-      developer.log(
-        'Error in GPS stream',
-        name: 'by.fortydegree.testgps',
-        error: error,
-        stackTrace: stack,
-      );
-    }).listen((gpsData) {
-      if (!mounted) return;
-      state.gpsDataNotifier.value = gpsData;
-      if (!state.useManualDeclination) {
-        setState(() {
-          state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
-        });
-      }
-    });
-  }
-
-  void _subscribeToCompassStream() {
-    state.compassSubscription = MyCompass.events.listen((data) {
-      if (!mounted || data.isEmpty) return;
-
-      final heading = data[0];
-      final accuracy = data.length > 1 ? data[1] : 0.0;
-      if (accuracy < 2) return;
-
-      state.headingSamples.add((heading, DateTime.now().millisecondsSinceEpoch));
-      if (state.headingSamples.length > HomeState.maxSamples) {
-        state.headingSamples.removeAt(0);
-      }
-
-      state.accuracyNotifier.value = accuracy;
-
-      if (state.headingSamples.length == 1) {
-        state.filteredHeading = heading;
-        state.headingNotifier.value = heading;
-      }
-    });
   }
 
   // ----------------------------------------------------------------------
@@ -305,7 +299,7 @@ class HomeLogic {
     });
   }
 
-  void setTargetCalculationStartPoint(gpsData) {
+  void setTargetCalculationStartPoint(GpsData gpsData) {
     state.targetCalculationStartPoint = gpsData;
   }
 
