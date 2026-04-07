@@ -2,7 +2,7 @@
      1	name: compass40
      2	description: "Compass 40°"
      3	publish_to: 'none'
-     4	version: 2.5.2
+     4	version: 2.5.4
      5	environment:
      6	  sdk: ^3.9.0
      7	
@@ -927,143 +927,126 @@
      5	import '../theme_provider.dart';
      6	import '../widgets/compass_section.dart';
      7	import '../widgets/gps_section.dart';
-     8	import '../controllers/home_logic.dart';
-     9	import '../controllers/home_state.dart';
-    10	import '../controllers/home_navigation_actions.dart';
-    11	import '../services/log_service.dart';
-    12	import '../services/sensor_service.dart';
-    13	
-    14	class MyHomePage extends StatefulWidget {
-    15	  const MyHomePage({super.key});
-    16	
-    17	  @override
-    18	  State<MyHomePage> createState() => _MyHomePageState();
-    19	}
-    20	
-    21	class _MyHomePageState extends State<MyHomePage> {
-    22	  late final HomeState _state;
-    23	  late final LogService _logService;
-    24	  late final SensorService _sensorService;
-    25	  late final HomeLogic _logic;
-    26	  late final HomeNavigationActions _actions;
-    27	
-    28	  @override
-    29	  void initState() {
-    30	    super.initState();
-    31	    _state = HomeState();
-    32	    _logService = LogService();
-    33	    _sensorService = SensorService();
-    34	    _logic = HomeLogic(
-    35	      state: _state,
-    36	      hostState: this,
-    37	      logService: _logService,
-    38	      sensorService: _sensorService,
-    39	    );
-    40	
-    41	    Provider.of<ThemeProvider>(context, listen: false).loadTheme();
-    42	    _logic.init();
-    43	  }
-    44	
-    45	  @override
-    46	  void didChangeDependencies() {
-    47	    super.didChangeDependencies();
-    48	    _actions = HomeNavigationActions(
-    49	      context: context,
-    50	      state: _state,
-    51	      logic: _logic,
-    52	    );
-    53	  }
-    54	
-    55	  @override
-    56	  void dispose() {
-    57	    _logic.dispose();
-    58	    super.dispose();
-    59	  }
-    60	
-    61	  void _handleExitRequest() {
-    62	    showDialog<bool>(
-    63	      context: context,
-    64	      builder: (context) => AlertDialog(
-    65	        title: const Text('Вы уверены?'),
-    66	        content: const Text('Вы хотите закрыть приложение?'),
-    67	        actions: <Widget>[
-    68	          TextButton(
-    69	            onPressed: () => Navigator.of(context).pop(false),
-    70	            child: const Text('Нет'),
-    71	          ),
-    72	          TextButton(
-    73	            onPressed: () => Navigator.of(context).pop(true),
-    74	            child: const Text('Да'),
-    75	          ),
-    76	        ],
-    77	      ),
-    78	    ).then((exit) {
-    79	      if (exit == true) {
-    80	        _logic.clearWaypoint().then((_) {
-    81	          SystemNavigator.pop();
-    82	        });
-    83	      }
-    84	    });
-    85	  }
-    86	
-    87	  @override
-    88	  Widget build(BuildContext context) {
-    89	    return PopScope(
-    90	      canPop: false,
-    91	      onPopInvokedWithResult: (bool didPop, dynamic result) {
-    92	        if (didPop) return;
-    93	        _handleExitRequest();
-    94	      },
-    95	      child: Scaffold(
-    96	        appBar: AppBar(
-    97	          title: const Text('Compass 40°'),
-    98	          actions: [
-    99	            IconButton(
-   100	              icon: const Icon(Icons.settings),
-   101	              onPressed: _actions.openSettings,
-   102	            ),
-   103	            IconButton(
-   104	              icon: const Icon(Icons.info_outline),
-   105	              onPressed: _actions.openAbout,
-   106	            ),
-   107	          ],
-   108	        ),
-   109	        body: Column(
-   110	          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-   111	          children: [
-   112	            CompassSection(
-   113	              headingNotifier: _state.headingNotifier,
-   114	              accuracyNotifier: _state.accuracyNotifier,
-   115	              bearingToTarget: _state.bearingToTarget,
-   116	              bearingToWaypoint: _state.bearingToWaypoint,
+     8	import '../widgets/exit_confirm_dialog.dart';
+     9	import '../controllers/home_logic.dart';
+    10	import '../controllers/home_state.dart';
+    11	import '../controllers/home_navigation_actions.dart';
+    12	import '../services/log_service.dart';
+    13	import '../services/sensor_service.dart';
+    14	
+    15	class MyHomePage extends StatefulWidget {
+    16	  const MyHomePage({super.key});
+    17	
+    18	  @override
+    19	  State<MyHomePage> createState() => _MyHomePageState();
+    20	}
+    21	
+    22	class _MyHomePageState extends State<MyHomePage> {
+    23	  late final HomeState _state;
+    24	  late final LogService _logService;
+    25	  late final SensorService _sensorService;
+    26	  late final HomeLogic _logic;
+    27	  late final HomeNavigationActions _actions;
+    28	
+    29	  @override
+    30	  void initState() {
+    31	    super.initState();
+    32	    _state = HomeState();
+    33	    _logService = LogService();
+    34	    _sensorService = SensorService();
+    35	    _logic = HomeLogic(
+    36	      state: _state,
+    37	      hostState: this,
+    38	      logService: _logService,
+    39	      sensorService: _sensorService,
+    40	    );
+    41	
+    42	    Provider.of<ThemeProvider>(context, listen: false).loadTheme();
+    43	    _logic.init();
+    44	  }
+    45	
+    46	  @override
+    47	  void didChangeDependencies() {
+    48	    super.didChangeDependencies();
+    49	    _actions = HomeNavigationActions(
+    50	      context: context,
+    51	      state: _state,
+    52	      logic: _logic,
+    53	    );
+    54	  }
+    55	
+    56	  @override
+    57	  void dispose() {
+    58	    _logic.dispose();
+    59	    super.dispose();
+    60	  }
+    61	
+    62	  Future<void> _handleExitRequest() async {
+    63	    final exit = await showExitConfirmDialog(context);
+    64	    if (exit == true) {
+    65	      await _logic.clearWaypoint();
+    66	      SystemNavigator.pop();
+    67	    }
+    68	  }
+    69	
+    70	  @override
+    71	  Widget build(BuildContext context) {
+    72	    return PopScope(
+    73	      canPop: false,
+    74	      onPopInvokedWithResult: (bool didPop, dynamic result) {
+    75	        if (didPop) return;
+    76	        _handleExitRequest();
+    77	      },
+    78	      child: Scaffold(
+    79	        appBar: AppBar(
+    80	          title: const Text('Compass 40°'),
+    81	          actions: [
+    82	            IconButton(
+    83	              icon: const Icon(Icons.settings),
+    84	              onPressed: _actions.openSettings,
+    85	            ),
+    86	            IconButton(
+    87	              icon: const Icon(Icons.info_outline),
+    88	              onPressed: _actions.openAbout,
+    89	            ),
+    90	          ],
+    91	        ),
+    92	        body: Column(
+    93	          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    94	          children: [
+    95	            CompassSection(
+    96	              headingNotifier: _state.headingNotifier,
+    97	              accuracyNotifier: _state.accuracyNotifier,
+    98	              bearingToTarget: _state.bearingToTarget,
+    99	              bearingToWaypoint: _state.bearingToWaypoint,
+   100	              logItems: _state.logItems,
+   101	              setWaypoint: _logic.setWaypoint,
+   102	              clearWaypoint: _logic.clearWaypoint,
+   103	              onVerticalDragEnd: _actions.handleVerticalDragEnd,
+   104	              getCardinalDirection: _logic.getCardinalDirection,
+   105	              getAccuracyStatusColor: _logic.getAccuracyStatusColor,
+   106	              getAccuracyText: _logic.getAccuracyText,
+   107	            ),
+   108	            GpsSection(
+   109	              gpsDataNotifier: _state.gpsDataNotifier,
+   110	              accuracyNotifier: _state.accuracyNotifier,
+   111	              distanceToTarget: _state.distanceToTarget,
+   112	              bearingToTarget: _state.bearingToTarget,
+   113	              distanceToWaypoint: _state.distanceToWaypoint,
+   114	              bearingToWaypoint: _state.bearingToWaypoint,
+   115	              waypoint: _state.waypoint,
+   116	              target: _state.target,
    117	              logItems: _state.logItems,
-   118	              setWaypoint: _logic.setWaypoint,
-   119	              clearWaypoint: _logic.clearWaypoint,
-   120	              onVerticalDragEnd: _actions.handleVerticalDragEnd,
-   121	              getCardinalDirection: _logic.getCardinalDirection,
-   122	              getAccuracyStatusColor: _logic.getAccuracyStatusColor,
-   123	              getAccuracyText: _logic.getAccuracyText,
-   124	            ),
-   125	            GpsSection(
-   126	              gpsDataNotifier: _state.gpsDataNotifier,
-   127	              accuracyNotifier: _state.accuracyNotifier,
-   128	              distanceToTarget: _state.distanceToTarget,
-   129	              bearingToTarget: _state.bearingToTarget,
-   130	              distanceToWaypoint: _state.distanceToWaypoint,
-   131	              bearingToWaypoint: _state.bearingToWaypoint,
-   132	              waypoint: _state.waypoint,
-   133	              target: _state.target,
-   134	              logItems: _state.logItems,
-   135	              magneticDeclination: _state.magneticDeclination,
-   136	              onClearTarget: _logic.clearTarget,
-   137	              onClearWaypoint: _logic.clearWaypoint,
-   138	            ),
-   139	          ],
-   140	        ),
-   141	      ),
-   142	    );
-   143	  }
-   144	}
+   118	              magneticDeclination: _state.magneticDeclination,
+   119	              onClearTarget: _logic.clearTarget,
+   120	              onClearWaypoint: _logic.clearWaypoint,
+   121	            ),
+   122	          ],
+   123	        ),
+   124	      ),
+   125	    );
+   126	  }
+   127	}
 
 === lib/about_screen.dart ===
      1	
@@ -2435,6 +2418,29 @@
    174	  bool shouldRepaint(covariant DownwardTrianglePainter o) => o.color != color;
    175	}
 
+=== lib/widgets/exit_confirm_dialog.dart ===
+     1	import 'package:flutter/material.dart';
+     2	
+     3	Future<bool?> showExitConfirmDialog(BuildContext context) {
+     4	  return showDialog<bool>(
+     5	    context: context,
+     6	    builder: (context) => AlertDialog(
+     7	      title: const Text('Вы уверены?'),
+     8	      content: const Text('Вы хотите закрыть приложение?'),
+     9	      actions: <Widget>[
+    10	        TextButton(
+    11	          onPressed: () => Navigator.of(context).pop(false),
+    12	          child: const Text('Нет'),
+    13	        ),
+    14	        TextButton(
+    15	          onPressed: () => Navigator.of(context).pop(true),
+    16	          child: const Text('Да'),
+    17	        ),
+    18	      ],
+    19	    ),
+    20	  );
+    21	}
+
 === lib/utils/geo_utils.dart ===
      1	import 'dart:math' as math;
      2	
@@ -2936,89 +2942,187 @@
      5	import android.hardware.SensorEvent
      6	import android.hardware.SensorEventListener
      7	import android.hardware.SensorManager
-     8	import io.flutter.embedding.engine.plugins.FlutterPlugin
-     9	import io.flutter.plugin.common.EventChannel
-    10	
-    11	class MyCompassPlugin : FlutterPlugin, EventChannel.StreamHandler, SensorEventListener {
-    12	    private lateinit var sensorManager: SensorManager
-    13	    private var eventSink: EventChannel.EventSink? = null
-    14	    private val accelerometerReading = FloatArray(3)
-    15	    private val magnetometerReading = FloatArray(3)
-    16	    private val rotationMatrix = FloatArray(9)
-    17	    private val orientationAngles = FloatArray(3)
-    18	    private var accuracy: Int = SensorManager.SENSOR_STATUS_UNRELIABLE
-    19	
-    20	    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-    21	        val context = binding.applicationContext
-    22	        sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-    23	        val eventChannel = EventChannel(binding.binaryMessenger, "my_compass/events")
-    24	        eventChannel.setStreamHandler(this)
-    25	    }
-    26	
-    27	    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-    28	        stopListening()
-    29	    }
-    30	
-    31	    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-    32	        eventSink = events
-    33	        startListening()
-    34	    }
+     8	import android.view.Surface
+     9	import android.view.WindowManager
+    10	import io.flutter.embedding.engine.plugins.FlutterPlugin
+    11	import io.flutter.plugin.common.EventChannel
+    12	import kotlin.math.roundToInt
+    13	
+    14	class MyCompassPlugin : FlutterPlugin, EventChannel.StreamHandler, SensorEventListener {
+    15	    private lateinit var sensorManager: SensorManager
+    16	    private var windowManager: WindowManager? = null
+    17	    private var eventSink: EventChannel.EventSink? = null
+    18	
+    19	    // Sensors
+    20	    private var rotationVectorSensor: Sensor? = null
+    21	    private var accelerometerSensor: Sensor? = null
+    22	    private var magneticFieldSensor: Sensor? = null
+    23	
+    24	    // Fallback sensor data
+    25	    private val accelerometerReading = FloatArray(3)
+    26	    private val magnetometerReading = FloatArray(3)
+    27	
+    28	    // Matrices / orientation
+    29	    private val rotationMatrix = FloatArray(9)
+    30	    private val remappedRotationMatrix = FloatArray(9)
+    31	    private val orientationAngles = FloatArray(3)
+    32	
+    33	    private var accuracy: Int = SensorManager.SENSOR_STATUS_UNRELIABLE
+    34	    private var useRotationVector = false
     35	
-    36	    override fun onCancel(arguments: Any?) {
-    37	        stopListening()
-    38	        eventSink = null
-    39	    }
+    36	    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    37	        val context = binding.applicationContext
+    38	        sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    39	        windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     40	
-    41	    private fun startListening() {
-    42	        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
-    43	            sensorManager.registerListener(
-    44	                this,
-    45	                accelerometer,
-    46	                SensorManager.SENSOR_DELAY_GAME
-    47	            )
-    48	        }
-    49	        sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also { magneticField ->
-    50	            sensorManager.registerListener(
-    51	                this,
-    52	                magneticField,
-    53	                SensorManager.SENSOR_DELAY_GAME
-    54	            )
-    55	        }
+    41	        rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+    42	        accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    43	        magneticFieldSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+    44	
+    45	        val eventChannel = EventChannel(binding.binaryMessenger, "my_compass/events")
+    46	        eventChannel.setStreamHandler(this)
+    47	    }
+    48	
+    49	    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    50	        stopListening()
+    51	    }
+    52	
+    53	    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+    54	        eventSink = events
+    55	        startListening()
     56	    }
     57	
-    58	    private fun stopListening() {
-    59	        sensorManager.unregisterListener(this)
-    60	    }
-    61	
-    62	    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-    63	        if (sensor?.type == Sensor.TYPE_MAGNETIC_FIELD) {
-    64	            this.accuracy = accuracy
-    65	            updateOrientationAngles()
-    66	        }
-    67	    }
-    68	
-    69	    override fun onSensorChanged(event: SensorEvent) {
-    70	        when (event.sensor.type) {
-    71	            Sensor.TYPE_ACCELEROMETER -> {
-    72	                System.arraycopy(event.values, 0, accelerometerReading, 0, accelerometerReading.size)
-    73	            }
-    74	            Sensor.TYPE_MAGNETIC_FIELD -> {
-    75	                System.arraycopy(event.values, 0, magnetometerReading, 0, magnetometerReading.size)
-    76	            }
-    77	        }
-    78	        updateOrientationAngles()
-    79	    }
-    80	
-    81	    private fun updateOrientationAngles() {
-    82	        SensorManager.getRotationMatrix(rotationMatrix, null, accelerometerReading, magnetometerReading)
-    83	        SensorManager.getOrientation(rotationMatrix, orientationAngles)
-    84	
-    85	        val azimuth = Math.toDegrees(orientationAngles[0].toDouble())
-    86	        val heading = (azimuth + 360) % 360
-    87	
-    88	        eventSink?.success(listOf(heading, accuracy.toDouble()))
-    89	    }
-    90	}
+    58	    override fun onCancel(arguments: Any?) {
+    59	        stopListening()
+    60	        eventSink = null
+    61	    }
+    62	
+    63	    private fun startListening() {
+    64	        stopListening()
+    65	
+    66	        useRotationVector = rotationVectorSensor != null
+    67	
+    68	        if (useRotationVector) {
+    69	            rotationVectorSensor?.also { sensor ->
+    70	                sensorManager.registerListener(
+    71	                    this,
+    72	                    sensor,
+    73	                    SensorManager.SENSOR_DELAY_GAME
+    74	                )
+    75	            }
+    76	        } else {
+    77	            accelerometerSensor?.also { sensor ->
+    78	                sensorManager.registerListener(
+    79	                    this,
+    80	                    sensor,
+    81	                    SensorManager.SENSOR_DELAY_GAME
+    82	                )
+    83	            }
+    84	            magneticFieldSensor?.also { sensor ->
+    85	                sensorManager.registerListener(
+    86	                    this,
+    87	                    sensor,
+    88	                    SensorManager.SENSOR_DELAY_GAME
+    89	                )
+    90	            }
+    91	        }
+    92	    }
+    93	
+    94	    private fun stopListening() {
+    95	        sensorManager.unregisterListener(this)
+    96	    }
+    97	
+    98	    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+    99	        when (sensor?.type) {
+   100	            Sensor.TYPE_MAGNETIC_FIELD,
+   101	            Sensor.TYPE_ROTATION_VECTOR -> {
+   102	                this.accuracy = accuracy
+   103	            }
+   104	        }
+   105	    }
+   106	
+   107	    override fun onSensorChanged(event: SensorEvent) {
+   108	        when (event.sensor.type) {
+   109	            Sensor.TYPE_ROTATION_VECTOR -> {
+   110	                if (useRotationVector) {
+   111	                    SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+   112	                    updateOrientationAnglesFromMatrix(rotationMatrix)
+   113	                }
+   114	            }
+   115	
+   116	            Sensor.TYPE_ACCELEROMETER -> {
+   117	                if (!useRotationVector) {
+   118	                    System.arraycopy(
+   119	                        event.values,
+   120	                        0,
+   121	                        accelerometerReading,
+   122	                        0,
+   123	                        accelerometerReading.size
+   124	                    )
+   125	                    updateOrientationAnglesFallback()
+   126	                }
+   127	            }
+   128	
+   129	            Sensor.TYPE_MAGNETIC_FIELD -> {
+   130	                if (!useRotationVector) {
+   131	                    System.arraycopy(
+   132	                        event.values,
+   133	                        0,
+   134	                        magnetometerReading,
+   135	                        0,
+   136	                        magnetometerReading.size
+   137	                    )
+   138	                    updateOrientationAnglesFallback()
+   139	                }
+   140	            }
+   141	        }
+   142	    }
+   143	
+   144	    private fun updateOrientationAnglesFallback() {
+   145	        val success = SensorManager.getRotationMatrix(
+   146	            rotationMatrix,
+   147	            null,
+   148	            accelerometerReading,
+   149	            magnetometerReading
+   150	        )
+   151	
+   152	        if (success) {
+   153	            updateOrientationAnglesFromMatrix(rotationMatrix)
+   154	        }
+   155	    }
+   156	
+   157	    private fun updateOrientationAnglesFromMatrix(sourceMatrix: FloatArray) {
+   158	        val rotation = getDisplayRotation()
+   159	
+   160	        val (axisX, axisY) = when (rotation) {
+   161	            Surface.ROTATION_90 -> Pair(SensorManager.AXIS_Y, SensorManager.AXIS_MINUS_X)
+   162	            Surface.ROTATION_180 -> Pair(SensorManager.AXIS_MINUS_X, SensorManager.AXIS_MINUS_Y)
+   163	            Surface.ROTATION_270 -> Pair(SensorManager.AXIS_MINUS_Y, SensorManager.AXIS_X)
+   164	            else -> Pair(SensorManager.AXIS_X, SensorManager.AXIS_Y)
+   165	        }
+   166	
+   167	        SensorManager.remapCoordinateSystem(
+   168	            sourceMatrix,
+   169	            axisX,
+   170	            axisY,
+   171	            remappedRotationMatrix
+   172	        )
+   173	
+   174	        SensorManager.getOrientation(remappedRotationMatrix, orientationAngles)
+   175	
+   176	        val azimuthRad = orientationAngles[0].toDouble()
+   177	        val azimuthDeg = Math.toDegrees(azimuthRad)
+   178	
+   179	        val heading = ((azimuthDeg + 360.0) % 360.0)
+   180	
+   181	        eventSink?.success(listOf(heading, accuracy.toDouble()))
+   182	    }
+   183	
+   184	    @Suppress("DEPRECATION")
+   185	    private fun getDisplayRotation(): Int {
+   186	        return windowManager?.defaultDisplay?.rotation ?: Surface.ROTATION_0
+   187	    }
+   188	}
 
 === android/app/src/main/AndroidManifest.xml ===
      1	<manifest xmlns:android="http://schemas.android.com/apk/res/android"

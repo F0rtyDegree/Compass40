@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../theme_provider.dart';
 import '../widgets/compass_section.dart';
 import '../widgets/gps_section.dart';
+import '../widgets/exit_confirm_dialog.dart';
 import '../controllers/home_logic.dart';
 import '../controllers/home_state.dart';
 import '../controllers/home_navigation_actions.dart';
@@ -58,30 +59,12 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
-  void _handleExitRequest() {
-    showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Вы уверены?'),
-        content: const Text('Вы хотите закрыть приложение?'),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Нет'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Да'),
-          ),
-        ],
-      ),
-    ).then((exit) {
-      if (exit == true) {
-        _logic.clearWaypoint().then((_) {
-          SystemNavigator.pop();
-        });
-      }
-    });
+  Future<void> _handleExitRequest() async {
+    final exit = await showExitConfirmDialog(context);
+    if (exit == true) {
+      await _logic.clearWaypoint();
+      SystemNavigator.pop();
+    }
   }
 
   @override

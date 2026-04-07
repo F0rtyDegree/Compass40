@@ -43,6 +43,9 @@ echo "=== lib/widgets/gps_section.dart ===" && cat -n lib/widgets/gps_section.da
 echo ""
 echo "=== lib/widgets/compass_painters.dart ===" && cat -n lib/widgets/compass_painters.dart
 echo ""
+echo "=== lib/widgets/exit_confirm_dialog.dart ===" && cat -n lib/widgets/exit_confirm_dialog.dart
+echo ""
+
 
 # Utils
 echo "=== lib/utils/geo_utils.dart ===" && cat -n lib/utils/geo_utils.dart
