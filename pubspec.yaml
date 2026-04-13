@@ -1,7 +1,7 @@
 name: compass40
 description: "Compass 40°"
 publish_to: 'none'
-version: 2.5.4
+version: 2.6.8
 environment:
   sdk: ^3.9.0
 

@@ -32,9 +32,9 @@ class _TargetScreenState extends State<TargetScreen> {
     if (!mounted) return;
 
     if (clipboardData == null || clipboardData.text == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Буфер обмена пуст')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Буфер обмена пуст')));
       return;
     }
 
@@ -47,7 +47,7 @@ class _TargetScreenState extends State<TargetScreen> {
         // Берем азимут и дистанцию из полей, если пустые - то 0.
         final azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
         final distance = double.tryParse(_distanceController.text) ?? 0.0;
-        
+
         // Возвращаем все данные для расчета на главный экран
         Navigator.pop(context, {
           'base_latitude': lat,
@@ -56,15 +56,18 @@ class _TargetScreenState extends State<TargetScreen> {
           'distance': distance,
           'useClipboardAsBase': true, // Явно указываем, что база из буфера
         });
-
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Неверный формат координат в буфере обмена')),
+          const SnackBar(
+            content: Text('Неверный формат координат в буфере обмена'),
+          ),
         );
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Неверный формат координат в буфере обмена')),
+        const SnackBar(
+          content: Text('Неверный формат координат в буфере обмена'),
+        ),
       );
     }
   }
@@ -79,9 +82,7 @@ class _TargetScreenState extends State<TargetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Установить цель'),
-      ),
+      appBar: AppBar(title: const Text('Установить цель')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -96,9 +97,13 @@ class _TargetScreenState extends State<TargetScreen> {
                   border: OutlineInputBorder(),
                   hintText: '0 (по умолчанию)',
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 validator: (value) {
-                  if (value == null || value.isEmpty) return null; // Пустое поле валидно (будет 0)
+                  if (value == null || value.isEmpty) {
+                    return null; // Пустое поле валидно (будет 0)
+                  }
                   final n = double.tryParse(value);
                   if (n == null || n < 0) {
                     return 'Введите корректное положительное число';
@@ -114,9 +119,13 @@ class _TargetScreenState extends State<TargetScreen> {
                   border: OutlineInputBorder(),
                   hintText: '0-360 (0 по умолчанию)',
                 ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 validator: (value) {
-                   if (value == null || value.isEmpty) return null; // Пустое поле валидно (будет 0)
+                  if (value == null || value.isEmpty) {
+                    return null; // Пустое поле валидно (будет 0)
+                  }
                   final n = double.tryParse(value);
                   if (n == null) {
                     return 'Введите корректное число';

@@ -1,4 +1,3 @@
-
 // This is a basic Flutter widget test.
 //
 // To perform an interaction with a widget in your test, use the WidgetTester
@@ -12,7 +11,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('Empty container test', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: Center(child: Text("Test")))));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: Center(child: Text("Test"))),
+      ),
+    );
 
     // Verify that a text widget is found.
     expect(find.text('Test'), findsOneWidget);

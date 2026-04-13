@@ -7,7 +7,9 @@ class MyCompass {
   static Stream<List<double>>? _headingStream;
 
   static Stream<List<double>> get events {
-    _headingStream ??= _eventChannel.receiveBroadcastStream().map((dynamic event) {
+    _headingStream ??= _eventChannel.receiveBroadcastStream().map((
+      dynamic event,
+    ) {
       if (event is List) {
         return event.cast<double>();
       }

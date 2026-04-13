@@ -44,9 +44,11 @@ class LogService {
 
     final logItems = await loadLogEntries();
 
-    final lastIncompleteEntry = logItems.lastWhereOrNull(
-      (item) => item is LogEntry && item.distance == null,
-    ) as LogEntry?;
+    final lastIncompleteEntry =
+        logItems.lastWhereOrNull(
+              (item) => item is LogEntry && item.distance == null,
+            )
+            as LogEntry?;
 
     if (lastIncompleteEntry != null) {
       final distance = calculateDistance(
@@ -64,8 +66,7 @@ class LogService {
       );
 
       lastIncompleteEntry.distance = distance;
-      lastIncompleteEntry.bearing =
-          (bearing - magneticDeclination + 360) % 360;
+      lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
     }
 
     final existingTrackEntries = logItems.whereType<LogEntry>();
@@ -82,10 +83,7 @@ class LogService {
     logItems.add(newEntry);
     await saveLogEntries(logItems);
 
-    return SetWaypointResult(
-      logItems: logItems,
-      waypoint: currentGpsData,
-    );
+    return SetWaypointResult(logItems: logItems, waypoint: currentGpsData);
   }
 
   Future<ClearWaypointResult> clearWaypoint({
@@ -95,9 +93,11 @@ class LogService {
   }) async {
     final logItems = await loadLogEntries();
 
-    final lastIncompleteEntry = logItems.lastWhereOrNull(
-      (item) => item is LogEntry && item.distance == null,
-    ) as LogEntry?;
+    final lastIncompleteEntry =
+        logItems.lastWhereOrNull(
+              (item) => item is LogEntry && item.distance == null,
+            )
+            as LogEntry?;
 
     if (lastIncompleteEntry == null) {
       return ClearWaypointResult(
@@ -154,10 +154,10 @@ class LogService {
 
     final newId = logItems.whereType<TargetCreationLogEntry>().isNotEmpty
         ? logItems
-                .whereType<TargetCreationLogEntry>()
-                .map((e) => e.id)
-                .reduce(math.max) +
-            1
+                  .whereType<TargetCreationLogEntry>()
+                  .map((e) => e.id)
+                  .reduce(math.max) +
+              1
         : 1;
 
     final entry = TargetCreationLogEntry(
@@ -180,10 +180,7 @@ class SetWaypointResult {
   final List<LogItem> logItems;
   final GpsData waypoint;
 
-  SetWaypointResult({
-    required this.logItems,
-    required this.waypoint,
-  });
+  SetWaypointResult({required this.logItems, required this.waypoint});
 }
 
 class ClearWaypointResult {

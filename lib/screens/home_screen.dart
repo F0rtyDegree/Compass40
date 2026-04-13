@@ -38,7 +38,6 @@ class _MyHomePageState extends State<MyHomePage> {
       logService: _logService,
       sensorService: _sensorService,
     );
-
     Provider.of<ThemeProvider>(context, listen: false).loadTheme();
     _logic.init();
   }
@@ -95,6 +94,7 @@ class _MyHomePageState extends State<MyHomePage> {
             CompassSection(
               headingNotifier: _state.headingNotifier,
               accuracyNotifier: _state.accuracyNotifier,
+              isGpsCompassActiveNotifier: _state.isGpsCompassActiveNotifier,
               bearingToTarget: _state.bearingToTarget,
               bearingToWaypoint: _state.bearingToWaypoint,
               logItems: _state.logItems,

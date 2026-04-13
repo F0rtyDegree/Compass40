@@ -26,6 +26,35 @@ class _LogScreenState extends State<LogScreen> {
     }
   }
 
+  void _copyAllToClipboard() {
+    final allText = widget.logItems.reversed.map((entry) {
+      if (entry is LogEntry) {
+        final distanceText = entry.distance != null
+            ? '${entry.distance!.round()}m'
+            : '--m';
+        final bearingText = entry.bearing != null
+            ? '${entry.bearing!.round()}°'
+            : '--°';
+        return '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
+      } else if (entry is TargetCreationLogEntry) {
+        final startText =
+            'Старт: ${entry.baseLatitude.toStringAsFixed(6)},${entry.baseLongitude.toStringAsFixed(6)} ${entry.distance.round()}м ${entry.azimuth.round()}°';
+        final targetText =
+            'ЦЕЛЬ: ${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
+        return '$startText\n$targetText';
+      }
+      return '';
+    }).join('\n');
+
+    Clipboard.setData(ClipboardData(text: allText));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Журнал скопирован в буфер обмена'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   void _handleTap(LogItem entry, {String? line}) {
     String textToCopy = '';
     int? entryId;
@@ -80,9 +109,13 @@ class _LogScreenState extends State<LogScreen> {
     if (entry is LogEntry) {
       final isCopied =
           entry.id == _copiedEntryId && _copiedEntryType == 'track';
-      // --- Исправлено --- 
-      final distanceText = entry.distance != null ? '${entry.distance!.round()}m' : '--m';
-      final bearingText = entry.bearing != null ? '${entry.bearing!.round()}°' : '--°';
+      // --- Исправлено ---
+      final distanceText = entry.distance != null
+          ? '${entry.distance!.round()}m'
+          : '--m';
+      final bearingText = entry.bearing != null
+          ? '${entry.bearing!.round()}°'
+          : '--°';
       final text =
           '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
       // --- Конец исправления ---
@@ -181,6 +214,11 @@ class _LogScreenState extends State<LogScreen> {
       appBar: AppBar(
         title: const Text('Журнал'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.copy_all),
+            onPressed: _copyAllToClipboard,
+            tooltip: 'Копировать все',
+          ),
           IconButton(
             icon: const Icon(Icons.delete_forever),
             onPressed: () async {

@@ -61,7 +61,8 @@ class _GpsSectionState extends State<GpsSection> {
 
             final copied = _isCoordinatesCopied;
             final inverted = Theme.of(context).scaffoldBackgroundColor;
-            final origColor = baseStyle?.color ??
+            final origColor =
+                baseStyle?.color ??
                 (Theme.of(context).brightness == Brightness.dark
                     ? Colors.white70
                     : Colors.black87);
@@ -81,8 +82,7 @@ class _GpsSectionState extends State<GpsSection> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
                   color: copied ? origColor : Colors.transparent,
                   borderRadius: BorderRadius.circular(4),
@@ -91,9 +91,7 @@ class _GpsSectionState extends State<GpsSection> {
                   context,
                   Icons.location_on,
                   coordsText,
-                  copied
-                      ? baseStyle?.copyWith(color: inverted)
-                      : baseStyle,
+                  copied ? baseStyle?.copyWith(color: inverted) : baseStyle,
                   copied ? inverted : iconColor,
                 ),
               ),
@@ -188,8 +186,7 @@ class _GpsSectionState extends State<GpsSection> {
               final distText = dist > 1000
                   ? '${(dist / 1000).toStringAsFixed(2)} km'
                   : '${dist.round()} m';
-              final text =
-                  'ДО ЦЕЛИ: -> $distText, ${bear.round().toString()}°';
+              final text = 'ДО ЦЕЛИ: -> $distText, ${bear.round().toString()}°';
               return Container(
                 height: minH,
                 alignment: Alignment.center,
@@ -198,8 +195,9 @@ class _GpsSectionState extends State<GpsSection> {
                   child: Text(
                     text,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.blueAccent,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.blueAccent,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               );
@@ -239,13 +237,13 @@ class _GpsSectionState extends State<GpsSection> {
                 alignment: Alignment.center,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(text,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold)),
+                  child: Text(
+                    text,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               );
             },
@@ -256,13 +254,20 @@ class _GpsSectionState extends State<GpsSection> {
   }
 
   Widget _buildIconValue(
-      BuildContext c, IconData icon, String val, TextStyle? st, Color? clr) {
+    BuildContext c,
+    IconData icon,
+    String val,
+    TextStyle? st,
+    Color? clr,
+  ) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: clr, size: 28),
         const SizedBox(width: 8),
-        Flexible(child: Text(val, style: st, overflow: TextOverflow.ellipsis)),
+        Flexible(
+          child: Text(val, style: st, overflow: TextOverflow.ellipsis),
+        ),
       ],
     );
   }

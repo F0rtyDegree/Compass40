@@ -6,6 +6,10 @@ echo ""
 echo "=== analysis_options.yaml ===" && cat -n analysis_options.yaml
 echo ""
 
+# Android Manifest
+echo "=== android/app/src/main/AndroidManifest.xml ===" && cat -n android/app/src/main/AndroidManifest.xml
+echo ""
+
 # Main App Files
 echo "=== lib/main.dart ===" && cat -n lib/main.dart
 echo ""
@@ -71,6 +75,3 @@ echo ""
 echo "=== packages/my_compass/android/src/main/kotlin/com/example/my_compass/MyCompassPlugin.kt ===" && cat -n packages/my_compass/android/src/main/kotlin/com/example/my_compass/MyCompassPlugin.kt
 echo ""
 
-# Android Manifest
-echo "=== android/app/src/main/AndroidManifest.xml ===" && cat -n android/app/src/main/AndroidManifest.xml
-echo ""

@@ -5,6 +5,9 @@ import 'package:gps_info/gps_info.dart';
 
 import '../log_entry.dart';
 
+// Режимы компаса
+enum CompassMode { magnetic, gps, auto }
+
 class HomeState {
   final GpsInfo gpsInfo = GpsInfo();
 
@@ -14,6 +17,14 @@ class HomeState {
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
   final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
+  final ValueNotifier<double?> gpsBearingNotifier = ValueNotifier(null);
+  final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
+
+  // Режим компаса
+  CompassMode compassMode = CompassMode.magnetic;
+
+  // Скорость автопереключения км/ч
+  double autoSwitchSpeedKmh = 3.0;
 
   double magneticDeclination = 0.0;
   bool useManualDeclination = false;
@@ -29,6 +40,7 @@ class HomeState {
 
   List<LogItem> logItems = [];
   final List<(double, int)> headingSamples = [];
+  final List<(double, int)> gpsBearingSamples = [];
   Timer? uiUpdateTimer;
 
   int averagingPeriod = 500;
@@ -43,9 +55,11 @@ class HomeState {
     gpsDataNotifier.dispose();
     headingNotifier.dispose();
     accuracyNotifier.dispose();
+    gpsBearingNotifier.dispose();
     distanceToWaypoint.dispose();
     bearingToWaypoint.dispose();
     distanceToTarget.dispose();
     bearingToTarget.dispose();
+    isGpsCompassActiveNotifier.dispose();
   }
 }

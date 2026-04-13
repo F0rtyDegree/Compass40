@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:gps_info/gps_info.dart';
@@ -45,7 +44,7 @@ class HomeLogic {
   }
 
   // ----------------------------------------------------------------------
-  // ----------------------- МАГНИТНАЯ СИСТЕМА ----------------------------
+  // Настройки
   // ----------------------------------------------------------------------
 
   Future<void> _loadAllSettings() async {
@@ -58,6 +57,8 @@ class HomeLogic {
       state.averagingPeriod = settings.averagingPeriod;
       state.smoothingFactor = settings.smoothingFactor;
       state.uiUpdatePeriod = settings.uiUpdatePeriod;
+      state.compassMode = settings.compassMode;
+      state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
     });
 
     startUiUpdateTimer();
@@ -66,6 +67,24 @@ class HomeLogic {
   Future<void> reloadSettings() async {
     await _loadAllSettings();
   }
+
+  Future<void> setCompassMode(CompassMode mode) async {
+    setState(() {
+      state.compassMode = mode;
+    });
+    await sensorService.saveCompassMode(mode);
+  }
+
+  Future<void> setAutoSwitchSpeed(double speedKmh) async {
+    setState(() {
+      state.autoSwitchSpeedKmh = speedKmh;
+    });
+    await sensorService.saveAutoSwitchSpeed(speedKmh);
+  }
+
+  // ----------------------------------------------------------------------
+  // Сенсоры
+  // ----------------------------------------------------------------------
 
   void _requestPermissions() async {
     if (await sensorService.requestLocationPermission()) {
@@ -83,6 +102,19 @@ class HomeLogic {
       onData: (gpsData) {
         if (!mounted) return;
         state.gpsDataNotifier.value = gpsData;
+
+        final speedKmh = (gpsData.speed ?? 0) * 3.6;
+        if (speedKmh > 0.5 && gpsData.gpsBearing != null) {
+          state.gpsBearingNotifier.value = gpsData.gpsBearing;
+          state.gpsBearingSamples.add((
+            gpsData.gpsBearing!,
+            DateTime.now().millisecondsSinceEpoch,
+          ));
+          if (state.gpsBearingSamples.length > HomeState.maxSamples) {
+            state.gpsBearingSamples.removeAt(0);
+          }
+        }
+
         if (!state.useManualDeclination) {
           setState(() {
             state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
@@ -101,9 +133,10 @@ class HomeLogic {
         final accuracy = data.length > 1 ? data[1] : 0.0;
         if (accuracy < 2) return;
 
-        state.headingSamples.add(
-          (heading, DateTime.now().millisecondsSinceEpoch),
-        );
+        state.headingSamples.add((
+          heading,
+          DateTime.now().millisecondsSinceEpoch,
+        ));
 
         if (state.headingSamples.length > HomeState.maxSamples) {
           state.headingSamples.removeAt(0);
@@ -119,6 +152,10 @@ class HomeLogic {
     );
   }
 
+  // ----------------------------------------------------------------------
+  // Таймер и обновление heading
+  // ----------------------------------------------------------------------
+
   void startUiUpdateTimer() {
     state.uiUpdateTimer?.cancel();
     state.uiUpdateTimer = Timer.periodic(
@@ -133,26 +170,98 @@ class HomeLogic {
     );
   }
 
-  void _updateHeading() {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    state.headingSamples.removeWhere(
-      (s) => now - s.$2 > state.averagingPeriod,
-    );
+  double _calculateCircularMedian(List<double> samples) {
+    if (samples.isEmpty) return 0.0;
+    if (samples.length == 1) return samples[0];
 
-    if (state.headingSamples.isEmpty) return;
+    samples.sort();
 
-    double sinSum = 0, cosSum = 0;
-    for (var s in state.headingSamples) {
-      final a = s.$1 * math.pi / 180;
-      sinSum += math.sin(a);
-      cosSum += math.cos(a);
+    double maxGap = 0;
+    int maxGapIndex = -1;
+
+    for (int i = 0; i < samples.length - 1; i++) {
+      final gap = samples[i + 1] - samples[i];
+      if (gap > maxGap) {
+        maxGap = gap;
+        maxGapIndex = i;
+      }
     }
 
-    final avgSin = sinSum / state.headingSamples.length;
-    final avgCos = cosSum / state.headingSamples.length;
-    final avgHeading = math.atan2(avgSin, avgCos) * 180 / math.pi;
+    final wrapAroundGap = (samples.first + 360) - samples.last;
+    if (wrapAroundGap > maxGap) {
+      maxGap = wrapAroundGap;
+      maxGapIndex = samples.length - 1;
+    }
 
-    double diff = avgHeading - state.filteredHeading;
+    List<double> shiftedSamples;
+    if (maxGapIndex == samples.length - 1) {
+      shiftedSamples = List.from(samples);
+    } else {
+      shiftedSamples = [];
+      final shiftPoint = samples[maxGapIndex];
+      for (final s in samples) {
+        if (s > shiftPoint) {
+          shiftedSamples.add(s);
+        } else {
+          shiftedSamples.add(s + 360);
+        }
+      }
+    }
+    
+    double median;
+    int mid = shiftedSamples.length ~/ 2;
+    if (shiftedSamples.length % 2 == 1) {
+      median = shiftedSamples[mid];
+    } else {
+      median = (shiftedSamples[mid - 1] + shiftedSamples[mid]) / 2.0;
+    }
+
+    return median % 360;
+  }
+
+  void _updateHeading() {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final speedKmh = (state.gpsDataNotifier.value.speed ?? 0) * 3.6;
+    final gpsBearing = state.gpsBearingNotifier.value;
+
+    bool useGps = false;
+
+    switch (state.compassMode) {
+      case CompassMode.magnetic:
+        useGps = false;
+        break;
+      case CompassMode.gps:
+        useGps = gpsBearing != null;
+        break;
+      case CompassMode.auto:
+        useGps = gpsBearing != null && speedKmh >= state.autoSwitchSpeedKmh;
+        break;
+    }
+
+    state.isGpsCompassActiveNotifier.value = useGps;
+    
+    double newHeading;
+
+    if (useGps) {
+      // GPS-компас
+      state.gpsBearingSamples.removeWhere((s) => now - s.$2 > state.averagingPeriod);
+      if (state.gpsBearingSamples.isEmpty) return;
+      final bearings = state.gpsBearingSamples.map((s) => s.$1).toList();
+      final medianTrueBearing = _calculateCircularMedian(bearings);
+      // Преобразуем истинный курс в магнитный
+      newHeading = (medianTrueBearing - state.magneticDeclination + 360) % 360;
+
+    } else {
+      // Магнитный компас
+      state.headingSamples.removeWhere((s) => now - s.$2 > state.averagingPeriod);
+      if (state.headingSamples.isEmpty) return;
+      final headings = state.headingSamples.map((s) => s.$1).toList();
+      // Данные с сенсора уже магнитные
+      newHeading = _calculateCircularMedian(headings);
+    }
+    
+    // Сглаживание
+    double diff = newHeading - state.filteredHeading;
     if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
 
     state.filteredHeading += state.smoothingFactor * diff;
@@ -166,7 +275,8 @@ class HomeLogic {
   // ----------------------------------------------------------------------
 
   void _calculateWaypointData() {
-    if (state.waypoint == null || state.gpsDataNotifier.value.latitude == null) {
+    if (state.waypoint == null ||
+        state.gpsDataNotifier.value.latitude == null) {
       return;
     }
 
@@ -216,16 +326,13 @@ class HomeLogic {
   }
 
   // ----------------------------------------------------------------------
-  // --- Работа с логами и контрольными точками --------------------------
+  // Логи и КП
   // ----------------------------------------------------------------------
 
   Future<void> loadLogEntries() async {
     final items = await logService.loadLogEntries();
     if (!mounted) return;
-
-    setState(() {
-      state.logItems = items;
-    });
+    setState(() => state.logItems = items);
   }
 
   Future<void> setWaypoint() async {
@@ -234,9 +341,7 @@ class HomeLogic {
       currentGpsData: state.gpsDataNotifier.value,
       magneticDeclination: state.magneticDeclination,
     );
-
     if (result == null || !mounted) return;
-
     setState(() {
       state.logItems = result.logItems;
       state.waypoint = result.waypoint;
@@ -249,9 +354,7 @@ class HomeLogic {
       currentGpsData: state.gpsDataNotifier.value,
       magneticDeclination: state.magneticDeclination,
     );
-
     if (!mounted) return;
-
     setState(() {
       state.logItems = result.logItems;
       state.waypoint = result.waypoint;
@@ -285,18 +388,12 @@ class HomeLogic {
       targetLatitude: targetLatitude,
       targetLongitude: targetLongitude,
     );
-
     if (!mounted) return;
-
-    setState(() {
-      state.logItems = items;
-    });
+    setState(() => state.logItems = items);
   }
 
   void setTarget(Map<String, double>? target) {
-    setState(() {
-      state.target = target;
-    });
+    setState(() => state.target = target);
   }
 
   void setTargetCalculationStartPoint(GpsData gpsData) {
@@ -304,7 +401,7 @@ class HomeLogic {
   }
 
   // ----------------------------------------------------------------------
-  // --- Сервисная информация и цвета ------------------------------------
+  // Вспомогательные методы для UI
   // ----------------------------------------------------------------------
 
   String getAccuracyText(double accuracy) {
@@ -347,5 +444,16 @@ class HomeLogic {
     if (heading >= 247.5 && heading < 292.5) return 'Запад';
     if (heading >= 292.5 && heading < 337.5) return 'С-Запад';
     return '--';
+  }
+
+  String getCompassModeLabel() {
+    switch (state.compassMode) {
+      case CompassMode.magnetic:
+        return 'Маг';
+      case CompassMode.gps:
+        return 'GPS';
+      case CompassMode.auto:
+        return 'Авто';
+    }
   }
 }

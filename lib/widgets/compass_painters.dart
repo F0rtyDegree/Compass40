@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 class TargetPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final fill = Paint()..color = Colors.blueAccent..style = PaintingStyle.fill;
+    final fill = Paint()
+      ..color = Colors.green
+      ..style = PaintingStyle.fill;
     final border = Paint()
       ..color = Colors.black.withAlpha(178)
       ..style = PaintingStyle.stroke
@@ -25,7 +27,9 @@ class TargetPainter extends CustomPainter {
 class WaypointPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final fill = Paint()..color = Colors.orange..style = PaintingStyle.fill;
+    final fill = Paint()
+      ..color = Colors.orange
+      ..style = PaintingStyle.fill;
     final border = Paint()
       ..color = Colors.black.withAlpha(178)
       ..style = PaintingStyle.stroke
@@ -61,7 +65,7 @@ class WindRosePainter extends CustomPainter {
       Colors.red,
       Colors.green,
       Colors.yellow,
-      Colors.cyan
+      Colors.cyan,
     ];
     final paint = Paint()
       ..style = PaintingStyle.stroke
@@ -72,7 +76,12 @@ class WindRosePainter extends CustomPainter {
       paint.color = colors[i];
       final start = -math.pi / 2 - sect / 2 + i * sect;
       canvas.drawArc(
-          Rect.fromCircle(center: center, radius: radius), start, sect, false, paint);
+        Rect.fromCircle(center: center, radius: radius),
+        start,
+        sect,
+        false,
+        paint,
+      );
     }
 
     // Разделительные линии (15 градусов)
@@ -114,12 +123,18 @@ class WindRosePainter extends CustomPainter {
       final i = e.key;
       final t = e.value;
       final col = colors[i];
-      final textColor = col.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+      final textColor = col.computeLuminance() > 0.5
+          ? Colors.black
+          : Colors.white;
       final tp = TextPainter(
         text: TextSpan(
-            text: t,
-            style: TextStyle(
-                color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+          text: t,
+          style: TextStyle(
+            color: textColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       final ang = -math.pi / 2 + i * sect;
@@ -143,7 +158,9 @@ class UprightTrianglePainter extends CustomPainter {
   const UprightTrianglePainter({required this.color});
   @override
   void paint(Canvas c, Size s) {
-    final p = Paint()..color = color..style = PaintingStyle.fill;
+    final p = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
     final path = Path()
       ..moveTo(s.width / 2, 0)
       ..lineTo(0, s.height)
@@ -161,7 +178,9 @@ class DownwardTrianglePainter extends CustomPainter {
   const DownwardTrianglePainter({required this.color});
   @override
   void paint(Canvas c, Size s) {
-    final p = Paint()..color = color..style = PaintingStyle.fill;
+    final p = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
     final path = Path()
       ..moveTo(0, 0)
       ..lineTo(s.width, 0)

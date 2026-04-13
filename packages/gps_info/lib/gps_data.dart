@@ -4,10 +4,11 @@ class GpsData {
   final double? accuracy;
   final double? speed;
   final double? altitude;
-  final double? mslAltitude; 
+  final double? mslAltitude;
   final int? satellitesUsed;
   final int? satellitesInView;
-  final double? magneticDeclination; 
+  final double? magneticDeclination;
+  final double? gpsBearing; // ✅ новое поле
 
   GpsData({
     this.latitude,
@@ -19,6 +20,7 @@ class GpsData {
     this.satellitesUsed,
     this.satellitesInView,
     this.magneticDeclination,
+    this.gpsBearing,
   });
 
   factory GpsData.fromMap(Map<dynamic, dynamic> map) {
@@ -32,6 +34,7 @@ class GpsData {
       satellitesUsed: map['satellitesUsed'] as int?,
       satellitesInView: map['satellitesInView'] as int?,
       magneticDeclination: map['magneticDeclination'] as double?,
+      gpsBearing: map['gpsBearing'] as double?,
     );
   }
 }

@@ -6,22 +6,22 @@ import '../widgets/compass_painters.dart';
 class CompassSection extends StatelessWidget {
   final ValueNotifier<double> headingNotifier;
   final ValueNotifier<double> accuracyNotifier;
+  final ValueNotifier<bool> isGpsCompassActiveNotifier;
   final ValueNotifier<double?> bearingToTarget;
   final ValueNotifier<double?> bearingToWaypoint;
   final List<LogItem> logItems;
-  final Function() setWaypoint;
-  final Function() clearWaypoint;
+  final Future<void> Function() setWaypoint;
+  final Future<void> Function() clearWaypoint;
   final Function(DragEndDetails) onVerticalDragEnd;
   final String Function(double) getCardinalDirection;
   final Color Function(double) getAccuracyStatusColor;
   final String Function(double) getAccuracyText;
 
-
-
   const CompassSection({
     super.key,
     required this.headingNotifier,
     required this.accuracyNotifier,
+    required this.isGpsCompassActiveNotifier,
     required this.bearingToTarget,
     required this.bearingToWaypoint,
     required this.logItems,
@@ -45,6 +45,7 @@ class CompassSection extends StatelessWidget {
           final textColor = Theme.of(context).brightness == Brightness.dark
               ? Colors.grey[400]
               : Colors.grey[700];
+
           return Padding(
             padding: const EdgeInsets.only(top: 20),
             child: Column(
@@ -53,18 +54,26 @@ class CompassSection extends StatelessWidget {
                 const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CustomPaint(painter: UprightTrianglePainter(color: Colors.blue)),
+                  child: CustomPaint(
+                    painter: UprightTrianglePainter(color: Colors.blue),
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   getCardinalDirection(heading),
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textColor),
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 const SizedBox(
                   width: 12,
                   height: 12,
-                  child: CustomPaint(painter: DownwardTrianglePainter(color: Colors.blue)),
+                  child: CustomPaint(
+                    painter: DownwardTrianglePainter(color: Colors.blue),
+                  ),
                 ),
                 Stack(
                   alignment: Alignment.center,
@@ -79,7 +88,9 @@ class CompassSection extends StatelessWidget {
                             height: 275,
                             child: CustomPaint(
                               painter: WindRosePainter(
-                                isDarkMode: Theme.of(context).brightness == Brightness.dark,
+                                isDarkMode:
+                                    Theme.of(context).brightness ==
+                                    Brightness.dark,
                                 heading: heading,
                               ),
                             ),
@@ -91,26 +102,52 @@ class CompassSection extends StatelessWidget {
                     ),
                     Text(
                       '${heading.round()}°',
-                      style: const TextStyle(fontSize: 60, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 60,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Positioned(
                       bottom: 60,
-                      child: ValueListenableBuilder<double>(
-                        valueListenable: accuracyNotifier,
-                        builder: (context, acc, _) => Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.shield_outlined,
-                                color: getAccuracyStatusColor(acc), size: 28),
-                            Text(getAccuracyText(acc),
-                                style: TextStyle(
-                                    color: getAccuracyStatusColor(acc), fontSize: 10)),
-                          ],
-                        ),
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: isGpsCompassActiveNotifier,
+                        builder: (context, isGpsActive, _) {
+                          return ValueListenableBuilder<double>(
+                            valueListenable: accuracyNotifier,
+                            builder: (context, acc, _) {
+                              // ✅ Серый цвет когда GPS-компас активен, обычные цвета — когда магнитный
+                              final color = isGpsActive 
+                                  ? Colors.grey 
+                                  : getAccuracyStatusColor(acc);
+                              
+                              final text = isGpsActive 
+                                  ? 'GPS компас' 
+                                  : getAccuracyText(acc);
+                                  
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.shield_outlined,
+                                    color: color,
+                                    size: 28,
+                                  ),
+                                  Text(
+                                    text,
+                                    style: TextStyle(
+                                      color: color,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
                       ),
                     ),
                   ],
-                )
+                ),
               ],
             ),
           );
@@ -133,7 +170,10 @@ class CompassSection extends StatelessWidget {
               alignment: Alignment.topCenter,
               child: Padding(
                 padding: const EdgeInsets.only(top: 22),
-                child: CustomPaint(size: const Size(12, 22), painter: TargetPainter()),
+                child: CustomPaint(
+                  size: const Size(12, 26),
+                  painter: TargetPainter(),
+                ),
               ),
             ),
           ),
@@ -156,7 +196,10 @@ class CompassSection extends StatelessWidget {
               alignment: Alignment.topCenter,
               child: Padding(
                 padding: const EdgeInsets.only(top: 22),
-                child: CustomPaint(size: const Size(12, 22), painter: WaypointPainter()),
+                child: CustomPaint(
+                  size: const Size(12, 22),
+                  painter: WaypointPainter(),
+                ),
               ),
             ),
           ),

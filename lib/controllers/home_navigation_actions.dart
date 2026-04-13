@@ -22,18 +22,14 @@ class HomeNavigationActions {
   void openSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const SettingsScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const SettingsScreen()),
     ).then((_) => logic.reloadSettings());
   }
 
   void openAbout() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const AboutScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const AboutScreen()),
     );
   }
 
@@ -41,26 +37,19 @@ class HomeNavigationActions {
     if (details.primaryVelocity! < 0) {
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (c) => LogScreen(logItems: state.logItems),
-        ),
+        MaterialPageRoute(builder: (c) => LogScreen(logItems: state.logItems)),
       ).then((_) => logic.loadLogEntries());
     } else if (details.primaryVelocity! > 0) {
-      logic.setTargetCalculationStartPoint(
-        state.gpsDataNotifier.value,
-      );
+      logic.setTargetCalculationStartPoint(state.gpsDataNotifier.value);
 
       final result = await Navigator.push<Map<String, dynamic>>(
         context,
-        MaterialPageRoute(
-          builder: (context) => const TargetScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const TargetScreen()),
       );
 
       if (result == null) return;
 
-      final useClipboardAsBase =
-          result['useClipboardAsBase'] as bool? ?? false;
+      final useClipboardAsBase = result['useClipboardAsBase'] as bool? ?? false;
 
       double startLat, startLon;
       if (useClipboardAsBase) {

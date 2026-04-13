@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -62,11 +61,17 @@ class _AboutScreenState extends State<AboutScreen> {
                 children: [
                   Text(
                     'Compass 40°',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   Text(
                     'v$_version',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withAlpha((255 * 0.6).round())),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withAlpha((255 * 0.6).round()),
+                    ),
                   ),
                 ],
               ),
@@ -78,7 +83,9 @@ class _AboutScreenState extends State<AboutScreen> {
               const SizedBox(height: 24),
               Text(
                 'Ключевые возможности:',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               _buildFeatureText(
