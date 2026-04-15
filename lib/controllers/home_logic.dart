@@ -207,7 +207,7 @@ class HomeLogic {
         }
       }
     }
-    
+
     double median;
     int mid = shiftedSamples.length ~/ 2;
     if (shiftedSamples.length % 2 == 1) {
@@ -239,27 +239,30 @@ class HomeLogic {
     }
 
     state.isGpsCompassActiveNotifier.value = useGps;
-    
+
     double newHeading;
 
     if (useGps) {
       // GPS-компас
-      state.gpsBearingSamples.removeWhere((s) => now - s.$2 > state.averagingPeriod);
+      state.gpsBearingSamples.removeWhere(
+        (s) => now - s.$2 > state.averagingPeriod,
+      );
       if (state.gpsBearingSamples.isEmpty) return;
       final bearings = state.gpsBearingSamples.map((s) => s.$1).toList();
       final medianTrueBearing = _calculateCircularMedian(bearings);
       // Преобразуем истинный курс в магнитный
       newHeading = (medianTrueBearing - state.magneticDeclination + 360) % 360;
-
     } else {
       // Магнитный компас
-      state.headingSamples.removeWhere((s) => now - s.$2 > state.averagingPeriod);
+      state.headingSamples.removeWhere(
+        (s) => now - s.$2 > state.averagingPeriod,
+      );
       if (state.headingSamples.isEmpty) return;
       final headings = state.headingSamples.map((s) => s.$1).toList();
       // Данные с сенсора уже магнитные
       newHeading = _calculateCircularMedian(headings);
     }
-    
+
     // Сглаживание
     double diff = newHeading - state.filteredHeading;
     if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;

@@ -9,27 +9,28 @@ class MapScreenState {
   String? imagePath;
   Size? imageSize;
   MapProject? project;
-  
+
   // Трансформация карты
   MapTransformState transformState = const MapTransformState();
-  
+
   // Режимы
   bool followMode = false;
   bool rotateMapByHeading = false;
   bool crosshairInCenter = true;
-  
+
   // Позиции
-  Offset? currentUserScreenPoint;  // позиция пользователя в экранных координатах
-  Offset? currentUserImagePoint;   // позиция пользователя в координатах изображения
-  Offset? crosshairImagePoint;      // позиция прицела в координатах изображения
-  
+  Offset? currentUserScreenPoint; // позиция пользователя в экранных координатах
+  Offset?
+  currentUserImagePoint; // позиция пользователя в координатах изображения
+  Offset? crosshairImagePoint; // позиция прицела в координатах изображения
+
   // Цели
   MapTarget? plannedTarget;
   MapTarget? activeTarget;
-  
+
   // Таймеры
   Timer? followRestoreTimer;
-  
+
   // Флаг, открыт ли экран (для предотвращения утечек)
   bool isDisposed = false;
 }

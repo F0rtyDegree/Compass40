@@ -18,5 +18,12 @@ class MapAnchor extends Equatable {
   });
 
   @override
-  List<Object?> get props => [id, imageX, imageY, latitude, longitude, createdAt];
+  List<Object?> get props => [
+    id,
+    imageX,
+    imageY,
+    latitude,
+    longitude,
+    createdAt,
+  ];
 }

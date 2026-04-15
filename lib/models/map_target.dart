@@ -22,5 +22,13 @@ class MapTarget extends Equatable {
   });
 
   @override
-  List<Object?> get props => [id, imageX, imageY, latitude, longitude, status, createdAt];
+  List<Object?> get props => [
+    id,
+    imageX,
+    imageY,
+    latitude,
+    longitude,
+    status,
+    createdAt,
+  ];
 }

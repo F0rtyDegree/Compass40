@@ -27,24 +27,26 @@ class _LogScreenState extends State<LogScreen> {
   }
 
   void _copyAllToClipboard() {
-    final allText = widget.logItems.reversed.map((entry) {
-      if (entry is LogEntry) {
-        final distanceText = entry.distance != null
-            ? '${entry.distance!.round()}m'
-            : '--m';
-        final bearingText = entry.bearing != null
-            ? '${entry.bearing!.round()}°'
-            : '--°';
-        return '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
-      } else if (entry is TargetCreationLogEntry) {
-        final startText =
-            'Старт: ${entry.baseLatitude.toStringAsFixed(6)},${entry.baseLongitude.toStringAsFixed(6)} ${entry.distance.round()}м ${entry.azimuth.round()}°';
-        final targetText =
-            'ЦЕЛЬ: ${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
-        return '$startText\n$targetText';
-      }
-      return '';
-    }).join('\n');
+    final allText = widget.logItems.reversed
+        .map((entry) {
+          if (entry is LogEntry) {
+            final distanceText = entry.distance != null
+                ? '${entry.distance!.round()}m'
+                : '--m';
+            final bearingText = entry.bearing != null
+                ? '${entry.bearing!.round()}°'
+                : '--°';
+            return '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
+          } else if (entry is TargetCreationLogEntry) {
+            final startText =
+                'Старт: ${entry.baseLatitude.toStringAsFixed(6)},${entry.baseLongitude.toStringAsFixed(6)} ${entry.distance.round()}м ${entry.azimuth.round()}°';
+            final targetText =
+                'ЦЕЛЬ: ${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
+            return '$startText\n$targetText';
+          }
+          return '';
+        })
+        .join('\n');
 
     Clipboard.setData(ClipboardData(text: allText));
     ScaffoldMessenger.of(context).showSnackBar(

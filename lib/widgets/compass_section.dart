@@ -41,7 +41,7 @@ class CompassSection extends StatelessWidget {
       onTap: setWaypoint,
       onVerticalDragEnd: onVerticalDragEnd,
       onHorizontalDragEnd: (details) {
-        if (details.primaryVelocity != null && 
+        if (details.primaryVelocity != null &&
             details.primaryVelocity!.abs() > 500) {
           onSwipeToOpenMap?.call();
         }
@@ -123,14 +123,14 @@ class CompassSection extends StatelessWidget {
                           return ValueListenableBuilder<double>(
                             valueListenable: accuracyNotifier,
                             builder: (context, acc, _) {
-                              final color = isGpsActive 
-                                  ? Colors.grey 
+                              final color = isGpsActive
+                                  ? Colors.grey
                                   : getAccuracyStatusColor(acc);
-                              
-                              final text = isGpsActive 
-                                  ? 'GPS компас' 
+
+                              final text = isGpsActive
+                                  ? 'GPS компас'
                                   : getAccuracyText(acc);
-                                  
+
                               return Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [

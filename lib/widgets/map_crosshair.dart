@@ -21,7 +21,7 @@ class CrosshairPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final lineLength = 15.0;
-    
+
     final paint = Paint()
       ..color = Colors.red
       ..strokeWidth = 2.0

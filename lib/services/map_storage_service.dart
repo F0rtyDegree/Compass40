@@ -32,29 +32,37 @@ class MapStorageService {
     final prefs = await SharedPreferences.getInstance();
     final projectsJson = prefs.getString(_projectsKey) ?? '{}';
     final Map<String, dynamic> projects = jsonDecode(projectsJson);
-    
+
     projects[project.id] = {
       'id': project.id,
       'imagePath': project.imagePath,
-      'anchors': project.anchors.map((a) => {
-        'id': a.id,
-        'imageX': a.imageX,
-        'imageY': a.imageY,
-        'latitude': a.latitude,
-        'longitude': a.longitude,
-        'createdAt': a.createdAt.toIso8601String(),
-      }).toList(),
-      'targets': project.targets.map((t) => {
-        'id': t.id,
-        'imageX': t.imageX,
-        'imageY': t.imageY,
-        'latitude': t.latitude,
-        'longitude': t.longitude,
-        'status': t.status.index,
-        'createdAt': t.createdAt.toIso8601String(),
-      }).toList(),
+      'anchors': project.anchors
+          .map(
+            (a) => {
+              'id': a.id,
+              'imageX': a.imageX,
+              'imageY': a.imageY,
+              'latitude': a.latitude,
+              'longitude': a.longitude,
+              'createdAt': a.createdAt.toIso8601String(),
+            },
+          )
+          .toList(),
+      'targets': project.targets
+          .map(
+            (t) => {
+              'id': t.id,
+              'imageX': t.imageX,
+              'imageY': t.imageY,
+              'latitude': t.latitude,
+              'longitude': t.longitude,
+              'status': t.status.index,
+              'createdAt': t.createdAt.toIso8601String(),
+            },
+          )
+          .toList(),
     };
-    
+
     await prefs.setString(_projectsKey, jsonEncode(projects));
   }
 
@@ -62,31 +70,39 @@ class MapStorageService {
     final prefs = await SharedPreferences.getInstance();
     final projectsJson = prefs.getString(_projectsKey);
     if (projectsJson == null) return null;
-    
+
     final Map<String, dynamic> projects = jsonDecode(projectsJson);
     final projectData = projects[id];
     if (projectData == null) return null;
-    
+
     return MapProject(
       id: projectData['id'],
       imagePath: projectData['imagePath'],
-      anchors: (projectData['anchors'] as List).map((a) => MapAnchor(
-        id: a['id'],
-        imageX: a['imageX'],
-        imageY: a['imageY'],
-        latitude: a['latitude'],
-        longitude: a['longitude'],
-        createdAt: DateTime.parse(a['createdAt']),
-      )).toList(),
-      targets: (projectData['targets'] as List).map((t) => MapTarget(
-        id: t['id'],
-        imageX: t['imageX'],
-        imageY: t['imageY'],
-        latitude: t['latitude'],
-        longitude: t['longitude'],
-        status: MapTargetStatus.values[t['status']],
-        createdAt: DateTime.parse(t['createdAt']),
-      )).toList(),
+      anchors: (projectData['anchors'] as List)
+          .map(
+            (a) => MapAnchor(
+              id: a['id'],
+              imageX: a['imageX'],
+              imageY: a['imageY'],
+              latitude: a['latitude'],
+              longitude: a['longitude'],
+              createdAt: DateTime.parse(a['createdAt']),
+            ),
+          )
+          .toList(),
+      targets: (projectData['targets'] as List)
+          .map(
+            (t) => MapTarget(
+              id: t['id'],
+              imageX: t['imageX'],
+              imageY: t['imageY'],
+              latitude: t['latitude'],
+              longitude: t['longitude'],
+              status: MapTargetStatus.values[t['status']],
+              createdAt: DateTime.parse(t['createdAt']),
+            ),
+          )
+          .toList(),
     );
   }
 
