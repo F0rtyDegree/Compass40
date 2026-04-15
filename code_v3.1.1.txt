@@ -1,0 +1,3962 @@
+=== pubspec.yaml ===
+     1	name: compass40
+     2	description: "Compass 40°"
+     3	publish_to: 'none'
+     4	version: 3.1.1
+     5	environment:
+     6	  sdk: ^3.9.0
+     7	
+     8	dependencies:
+     9	  flutter:
+    10	    sdk: flutter
+    11	
+    12	  cupertino_icons: ^1.0.8
+    13	  permission_handler: ^11.0.1
+    14	
+    15	  gps_info:
+    16	    path: packages/gps_info
+    17	  my_compass:
+    18	    path: packages/my_compass
+    19	  shared_preferences: ^2.5.4
+    20	  provider: ^6.1.5+1
+    21	  package_info_plus: ^9.0.0
+    22	  collection: ^1.19.1
+    23	  equatable: ^2.0.8
+    24	  path_provider: ^2.1.5
+    25	  image_picker: ^1.1.2
+    26	
+    27	dev_dependencies:
+    28	  flutter_test:
+    29	    sdk: flutter
+    30	
+    31	  flutter_lints: ^5.0.0
+    32	
+    33	flutter:
+    34	  uses-material-design: true
+
+=== analysis_options.yaml ===
+     1	# This file configures the analyzer, which statically analyzes Dart code to
+     2	# check for errors, warnings, and lints.
+     3	#
+     4	# The issues identified by the analyzer are surfaced in the UI of Dart-enabled
+     5	# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
+     6	# invoked from the command line by running `flutter analyze`.
+     7	
+     8	# The following line activates a set of recommended lints for Flutter apps,
+     9	# packages, and plugins designed to encourage good coding practices.
+    10	include: package:flutter_lints/flutter.yaml
+    11	
+    12	linter:
+    13	  # The lint rules applied to this project can be customized in the
+    14	  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
+    15	  # included above or to enable additional rules. A list of all available lints
+    16	  # and their documentation is published at https://dart.dev/lints.
+    17	  #
+    18	  # Instead of disabling a lint rule for the entire project in the
+    19	  # section below, it can also be suppressed for a single line of code
+    20	  # or a specific dart file by using the `// ignore: name_of_lint` and
+    21	  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
+    22	  # producing the lint.
+    23	  rules:
+    24	    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
+    25	    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    26	
+    27	# Additional information about this file can be found at
+    28	# https://dart.dev/guides/language/analysis-options
+
+=== android/app/src/main/AndroidManifest.xml ===
+     1	<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+     2	    package="by.fortydegree.compass40">
+     3	   <application
+     4	        android:label="Compass40"
+     5	        android:name="${applicationName}"
+     6	        android:icon="@mipmap/ic_launcher">
+     7	        <activity
+     8	            android:name=".MainActivity"
+     9	            android:exported="true"
+    10	            android:launchMode="singleTop"
+    11	            android:theme="@style/LaunchTheme"
+    12	            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+    13	            android:hardwareAccelerated="true"
+    14	            android:windowSoftInputMode="adjustResize"
+    15	            android:resizeableActivity="true">
+    16	            <meta-data
+    17	              android:name="io.flutter.embedding.android.NormalTheme"
+    18	              android:resource="@style/NormalTheme"
+    19	              />
+    20	            <intent-filter>
+    21	                <action android:name="android.intent.action.MAIN"/>
+    22	                <category android:name="android.intent.category.LAUNCHER"/>
+    23	            </intent-filter>
+    24	        </activity>
+    25	        <meta-data
+    26	            android:name="flutterEmbedding"
+    27	            android:value="2" />
+    28	    </application>
+    29	    <queries>
+    30	        <intent>
+    31	            <action android:name="android.intent.action.MAIN" />
+    32	        </intent>
+    33	    </queries>
+    34	    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    35	    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    36	    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    37	    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    38	</manifest>
+
+=== lib/about_screen.dart ===
+     1	import 'package:flutter/material.dart';
+     2	import 'package:package_info_plus/package_info_plus.dart';
+     3	
+     4	class AboutScreen extends StatefulWidget {
+     5	  const AboutScreen({super.key});
+     6	
+     7	  @override
+     8	  State<AboutScreen> createState() => _AboutScreenState();
+     9	}
+    10	
+    11	class _AboutScreenState extends State<AboutScreen> {
+    12	  String _version = '...';
+    13	
+    14	  @override
+    15	  void initState() {
+    16	    super.initState();
+    17	    _getVersion();
+    18	  }
+    19	
+    20	  Future<void> _getVersion() async {
+    21	    final packageInfo = await PackageInfo.fromPlatform();
+    22	    if (mounted) {
+    23	      setState(() {
+    24	        _version = packageInfo.version;
+    25	      });
+    26	    }
+    27	  }
+    28	
+    29	  Widget _buildFeatureText(String title, String subtitle) {
+    30	    return Padding(
+    31	      padding: const EdgeInsets.only(bottom: 8.0),
+    32	      child: RichText(
+    33	        text: TextSpan(
+    34	          style: Theme.of(context).textTheme.bodyLarge,
+    35	          children: [
+    36	            TextSpan(
+    37	              text: '$title: ',
+    38	              style: const TextStyle(fontWeight: FontWeight.bold),
+    39	            ),
+    40	            TextSpan(text: subtitle),
+    41	          ],
+    42	        ),
+    43	      ),
+    44	    );
+    45	  }
+    46	
+    47	  @override
+    48	  Widget build(BuildContext context) {
+    49	    return Scaffold(
+    50	      appBar: AppBar(title: const Text('О приложении')),
+    51	      body: SingleChildScrollView(
+    52	        child: Padding(
+    53	          padding: const EdgeInsets.all(16.0),
+    54	          child: Column(
+    55	            crossAxisAlignment: CrossAxisAlignment.start,
+    56	            children: [
+    57	              Row(
+    58	                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    59	                crossAxisAlignment: CrossAxisAlignment.baseline,
+    60	                textBaseline: TextBaseline.alphabetic,
+    61	                children: [
+    62	                  Text(
+    63	                    'Compass 40°',
+    64	                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+    65	                      fontWeight: FontWeight.bold,
+    66	                    ),
+    67	                  ),
+    68	                  Text(
+    69	                    'v$_version',
+    70	                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+    71	                      color: Theme.of(
+    72	                        context,
+    73	                      ).colorScheme.onSurface.withAlpha((255 * 0.6).round()),
+    74	                    ),
+    75	                  ),
+    76	                ],
+    77	              ),
+    78	              const SizedBox(height: 8),
+    79	              Text(
+    80	                'Это цифровой компас с расширенными возможностями.',
+    81	                style: Theme.of(context).textTheme.titleMedium,
+    82	              ),
+    83	              const SizedBox(height: 24),
+    84	              Text(
+    85	                'Ключевые возможности:',
+    86	                style: Theme.of(
+    87	                  context,
+    88	                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+    89	              ),
+    90	              const SizedBox(height: 16),
+    91	              _buildFeatureText(
+    92	                'Точный компас',
+    93	                'Указывает направление в градусах с цветовой индикацией сторон света и подсказками "Розы ветров".',
+    94	              ),
+    95	              _buildFeatureText(
+    96	                'GPS-панель',
+    97	                'Отображает вашу скорость, текущие координаты, высоту над уровнем моря и точность GPS-сигнала.',
+    98	              ),
+    99	              _buildFeatureText(
+   100	                'Навигация к цели',
+   101	                'Вы можете задать координаты целевой точки, и приложение будет указывать направление и оставшееся расстояние до нее.',
+   102	              ),
+   103	              _buildFeatureText(
+   104	                'Журнал маршрута',
+   105	                'Сохраняйте важные точки вашего пути в виде логов, чтобы иметь возможность вернуться к ним позже.',
+   106	              ),
+   107	              _buildFeatureText(
+   108	                'Гибкие настройки',
+   109	                'Персонализируйте приложение, выбирая между светлой и темной темами, вводя поправку на магнитное склонение и настраивая плавность анимации компаса.',
+   110	              ),
+   111	            ],
+   112	          ),
+   113	        ),
+   114	      ),
+   115	    );
+   116	  }
+   117	}
+
+=== lib/app/my_app.dart ===
+     1	import 'package:flutter/material.dart';
+     2	import 'package:provider/provider.dart';
+     3	
+     4	import '../screens/home_screen.dart';
+     5	import '../theme_provider.dart';
+     6	
+     7	class MyApp extends StatelessWidget {
+     8	  const MyApp({super.key});
+     9	
+    10	  @override
+    11	  Widget build(BuildContext context) {
+    12	    return Consumer<ThemeProvider>(
+    13	      builder: (context, themeProvider, child) {
+    14	        return MaterialApp(
+    15	          title: 'Compass 40°',
+    16	          theme: ThemeData(
+    17	            brightness: Brightness.light,
+    18	            colorScheme: ColorScheme.fromSeed(
+    19	              seedColor: Colors.deepPurple,
+    20	              brightness: Brightness.light,
+    21	            ),
+    22	            useMaterial3: true,
+    23	            textTheme: const TextTheme(
+    24	              bodyLarge: TextStyle(fontSize: 18, color: Colors.black87),
+    25	            ),
+    26	          ),
+    27	          darkTheme: ThemeData(
+    28	            brightness: Brightness.dark,
+    29	            scaffoldBackgroundColor: const Color(0xFF1A1A1A),
+    30	            colorScheme: ColorScheme.fromSeed(
+    31	              seedColor: Colors.deepPurple,
+    32	              brightness: Brightness.dark,
+    33	              surface: const Color(0xFF1A1A1A),
+    34	            ),
+    35	            useMaterial3: true,
+    36	            textTheme: const TextTheme(
+    37	              bodyLarge: TextStyle(fontSize: 18, color: Colors.white70),
+    38	            ),
+    39	            appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF2C2C2C)),
+    40	            dividerColor: Colors.grey,
+    41	          ),
+    42	          themeMode: themeProvider.themeMode,
+    43	          home: const MyHomePage(),
+    44	        );
+    45	      },
+    46	    );
+    47	  }
+    48	}
+
+=== lib/controllers/home_logic.dart ===
+     1	import 'dart:async';
+     2	
+     3	import 'package:flutter/material.dart';
+     4	import 'package:gps_info/gps_info.dart';
+     5	
+     6	import '../services/log_service.dart';
+     7	import '../services/sensor_service.dart';
+     8	import '../utils/geo_utils.dart';
+     9	import 'home_state.dart';
+    10	
+    11	class HomeLogic {
+    12	  final HomeState state;
+    13	  final State hostState;
+    14	  final LogService logService;
+    15	  final SensorService sensorService;
+    16	
+    17	  HomeLogic({
+    18	    required this.state,
+    19	    required this.hostState,
+    20	    required this.logService,
+    21	    required this.sensorService,
+    22	  });
+    23	
+    24	  bool get mounted => hostState.mounted;
+    25	
+    26	  void setState(VoidCallback fn) {
+    27	    if (mounted) {
+    28	      // ignore: invalid_use_of_protected_member
+    29	      hostState.setState(fn);
+    30	    }
+    31	  }
+    32	
+    33	  Future<void> init() async {
+    34	    await _loadAllSettings();
+    35	    await loadLogEntries();
+    36	    _requestPermissions();
+    37	  }
+    38	
+    39	  void dispose() {
+    40	    state.uiUpdateTimer?.cancel();
+    41	    state.gpsDataSubscription.cancel();
+    42	    state.compassSubscription.cancel();
+    43	    state.disposeNotifiers();
+    44	  }
+    45	
+    46	  // ----------------------------------------------------------------------
+    47	  // Настройки
+    48	  // ----------------------------------------------------------------------
+    49	
+    50	  Future<void> _loadAllSettings() async {
+    51	    final settings = await sensorService.loadSettings();
+    52	    if (!mounted) return;
+    53	
+    54	    setState(() {
+    55	      state.useManualDeclination = settings.useManualDeclination;
+    56	      state.magneticDeclination = settings.magneticDeclination;
+    57	      state.averagingPeriod = settings.averagingPeriod;
+    58	      state.smoothingFactor = settings.smoothingFactor;
+    59	      state.uiUpdatePeriod = settings.uiUpdatePeriod;
+    60	      state.compassMode = settings.compassMode;
+    61	      state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
+    62	    });
+    63	
+    64	    startUiUpdateTimer();
+    65	  }
+    66	
+    67	  Future<void> reloadSettings() async {
+    68	    await _loadAllSettings();
+    69	  }
+    70	
+    71	  Future<void> setCompassMode(CompassMode mode) async {
+    72	    setState(() {
+    73	      state.compassMode = mode;
+    74	    });
+    75	    await sensorService.saveCompassMode(mode);
+    76	  }
+    77	
+    78	  Future<void> setAutoSwitchSpeed(double speedKmh) async {
+    79	    setState(() {
+    80	      state.autoSwitchSpeedKmh = speedKmh;
+    81	    });
+    82	    await sensorService.saveAutoSwitchSpeed(speedKmh);
+    83	  }
+    84	
+    85	  // ----------------------------------------------------------------------
+    86	  // Сенсоры
+    87	  // ----------------------------------------------------------------------
+    88	
+    89	  void _requestPermissions() async {
+    90	    if (await sensorService.requestLocationPermission()) {
+    91	      _subscribeToGpsDataStream();
+    92	      _subscribeToCompassStream();
+    93	    }
+    94	  }
+    95	
+    96	  void _subscribeToGpsDataStream() async {
+    97	    final settings = await sensorService.loadSettings();
+    98	
+    99	    state.gpsDataSubscription = sensorService.subscribeToGps(
+   100	      gpsInfo: state.gpsInfo,
+   101	      intervalSeconds: settings.gpsInterval,
+   102	      onData: (gpsData) {
+   103	        if (!mounted) return;
+   104	        state.gpsDataNotifier.value = gpsData;
+   105	
+   106	        final speedKmh = (gpsData.speed ?? 0) * 3.6;
+   107	        if (speedKmh > 0.5 && gpsData.gpsBearing != null) {
+   108	          state.gpsBearingNotifier.value = gpsData.gpsBearing;
+   109	          state.gpsBearingSamples.add((
+   110	            gpsData.gpsBearing!,
+   111	            DateTime.now().millisecondsSinceEpoch,
+   112	          ));
+   113	          if (state.gpsBearingSamples.length > HomeState.maxSamples) {
+   114	            state.gpsBearingSamples.removeAt(0);
+   115	          }
+   116	        }
+   117	
+   118	        if (!state.useManualDeclination) {
+   119	          setState(() {
+   120	            state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
+   121	          });
+   122	        }
+   123	      },
+   124	    );
+   125	  }
+   126	
+   127	  void _subscribeToCompassStream() {
+   128	    state.compassSubscription = sensorService.subscribeToCompass(
+   129	      onData: (data) {
+   130	        if (!mounted || data.isEmpty) return;
+   131	
+   132	        final heading = data[0];
+   133	        final accuracy = data.length > 1 ? data[1] : 0.0;
+   134	        if (accuracy < 2) return;
+   135	
+   136	        state.headingSamples.add((
+   137	          heading,
+   138	          DateTime.now().millisecondsSinceEpoch,
+   139	        ));
+   140	
+   141	        if (state.headingSamples.length > HomeState.maxSamples) {
+   142	          state.headingSamples.removeAt(0);
+   143	        }
+   144	
+   145	        state.accuracyNotifier.value = accuracy;
+   146	
+   147	        if (state.headingSamples.length == 1) {
+   148	          state.filteredHeading = heading;
+   149	          state.headingNotifier.value = heading;
+   150	        }
+   151	      },
+   152	    );
+   153	  }
+   154	
+   155	  // ----------------------------------------------------------------------
+   156	  // Таймер и обновление heading
+   157	  // ----------------------------------------------------------------------
+   158	
+   159	  void startUiUpdateTimer() {
+   160	    state.uiUpdateTimer?.cancel();
+   161	    state.uiUpdateTimer = Timer.periodic(
+   162	      Duration(milliseconds: state.uiUpdatePeriod),
+   163	      (timer) {
+   164	        if (mounted) {
+   165	          _updateHeading();
+   166	          _calculateWaypointData();
+   167	          _calculateTargetData();
+   168	        }
+   169	      },
+   170	    );
+   171	  }
+   172	
+   173	  double _calculateCircularMedian(List<double> samples) {
+   174	    if (samples.isEmpty) return 0.0;
+   175	    if (samples.length == 1) return samples[0];
+   176	
+   177	    samples.sort();
+   178	
+   179	    double maxGap = 0;
+   180	    int maxGapIndex = -1;
+   181	
+   182	    for (int i = 0; i < samples.length - 1; i++) {
+   183	      final gap = samples[i + 1] - samples[i];
+   184	      if (gap > maxGap) {
+   185	        maxGap = gap;
+   186	        maxGapIndex = i;
+   187	      }
+   188	    }
+   189	
+   190	    final wrapAroundGap = (samples.first + 360) - samples.last;
+   191	    if (wrapAroundGap > maxGap) {
+   192	      maxGap = wrapAroundGap;
+   193	      maxGapIndex = samples.length - 1;
+   194	    }
+   195	
+   196	    List<double> shiftedSamples;
+   197	    if (maxGapIndex == samples.length - 1) {
+   198	      shiftedSamples = List.from(samples);
+   199	    } else {
+   200	      shiftedSamples = [];
+   201	      final shiftPoint = samples[maxGapIndex];
+   202	      for (final s in samples) {
+   203	        if (s > shiftPoint) {
+   204	          shiftedSamples.add(s);
+   205	        } else {
+   206	          shiftedSamples.add(s + 360);
+   207	        }
+   208	      }
+   209	    }
+   210	    
+   211	    double median;
+   212	    int mid = shiftedSamples.length ~/ 2;
+   213	    if (shiftedSamples.length % 2 == 1) {
+   214	      median = shiftedSamples[mid];
+   215	    } else {
+   216	      median = (shiftedSamples[mid - 1] + shiftedSamples[mid]) / 2.0;
+   217	    }
+   218	
+   219	    return median % 360;
+   220	  }
+   221	
+   222	  void _updateHeading() {
+   223	    final now = DateTime.now().millisecondsSinceEpoch;
+   224	    final speedKmh = (state.gpsDataNotifier.value.speed ?? 0) * 3.6;
+   225	    final gpsBearing = state.gpsBearingNotifier.value;
+   226	
+   227	    bool useGps = false;
+   228	
+   229	    switch (state.compassMode) {
+   230	      case CompassMode.magnetic:
+   231	        useGps = false;
+   232	        break;
+   233	      case CompassMode.gps:
+   234	        useGps = gpsBearing != null;
+   235	        break;
+   236	      case CompassMode.auto:
+   237	        useGps = gpsBearing != null && speedKmh >= state.autoSwitchSpeedKmh;
+   238	        break;
+   239	    }
+   240	
+   241	    state.isGpsCompassActiveNotifier.value = useGps;
+   242	    
+   243	    double newHeading;
+   244	
+   245	    if (useGps) {
+   246	      // GPS-компас
+   247	      state.gpsBearingSamples.removeWhere((s) => now - s.$2 > state.averagingPeriod);
+   248	      if (state.gpsBearingSamples.isEmpty) return;
+   249	      final bearings = state.gpsBearingSamples.map((s) => s.$1).toList();
+   250	      final medianTrueBearing = _calculateCircularMedian(bearings);
+   251	      // Преобразуем истинный курс в магнитный
+   252	      newHeading = (medianTrueBearing - state.magneticDeclination + 360) % 360;
+   253	
+   254	    } else {
+   255	      // Магнитный компас
+   256	      state.headingSamples.removeWhere((s) => now - s.$2 > state.averagingPeriod);
+   257	      if (state.headingSamples.isEmpty) return;
+   258	      final headings = state.headingSamples.map((s) => s.$1).toList();
+   259	      // Данные с сенсора уже магнитные
+   260	      newHeading = _calculateCircularMedian(headings);
+   261	    }
+   262	    
+   263	    // Сглаживание
+   264	    double diff = newHeading - state.filteredHeading;
+   265	    if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
+   266	
+   267	    state.filteredHeading += state.smoothingFactor * diff;
+   268	    state.filteredHeading = (state.filteredHeading + 360) % 360;
+   269	
+   270	    state.headingNotifier.value = state.filteredHeading;
+   271	  }
+   272	
+   273	  // ----------------------------------------------------------------------
+   274	  // Расчёты навигации
+   275	  // ----------------------------------------------------------------------
+   276	
+   277	  void _calculateWaypointData() {
+   278	    if (state.waypoint == null ||
+   279	        state.gpsDataNotifier.value.latitude == null) {
+   280	      return;
+   281	    }
+   282	
+   283	    final nowData = state.gpsDataNotifier.value;
+   284	
+   285	    state.distanceToWaypoint.value = calculateDistance(
+   286	      state.waypoint!.latitude!,
+   287	      state.waypoint!.longitude!,
+   288	      nowData.latitude!,
+   289	      nowData.longitude!,
+   290	    );
+   291	
+   292	    final trueBearing = calculateTrueBearing(
+   293	      state.waypoint!.latitude!,
+   294	      state.waypoint!.longitude!,
+   295	      nowData.latitude!,
+   296	      nowData.longitude!,
+   297	    );
+   298	
+   299	    state.bearingToWaypoint.value =
+   300	        (trueBearing - state.magneticDeclination + 360) % 360;
+   301	  }
+   302	
+   303	  void _calculateTargetData() {
+   304	    if (state.target == null || state.gpsDataNotifier.value.latitude == null) {
+   305	      return;
+   306	    }
+   307	
+   308	    final nowData = state.gpsDataNotifier.value;
+   309	
+   310	    state.distanceToTarget.value = calculateDistance(
+   311	      nowData.latitude!,
+   312	      nowData.longitude!,
+   313	      state.target!['latitude']!,
+   314	      state.target!['longitude']!,
+   315	    );
+   316	
+   317	    final trueBearing = calculateTrueBearing(
+   318	      nowData.latitude!,
+   319	      nowData.longitude!,
+   320	      state.target!['latitude']!,
+   321	      state.target!['longitude']!,
+   322	    );
+   323	
+   324	    state.bearingToTarget.value =
+   325	        (trueBearing - state.magneticDeclination + 360) % 360;
+   326	  }
+   327	
+   328	  // ----------------------------------------------------------------------
+   329	  // Логи и КП
+   330	  // ----------------------------------------------------------------------
+   331	
+   332	  Future<void> loadLogEntries() async {
+   333	    final items = await logService.loadLogEntries();
+   334	    if (!mounted) return;
+   335	    setState(() => state.logItems = items);
+   336	  }
+   337	
+   338	  Future<void> setWaypoint() async {
+   339	    final result = await logService.setWaypoint(
+   340	      currentLogItems: state.logItems,
+   341	      currentGpsData: state.gpsDataNotifier.value,
+   342	      magneticDeclination: state.magneticDeclination,
+   343	    );
+   344	    if (result == null || !mounted) return;
+   345	    setState(() {
+   346	      state.logItems = result.logItems;
+   347	      state.waypoint = result.waypoint;
+   348	    });
+   349	  }
+   350	
+   351	  Future<void> clearWaypoint() async {
+   352	    final result = await logService.clearWaypoint(
+   353	      currentLogItems: state.logItems,
+   354	      currentGpsData: state.gpsDataNotifier.value,
+   355	      magneticDeclination: state.magneticDeclination,
+   356	    );
+   357	    if (!mounted) return;
+   358	    setState(() {
+   359	      state.logItems = result.logItems;
+   360	      state.waypoint = result.waypoint;
+   361	      state.distanceToWaypoint.value = null;
+   362	      state.bearingToWaypoint.value = null;
+   363	    });
+   364	  }
+   365	
+   366	  void clearTarget() {
+   367	    setState(() {
+   368	      state.target = null;
+   369	      state.distanceToTarget.value = null;
+   370	      state.bearingToTarget.value = null;
+   371	    });
+   372	  }
+   373	
+   374	  Future<void> addTargetCreationLogEntry({
+   375	    required double baseLatitude,
+   376	    required double baseLongitude,
+   377	    required double azimuth,
+   378	    required double distance,
+   379	    required double targetLatitude,
+   380	    required double targetLongitude,
+   381	  }) async {
+   382	    final items = await logService.addTargetCreationLogEntry(
+   383	      currentLogItems: state.logItems,
+   384	      baseLatitude: baseLatitude,
+   385	      baseLongitude: baseLongitude,
+   386	      azimuth: azimuth,
+   387	      distance: distance,
+   388	      targetLatitude: targetLatitude,
+   389	      targetLongitude: targetLongitude,
+   390	    );
+   391	    if (!mounted) return;
+   392	    setState(() => state.logItems = items);
+   393	  }
+   394	
+   395	  void setTarget(Map<String, double>? target) {
+   396	    setState(() => state.target = target);
+   397	  }
+   398	
+   399	  void setTargetCalculationStartPoint(GpsData gpsData) {
+   400	    state.targetCalculationStartPoint = gpsData;
+   401	  }
+   402	
+   403	  // ----------------------------------------------------------------------
+   404	  // Вспомогательные методы для UI
+   405	  // ----------------------------------------------------------------------
+   406	
+   407	  String getAccuracyText(double accuracy) {
+   408	    switch (accuracy.toInt()) {
+   409	      case 0:
+   410	        return 'Низкая (калибруйте)';
+   411	      case 1:
+   412	        return 'Средняя';
+   413	      case 2:
+   414	        return 'Высокая';
+   415	      case 3:
+   416	        return 'Отличная';
+   417	      default:
+   418	        return 'Неизвестно';
+   419	    }
+   420	  }
+   421	
+   422	  Color getAccuracyStatusColor(double accuracy) {
+   423	    switch (accuracy.toInt()) {
+   424	      case 0:
+   425	        return Colors.red;
+   426	      case 1:
+   427	        return Colors.orange;
+   428	      case 2:
+   429	        return Colors.yellow;
+   430	      case 3:
+   431	        return Colors.green;
+   432	      default:
+   433	        return Colors.grey;
+   434	    }
+   435	  }
+   436	
+   437	  String getCardinalDirection(double heading) {
+   438	    if (heading >= 337.5 || heading < 22.5) return 'Север';
+   439	    if (heading >= 22.5 && heading < 67.5) return 'С-Восток';
+   440	    if (heading >= 67.5 && heading < 112.5) return 'Восток';
+   441	    if (heading >= 112.5 && heading < 157.5) return 'Ю-Восток';
+   442	    if (heading >= 157.5 && heading < 202.5) return 'Юг';
+   443	    if (heading >= 202.5 && heading < 247.5) return 'Ю-Запад';
+   444	    if (heading >= 247.5 && heading < 292.5) return 'Запад';
+   445	    if (heading >= 292.5 && heading < 337.5) return 'С-Запад';
+   446	    return '--';
+   447	  }
+   448	
+   449	  String getCompassModeLabel() {
+   450	    switch (state.compassMode) {
+   451	      case CompassMode.magnetic:
+   452	        return 'Маг';
+   453	      case CompassMode.gps:
+   454	        return 'GPS';
+   455	      case CompassMode.auto:
+   456	        return 'Авто';
+   457	    }
+   458	  }
+   459	}
+
+=== lib/controllers/home_navigation_actions.dart ===
+     1	import 'package:flutter/material.dart';
+     2	
+     3	import '../about_screen.dart';
+     4	import '../log_screen.dart';
+     5	import '../settings_screen.dart';
+     6	import '../target_screen.dart';
+     7	import '../utils/geo_utils.dart';
+     8	import 'home_logic.dart';
+     9	import 'home_state.dart';
+    10	
+    11	class HomeNavigationActions {
+    12	  final BuildContext context;
+    13	  final HomeState state;
+    14	  final HomeLogic logic;
+    15	
+    16	  HomeNavigationActions({
+    17	    required this.context,
+    18	    required this.state,
+    19	    required this.logic,
+    20	  });
+    21	
+    22	  void openSettings() {
+    23	    Navigator.push(
+    24	      context,
+    25	      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    26	    ).then((_) => logic.reloadSettings());
+    27	  }
+    28	
+    29	  void openAbout() {
+    30	    Navigator.push(
+    31	      context,
+    32	      MaterialPageRoute(builder: (context) => const AboutScreen()),
+    33	    );
+    34	  }
+    35	
+    36	  Future<void> handleVerticalDragEnd(DragEndDetails details) async {
+    37	    if (details.primaryVelocity! < 0) {
+    38	      await Navigator.push(
+    39	        context,
+    40	        MaterialPageRoute(builder: (c) => LogScreen(logItems: state.logItems)),
+    41	      ).then((_) => logic.loadLogEntries());
+    42	    } else if (details.primaryVelocity! > 0) {
+    43	      logic.setTargetCalculationStartPoint(state.gpsDataNotifier.value);
+    44	
+    45	      final result = await Navigator.push<Map<String, dynamic>>(
+    46	        context,
+    47	        MaterialPageRoute(builder: (context) => const TargetScreen()),
+    48	      );
+    49	
+    50	      if (result == null) return;
+    51	
+    52	      final useClipboardAsBase = result['useClipboardAsBase'] as bool? ?? false;
+    53	
+    54	      double startLat, startLon;
+    55	      if (useClipboardAsBase) {
+    56	        startLat = result['base_latitude'] as double;
+    57	        startLon = result['base_longitude'] as double;
+    58	      } else {
+    59	        if (state.targetCalculationStartPoint?.latitude == null) {
+    60	          return;
+    61	        }
+    62	        startLat = state.targetCalculationStartPoint!.latitude!;
+    63	        startLon = state.targetCalculationStartPoint!.longitude!;
+    64	      }
+    65	
+    66	      final magneticAzimuth = result['azimuth'] as double;
+    67	      final trueBearing =
+    68	          (magneticAzimuth + state.magneticDeclination + 360) % 360;
+    69	
+    70	      final coords = calculateTargetCoordinates(
+    71	        startLat: startLat,
+    72	        startLon: startLon,
+    73	        distanceMeters: result['distance'] as double,
+    74	        trueBearingDegrees: trueBearing,
+    75	      );
+    76	
+    77	      logic.setTarget(coords);
+    78	
+    79	      await logic.addTargetCreationLogEntry(
+    80	        baseLatitude: startLat,
+    81	        baseLongitude: startLon,
+    82	        azimuth: magneticAzimuth,
+    83	        distance: result['distance'] as double,
+    84	        targetLatitude: coords['latitude']!,
+    85	        targetLongitude: coords['longitude']!,
+    86	      );
+    87	    }
+    88	  }
+    89	}
+
+=== lib/controllers/home_state.dart ===
+     1	import 'dart:async';
+     2	
+     3	import 'package:flutter/material.dart';
+     4	import 'package:gps_info/gps_info.dart';
+     5	
+     6	import '../log_entry.dart';
+     7	
+     8	// Режимы компаса
+     9	enum CompassMode { magnetic, gps, auto }
+    10	
+    11	class HomeState {
+    12	  final GpsInfo gpsInfo = GpsInfo();
+    13	
+    14	  late StreamSubscription<GpsData> gpsDataSubscription;
+    15	  late StreamSubscription<List<double>> compassSubscription;
+    16	
+    17	  final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
+    18	  final ValueNotifier<double> headingNotifier = ValueNotifier(0);
+    19	  final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
+    20	  final ValueNotifier<double?> gpsBearingNotifier = ValueNotifier(null);
+    21	  final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
+    22	
+    23	  // Режим компаса
+    24	  CompassMode compassMode = CompassMode.magnetic;
+    25	
+    26	  // Скорость автопереключения км/ч
+    27	  double autoSwitchSpeedKmh = 3.0;
+    28	
+    29	  double magneticDeclination = 0.0;
+    30	  bool useManualDeclination = false;
+    31	
+    32	  GpsData? waypoint;
+    33	  final ValueNotifier<double?> distanceToWaypoint = ValueNotifier(null);
+    34	  final ValueNotifier<double?> bearingToWaypoint = ValueNotifier(null);
+    35	
+    36	  GpsData? targetCalculationStartPoint;
+    37	  Map<String, double>? target;
+    38	  final ValueNotifier<double?> distanceToTarget = ValueNotifier(null);
+    39	  final ValueNotifier<double?> bearingToTarget = ValueNotifier(null);
+    40	
+    41	  List<LogItem> logItems = [];
+    42	  final List<(double, int)> headingSamples = [];
+    43	  final List<(double, int)> gpsBearingSamples = [];
+    44	  Timer? uiUpdateTimer;
+    45	
+    46	  int averagingPeriod = 500;
+    47	  int uiUpdatePeriod = 250;
+    48	
+    49	  double filteredHeading = 0.0;
+    50	  double smoothingFactor = 0.5;
+    51	
+    52	  static const int maxSamples = 50;
+    53	
+    54	  void disposeNotifiers() {
+    55	    gpsDataNotifier.dispose();
+    56	    headingNotifier.dispose();
+    57	    accuracyNotifier.dispose();
+    58	    gpsBearingNotifier.dispose();
+    59	    distanceToWaypoint.dispose();
+    60	    bearingToWaypoint.dispose();
+    61	    distanceToTarget.dispose();
+    62	    bearingToTarget.dispose();
+    63	    isGpsCompassActiveNotifier.dispose();
+    64	  }
+    65	}
+
+=== lib/controllers/map_screen_state.dart ===
+     1	import 'dart:async';
+     2	import 'package:flutter/widgets.dart';
+     3	import '../models/map_project.dart';
+     4	import '../models/map_transform_state.dart';
+     5	import '../models/map_target.dart';
+     6	
+     7	class MapScreenState {
+     8	  // Проект и изображение
+     9	  String? imagePath;
+    10	  Size? imageSize;
+    11	  MapProject? project;
+    12	  
+    13	  // Трансформация карты
+    14	  MapTransformState transformState = const MapTransformState();
+    15	  
+    16	  // Режимы
+    17	  bool followMode = false;
+    18	  bool rotateMapByHeading = false;
+    19	  bool crosshairInCenter = true;
+    20	  
+    21	  // Позиции
+    22	  Offset? currentUserScreenPoint;  // позиция пользователя в экранных координатах
+    23	  Offset? currentUserImagePoint;   // позиция пользователя в координатах изображения
+    24	  Offset? crosshairImagePoint;      // позиция прицела в координатах изображения
+    25	  
+    26	  // Цели
+    27	  MapTarget? plannedTarget;
+    28	  MapTarget? activeTarget;
+    29	  
+    30	  // Таймеры
+    31	  Timer? followRestoreTimer;
+    32	  
+    33	  // Флаг, открыт ли экран (для предотвращения утечек)
+    34	  bool isDisposed = false;
+    35	}
+=== lib/log_entry.dart ===
+     1	// Базовый абстрактный класс для всех записей в журнале
+     2	abstract class LogItem {
+     3	  final DateTime timestamp;
+     4	  final String type;
+     5	  LogItem({required this.type}) : timestamp = DateTime.now();
+     6	  Map<String, dynamic> toJson();
+     7	}
+     8	
+     9	// Класс для записей о создании цели
+    10	class TargetCreationLogEntry extends LogItem {
+    11	  final int id; // ✅ Уникальный идентификатор
+    12	  final double baseLatitude;
+    13	  final double baseLongitude;
+    14	  final double azimuth;
+    15	  final double distance;
+    16	  final double targetLatitude;
+    17	  final double targetLongitude;
+    18	
+    19	  TargetCreationLogEntry({
+    20	    required this.id, // ✅ Требовать при создании
+    21	    required this.baseLatitude,
+    22	    required this.baseLongitude,
+    23	    required this.azimuth,
+    24	    required this.distance,
+    25	    required this.targetLatitude,
+    26	    required this.targetLongitude,
+    27	  }) : super(type: 'target_creation');
+    28	
+    29	  @override
+    30	  Map<String, dynamic> toJson() => {
+    31	    'type': type,
+    32	    'timestamp': timestamp.toIso8601String(),
+    33	    'id': id, // ✅ Сохранять id
+    34	    'baseLatitude': baseLatitude,
+    35	    'baseLongitude': baseLongitude,
+    36	    'azimuth': azimuth,
+    37	    'distance': distance,
+    38	    'targetLatitude': targetLatitude,
+    39	    'targetLongitude': targetLongitude,
+    40	  };
+    41	
+    42	  factory TargetCreationLogEntry.fromJson(Map<String, dynamic> json) {
+    43	    return TargetCreationLogEntry(
+    44	      id:
+    45	          json['id'] ??
+    46	          DateTime.now().millisecondsSinceEpoch, // ✅ Для старых записей
+    47	      baseLatitude: json['baseLatitude'],
+    48	      baseLongitude: json['baseLongitude'],
+    49	      azimuth: json['azimuth'],
+    50	      distance: json['distance'],
+    51	      targetLatitude: json['targetLatitude'],
+    52	      targetLongitude: json['targetLongitude'],
+    53	    );
+    54	  }
+    55	}
+    56	
+    57	// Существующий класс для точек маршрута
+    58	class LogEntry extends LogItem {
+    59	  final int id;
+    60	  final double latitude;
+    61	  final double longitude;
+    62	  double? distance;
+    63	  double? bearing;
+    64	
+    65	  LogEntry({
+    66	    required this.id,
+    67	    required this.latitude,
+    68	    required this.longitude,
+    69	    this.distance,
+    70	    this.bearing,
+    71	  }) : super(type: 'track');
+    72	
+    73	  @override
+    74	  Map<String, dynamic> toJson() => {
+    75	    'type': type,
+    76	    'timestamp': timestamp.toIso8601String(),
+    77	    'id': id,
+    78	    'latitude': latitude,
+    79	    'longitude': longitude,
+    80	    'distance': distance,
+    81	    'bearing': bearing,
+    82	  };
+    83	
+    84	  factory LogEntry.fromJson(Map<String, dynamic> json) => LogEntry(
+    85	    id: json['id'],
+    86	    latitude: json['latitude'],
+    87	    longitude: json['longitude'],
+    88	    distance: json['distance'],
+    89	    bearing: json['bearing'],
+    90	  );
+    91	}
+    92	
+    93	// Фабрика для десериализации из JSON
+    94	LogItem logItemFromJson(Map<String, dynamic> json) {
+    95	  switch (json['type']) {
+    96	    case 'target_creation':
+    97	      return TargetCreationLogEntry.fromJson(json);
+    98	    case 'track':
+    99	      return LogEntry.fromJson(json);
+   100	    default:
+   101	      throw ArgumentError('Unknown log item type: ${json['type']}');
+   102	  }
+   103	}
+
+=== lib/log_screen.dart ===
+     1	import 'dart:async';
+     2	import 'package:flutter/material.dart';
+     3	import 'package:flutter/services.dart';
+     4	import 'package:shared_preferences/shared_preferences.dart';
+     5	import 'log_entry.dart';
+     6	
+     7	class LogScreen extends StatefulWidget {
+     8	  final List<LogItem> logItems;
+     9	
+    10	  const LogScreen({super.key, required this.logItems});
+    11	
+    12	  @override
+    13	  State<LogScreen> createState() => _LogScreenState();
+    14	}
+    15	
+    16	class _LogScreenState extends State<LogScreen> {
+    17	  int? _copiedEntryId;
+    18	  String? _copiedEntryType;
+    19	  String? _copiedLine;
+    20	
+    21	  Future<void> _clearLogAndExit() async {
+    22	    final prefs = await SharedPreferences.getInstance();
+    23	    await prefs.remove('log_items');
+    24	    if (mounted) {
+    25	      Navigator.of(context).pop({'logCleared': true});
+    26	    }
+    27	  }
+    28	
+    29	  void _copyAllToClipboard() {
+    30	    final allText = widget.logItems.reversed.map((entry) {
+    31	      if (entry is LogEntry) {
+    32	        final distanceText = entry.distance != null
+    33	            ? '${entry.distance!.round()}m'
+    34	            : '--m';
+    35	        final bearingText = entry.bearing != null
+    36	            ? '${entry.bearing!.round()}°'
+    37	            : '--°';
+    38	        return '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
+    39	      } else if (entry is TargetCreationLogEntry) {
+    40	        final startText =
+    41	            'Старт: ${entry.baseLatitude.toStringAsFixed(6)},${entry.baseLongitude.toStringAsFixed(6)} ${entry.distance.round()}м ${entry.azimuth.round()}°';
+    42	        final targetText =
+    43	            'ЦЕЛЬ: ${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
+    44	        return '$startText\n$targetText';
+    45	      }
+    46	      return '';
+    47	    }).join('\n');
+    48	
+    49	    Clipboard.setData(ClipboardData(text: allText));
+    50	    ScaffoldMessenger.of(context).showSnackBar(
+    51	      const SnackBar(
+    52	        content: Text('Журнал скопирован в буфер обмена'),
+    53	        duration: Duration(seconds: 2),
+    54	      ),
+    55	    );
+    56	  }
+    57	
+    58	  void _handleTap(LogItem entry, {String? line}) {
+    59	    String textToCopy = '';
+    60	    int? entryId;
+    61	    String entryType = '';
+    62	
+    63	    if (entry is LogEntry) {
+    64	      textToCopy =
+    65	          '${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}';
+    66	      entryId = entry.id;
+    67	      entryType = 'track';
+    68	    } else if (entry is TargetCreationLogEntry) {
+    69	      if (line == 'start') {
+    70	        textToCopy =
+    71	            '${entry.baseLatitude.toStringAsFixed(6)},${entry.baseLongitude.toStringAsFixed(6)}';
+    72	      } else {
+    73	        textToCopy =
+    74	            '${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
+    75	      }
+    76	      entryId = entry.id;
+    77	      entryType = 'target';
+    78	    }
+    79	
+    80	    if (textToCopy.isNotEmpty) {
+    81	      Clipboard.setData(ClipboardData(text: textToCopy));
+    82	      if (mounted) {
+    83	        setState(() {
+    84	          _copiedEntryId = entryId;
+    85	          _copiedEntryType = entryType;
+    86	          _copiedLine = line;
+    87	        });
+    88	        Timer(const Duration(milliseconds: 200), () {
+    89	          if (mounted) {
+    90	            setState(() {
+    91	              _copiedEntryId = null;
+    92	              _copiedEntryType = null;
+    93	              _copiedLine = null;
+    94	            });
+    95	          }
+    96	        });
+    97	      }
+    98	    }
+    99	  }
+   100	
+   101	  Widget _buildLogItemWidget(LogItem entry) {
+   102	    final originalTextColor =
+   103	        Theme.of(context).textTheme.bodyLarge?.color ??
+   104	        (Theme.of(context).brightness == Brightness.dark
+   105	            ? Colors.white70
+   106	            : Colors.black87);
+   107	    final invertedTextColor = Theme.of(context).scaffoldBackgroundColor;
+   108	
+   109	    if (entry is LogEntry) {
+   110	      final isCopied =
+   111	          entry.id == _copiedEntryId && _copiedEntryType == 'track';
+   112	      // --- Исправлено ---
+   113	      final distanceText = entry.distance != null
+   114	          ? '${entry.distance!.round()}m'
+   115	          : '--m';
+   116	      final bearingText = entry.bearing != null
+   117	          ? '${entry.bearing!.round()}°'
+   118	          : '--°';
+   119	      final text =
+   120	          '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
+   121	      // --- Конец исправления ---
+   122	      return InkWell(
+   123	        onTap: () => _handleTap(entry),
+   124	        child: AnimatedContainer(
+   125	          duration: const Duration(milliseconds: 150),
+   126	          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+   127	          color: isCopied ? originalTextColor : Colors.transparent,
+   128	          child: Text(
+   129	            text,
+   130	            style: TextStyle(
+   131	              fontFamily: 'monospace',
+   132	              fontSize: 16,
+   133	              color: isCopied ? invertedTextColor : originalTextColor,
+   134	            ),
+   135	          ),
+   136	        ),
+   137	      );
+   138	    } else if (entry is TargetCreationLogEntry) {
+   139	      final isStartCopied =
+   140	          entry.id == _copiedEntryId &&
+   141	          _copiedEntryType == 'target' &&
+   142	          _copiedLine == 'start';
+   143	      final isTargetCopied =
+   144	          entry.id == _copiedEntryId &&
+   145	          _copiedEntryType == 'target' &&
+   146	          _copiedLine == 'target';
+   147	
+   148	      final startText =
+   149	          'Старт: ${entry.baseLatitude.toStringAsFixed(6)},${entry.baseLongitude.toStringAsFixed(6)} ${entry.distance.round()}м ${entry.azimuth.round()}°';
+   150	      final targetText =
+   151	          'ЦЕЛЬ: ${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
+   152	      final baseStyle = TextStyle(
+   153	        fontFamily: 'monospace',
+   154	        fontSize: 14,
+   155	        color: originalTextColor,
+   156	      );
+   157	      final copiedStyle = TextStyle(
+   158	        fontFamily: 'monospace',
+   159	        fontSize: 14,
+   160	        color: invertedTextColor,
+   161	        fontWeight: FontWeight.bold,
+   162	      );
+   163	
+   164	      return Container(
+   165	        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+   166	        decoration: BoxDecoration(
+   167	          border: Border(
+   168	            bottom: BorderSide(color: Theme.of(context).dividerColor, width: 1),
+   169	          ),
+   170	          color: Colors.blueAccent.withAlpha(30),
+   171	        ),
+   172	        child: Column(
+   173	          crossAxisAlignment: CrossAxisAlignment.start,
+   174	          children: [
+   175	            InkWell(
+   176	              onTap: () => _handleTap(entry, line: 'start'),
+   177	              child: AnimatedContainer(
+   178	                duration: const Duration(milliseconds: 150),
+   179	                width: double.infinity,
+   180	                color: isStartCopied ? originalTextColor : Colors.transparent,
+   181	                padding: const EdgeInsets.symmetric(vertical: 4.0),
+   182	                child: Text(
+   183	                  startText,
+   184	                  style: isStartCopied ? copiedStyle : baseStyle,
+   185	                ),
+   186	              ),
+   187	            ),
+   188	            const SizedBox(height: 4),
+   189	            InkWell(
+   190	              onTap: () => _handleTap(entry, line: 'target'),
+   191	              child: AnimatedContainer(
+   192	                duration: const Duration(milliseconds: 150),
+   193	                width: double.infinity,
+   194	                color: isTargetCopied ? originalTextColor : Colors.transparent,
+   195	                padding: const EdgeInsets.symmetric(vertical: 4.0),
+   196	                child: Text(
+   197	                  targetText,
+   198	                  style: isTargetCopied ? copiedStyle : baseStyle,
+   199	                ),
+   200	              ),
+   201	            ),
+   202	          ],
+   203	        ),
+   204	      );
+   205	    }
+   206	    return const SizedBox.shrink();
+   207	  }
+   208	
+   209	  @override
+   210	  Widget build(BuildContext context) {
+   211	    final reversedItems = widget.logItems.reversed.toList();
+   212	
+   213	    return Scaffold(
+   214	      appBar: AppBar(
+   215	        title: const Text('Журнал'),
+   216	        actions: [
+   217	          IconButton(
+   218	            icon: const Icon(Icons.copy_all),
+   219	            onPressed: _copyAllToClipboard,
+   220	            tooltip: 'Копировать все',
+   221	          ),
+   222	          IconButton(
+   223	            icon: const Icon(Icons.delete_forever),
+   224	            onPressed: () async {
+   225	              final bool? confirm = await showDialog<bool>(
+   226	                context: context,
+   227	                builder: (BuildContext context) {
+   228	                  return AlertDialog(
+   229	                    title: const Text('Очистить журнал?'),
+   230	                    content: const Text('Все записи будут удалены.'),
+   231	                    actions: <Widget>[
+   232	                      TextButton(
+   233	                        child: const Text('Отмена'),
+   234	                        onPressed: () => Navigator.of(context).pop(false),
+   235	                      ),
+   236	                      TextButton(
+   237	                        child: const Text(
+   238	                          'Очистить',
+   239	                          style: TextStyle(color: Colors.red),
+   240	                        ),
+   241	                        onPressed: () => Navigator.of(context).pop(true),
+   242	                      ),
+   243	                    ],
+   244	                  );
+   245	                },
+   246	              );
+   247	
+   248	              if (confirm == true) {
+   249	                await _clearLogAndExit();
+   250	              }
+   251	            },
+   252	            tooltip: 'Очистить журнал',
+   253	          ),
+   254	        ],
+   255	      ),
+   256	      body: reversedItems.isEmpty
+   257	          ? const Center(child: Text('Журнал пуст.'))
+   258	          : ListView.builder(
+   259	              itemCount: reversedItems.length,
+   260	              itemBuilder: (context, index) {
+   261	                final entry = reversedItems[index];
+   262	                return _buildLogItemWidget(entry);
+   263	              },
+   264	            ),
+   265	    );
+   266	  }
+   267	}
+
+=== lib/main.dart ===
+     1	import 'package:flutter/material.dart';
+     2	import 'package:provider/provider.dart';
+     3	
+     4	import 'app/my_app.dart';
+     5	import 'theme_provider.dart';
+     6	
+     7	void main() {
+     8	  runApp(
+     9	    ChangeNotifierProvider(
+    10	      create: (context) => ThemeProvider(),
+    11	      child: const MyApp(),
+    12	    ),
+    13	  );
+    14	}
+
+=== lib/models/map_anchor.dart ===
+     1	import 'package:equatable/equatable.dart';
+     2	
+     3	class MapAnchor extends Equatable {
+     4	  final String id;
+     5	  final double imageX;
+     6	  final double imageY;
+     7	  final double latitude;
+     8	  final double longitude;
+     9	  final DateTime createdAt;
+    10	
+    11	  const MapAnchor({
+    12	    required this.id,
+    13	    required this.imageX,
+    14	    required this.imageY,
+    15	    required this.latitude,
+    16	    required this.longitude,
+    17	    required this.createdAt,
+    18	  });
+    19	
+    20	  @override
+    21	  List<Object?> get props => [id, imageX, imageY, latitude, longitude, createdAt];
+    22	}
+=== lib/models/map_project.dart ===
+     1	import 'package:equatable/equatable.dart';
+     2	import 'map_anchor.dart';
+     3	import 'map_target.dart';
+     4	
+     5	class MapProject extends Equatable {
+     6	  final String id;
+     7	  final String imagePath;
+     8	  final List<MapAnchor> anchors;
+     9	  final List<MapTarget> targets;
+    10	
+    11	  const MapProject({
+    12	    required this.id,
+    13	    required this.imagePath,
+    14	    required this.anchors,
+    15	    required this.targets,
+    16	  });
+    17	
+    18	  MapProject copyWith({
+    19	    String? id,
+    20	    String? imagePath,
+    21	    List<MapAnchor>? anchors,
+    22	    List<MapTarget>? targets,
+    23	  }) {
+    24	    return MapProject(
+    25	      id: id ?? this.id,
+    26	      imagePath: imagePath ?? this.imagePath,
+    27	      anchors: anchors ?? this.anchors,
+    28	      targets: targets ?? this.targets,
+    29	    );
+    30	  }
+    31	
+    32	  @override
+    33	  List<Object?> get props => [id, imagePath, anchors, targets];
+    34	}
+=== lib/models/map_target.dart ===
+     1	import 'package:equatable/equatable.dart';
+     2	
+     3	enum MapTargetStatus { planned, active, passed }
+     4	
+     5	class MapTarget extends Equatable {
+     6	  final String id;
+     7	  final double imageX;
+     8	  final double imageY;
+     9	  final double? latitude;
+    10	  final double? longitude;
+    11	  final MapTargetStatus status;
+    12	  final DateTime createdAt;
+    13	
+    14	  const MapTarget({
+    15	    required this.id,
+    16	    required this.imageX,
+    17	    required this.imageY,
+    18	    this.latitude,
+    19	    this.longitude,
+    20	    required this.status,
+    21	    required this.createdAt,
+    22	  });
+    23	
+    24	  @override
+    25	  List<Object?> get props => [id, imageX, imageY, latitude, longitude, status, createdAt];
+    26	}
+=== lib/models/map_transform_state.dart ===
+     1	import 'package:flutter/widgets.dart';
+     2	import 'package:equatable/equatable.dart';
+     3	
+     4	class MapTransformState extends Equatable {
+     5	  final double scale;
+     6	  final double rotationRadians;
+     7	  final Offset translation;
+     8	
+     9	  const MapTransformState({
+    10	    this.scale = 1.0,
+    11	    this.rotationRadians = 0.0,
+    12	    this.translation = Offset.zero,
+    13	  });
+    14	
+    15	  MapTransformState copyWith({
+    16	    double? scale,
+    17	    double? rotationRadians,
+    18	    Offset? translation,
+    19	  }) {
+    20	    return MapTransformState(
+    21	      scale: scale ?? this.scale,
+    22	      rotationRadians: rotationRadians ?? this.rotationRadians,
+    23	      translation: translation ?? this.translation,
+    24	    );
+    25	  }
+    26	
+    27	  @override
+    28	  List<Object?> get props => [scale, rotationRadians, translation];
+    29	}
+=== lib/models/map_working_pair.dart ===
+     1	import 'package:equatable/equatable.dart';
+     2	import 'map_anchor.dart';
+     3	
+     4	class MapWorkingPair extends Equatable {
+     5	  final MapAnchor latest;
+     6	  final MapAnchor reference;
+     7	
+     8	  const MapWorkingPair({
+     9	    required this.latest,
+    10	    required this.reference,
+    11	  });
+    12	
+    13	  @override
+    14	  List<Object?> get props => [latest, reference];
+    15	}
+=== lib/screens/home_screen.dart ===
+     1	import 'package:flutter/material.dart';
+     2	import 'package:flutter/services.dart';
+     3	import 'package:provider/provider.dart';
+     4	
+     5	import 'map_screen.dart';
+     6	import '../theme_provider.dart';
+     7	import '../widgets/compass_section.dart';
+     8	import '../widgets/gps_section.dart';
+     9	import '../widgets/exit_confirm_dialog.dart';
+    10	import '../controllers/home_logic.dart';
+    11	import '../controllers/home_state.dart';
+    12	import '../controllers/home_navigation_actions.dart';
+    13	import '../services/log_service.dart';
+    14	import '../services/sensor_service.dart';
+    15	
+    16	class MyHomePage extends StatefulWidget {
+    17	  const MyHomePage({super.key});
+    18	
+    19	  @override
+    20	  State<MyHomePage> createState() => _MyHomePageState();
+    21	}
+    22	
+    23	class _MyHomePageState extends State<MyHomePage> {
+    24	  late final HomeState _state;
+    25	  late final LogService _logService;
+    26	  late final SensorService _sensorService;
+    27	  late final HomeLogic _logic;
+    28	  late final HomeNavigationActions _actions;
+    29	
+    30	  @override
+    31	  void initState() {
+    32	    super.initState();
+    33	    _state = HomeState();
+    34	    _logService = LogService();
+    35	    _sensorService = SensorService();
+    36	    _logic = HomeLogic(
+    37	      state: _state,
+    38	      hostState: this,
+    39	      logService: _logService,
+    40	      sensorService: _sensorService,
+    41	    );
+    42	    Provider.of<ThemeProvider>(context, listen: false).loadTheme();
+    43	    _logic.init();
+    44	  }
+    45	
+    46	  @override
+    47	  void didChangeDependencies() {
+    48	    super.didChangeDependencies();
+    49	    _actions = HomeNavigationActions(
+    50	      context: context,
+    51	      state: _state,
+    52	      logic: _logic,
+    53	    );
+    54	  }
+    55	
+    56	  @override
+    57	  void dispose() {
+    58	    _logic.dispose();
+    59	    super.dispose();
+    60	  }
+    61	
+    62	  Future<void> _handleExitRequest() async {
+    63	    final exit = await showExitConfirmDialog(context);
+    64	    if (exit == true) {
+    65	      await _logic.clearWaypoint();
+    66	      SystemNavigator.pop();
+    67	    }
+    68	  }
+    69	
+    70	  @override
+    71	  Widget build(BuildContext context) {
+    72	    return PopScope(
+    73	      canPop: false,
+    74	      onPopInvokedWithResult: (bool didPop, dynamic result) {
+    75	        if (didPop) return;
+    76	        _handleExitRequest();
+    77	      },
+    78	      child: Scaffold(
+    79	        appBar: AppBar(
+    80	          title: const Text('Compass 40°'),
+    81	          actions: [
+    82	            IconButton(
+    83	              icon: const Icon(Icons.settings),
+    84	              onPressed: _actions.openSettings,
+    85	            ),
+    86	            IconButton(
+    87	              icon: const Icon(Icons.info_outline),
+    88	              onPressed: _actions.openAbout,
+    89	            ),
+    90	          ],
+    91	        ),
+    92	        body: Column(
+    93	          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    94	          children: [
+    95	            CompassSection(
+    96	              headingNotifier: _state.headingNotifier,
+    97	              accuracyNotifier: _state.accuracyNotifier,
+    98	              isGpsCompassActiveNotifier: _state.isGpsCompassActiveNotifier,
+    99	              bearingToTarget: _state.bearingToTarget,
+   100	              bearingToWaypoint: _state.bearingToWaypoint,
+   101	              logItems: _state.logItems,
+   102	              setWaypoint: _logic.setWaypoint,
+   103	              clearWaypoint: _logic.clearWaypoint,
+   104	              onVerticalDragEnd: _actions.handleVerticalDragEnd,
+   105	              getCardinalDirection: _logic.getCardinalDirection,
+   106	              getAccuracyStatusColor: _logic.getAccuracyStatusColor,
+   107	              getAccuracyText: _logic.getAccuracyText,
+   108	              onSwipeToOpenMap: () {
+   109	                Navigator.push(
+   110	                  context,
+   111	                  MaterialPageRoute(builder: (_) => const MapScreen()),
+   112	                );
+   113	              },
+   114	            ),
+   115	            GpsSection(
+   116	              gpsDataNotifier: _state.gpsDataNotifier,
+   117	              accuracyNotifier: _state.accuracyNotifier,
+   118	              distanceToTarget: _state.distanceToTarget,
+   119	              bearingToTarget: _state.bearingToTarget,
+   120	              distanceToWaypoint: _state.distanceToWaypoint,
+   121	              bearingToWaypoint: _state.bearingToWaypoint,
+   122	              waypoint: _state.waypoint,
+   123	              target: _state.target,
+   124	              logItems: _state.logItems,
+   125	              magneticDeclination: _state.magneticDeclination,
+   126	              onClearTarget: _logic.clearTarget,
+   127	              onClearWaypoint: _logic.clearWaypoint,
+   128	            ),
+   129	          ],
+   130	        ),
+   131	      ),
+   132	    );
+   133	  }
+   134	}
+
+=== lib/screens/map_screen.dart ===
+     1	import 'dart:io';
+     2	import 'package:flutter/material.dart';
+     3	import '../services/map_storage_service.dart';
+     4	import '../controllers/map_screen_state.dart';
+     5	import '../models/map_project.dart';
+     6	import 'package:image_picker/image_picker.dart';
+     7	
+     8	class MapScreen extends StatefulWidget {
+     9	  const MapScreen({super.key});
+    10	
+    11	  @override
+    12	  State<MapScreen> createState() => _MapScreenState();
+    13	}
+    14	
+    15	class _MapScreenState extends State<MapScreen> {
+    16	  final MapStorageService _storageService = MapStorageService();
+    17	  final MapScreenState _state = MapScreenState();
+    18	  
+    19	  @override
+    20	  void initState() {
+    21	    super.initState();
+    22	    _loadLastProject();
+    23	  }
+    24	  
+    25	  Future<void> _loadLastProject() async {
+    26	    final projectId = await _storageService.getCurrentProjectId();
+    27	    if (projectId != null) {
+    28	      final project = await _storageService.loadProject(projectId);
+    29	      if (project != null && mounted) {
+    30	        setState(() {
+    31	          _state.project = project;
+    32	          _state.imagePath = project.imagePath;
+    33	        });
+    34	        _loadImageSize();
+    35	      }
+    36	    }
+    37	  }
+    38	  
+    39	  Future<void> _pickImage() async {
+    40	  try {
+    41	    final picker = ImagePicker();
+    42	    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    43	    
+    44	    if (image != null && mounted) {
+    45	      final savedPath = await _storageService.saveImageToAppStorage(image.path);
+    46	      final projectId = DateTime.now().millisecondsSinceEpoch.toString();
+    47	      final project = MapProject(
+    48	        id: projectId,
+    49	        imagePath: savedPath,
+    50	        anchors: [],
+    51	        targets: [],
+    52	      );
+    53	      await _storageService.saveProject(project);
+    54	      await _storageService.setCurrentProjectId(projectId);
+    55	      setState(() {
+    56	        _state.project = project;
+    57	        _state.imagePath = savedPath;
+    58	      });
+    59	      _loadImageSize();
+    60	    }
+    61	  } catch (e) {
+    62	    debugPrint('Error picking image: $e');
+    63	  }
+    64	}
+    65	  
+    66	  Future<void> _loadImageSize() async {
+    67	    if (_state.imagePath == null) return;
+    68	    final file = File(_state.imagePath!);
+    69	    if (!await file.exists()) return;
+    70	    
+    71	    final decoded = await decodeImageFromList(await file.readAsBytes());
+    72	    if (mounted) {
+    73	      setState(() {
+    74	        _state.imageSize = Size(decoded.width.toDouble(), decoded.height.toDouble());
+    75	      });
+    76	    }
+    77	  }
+    78	  
+    79	  @override
+    80	  Widget build(BuildContext context) {
+    81	    return Scaffold(
+    82	      appBar: AppBar(
+    83	        title: const Text('Спорткарта'),
+    84	        centerTitle: true,
+    85	        actions: [
+    86	          if (_state.imagePath == null)
+    87	            IconButton(
+    88	              icon: const Icon(Icons.add_photo_alternate),
+    89	              onPressed: _pickImage,
+    90	              tooltip: 'Выбрать карту',
+    91	            ),
+    92	        ],
+    93	      ),
+    94	      body: _state.imagePath == null
+    95	          ? Center(
+    96	        child: Column(
+    97	          mainAxisAlignment: MainAxisAlignment.center,
+    98	          children: [
+    99	            const Icon(Icons.map, size: 64, color: Colors.grey),
+   100	            const SizedBox(height: 16),
+   101	            const Text('Нет загруженной карты'),
+   102	            const SizedBox(height: 16),
+   103	            ElevatedButton.icon(
+   104	              onPressed: _pickImage,
+   105	              icon: const Icon(Icons.add_photo_alternate),
+   106	              label: const Text('Выбрать фото карты'),
+   107	            ),
+   108	          ],
+   109	        ),
+   110	      )
+   111	      : _state.imageSize == null
+   112	    ? const Center(child: CircularProgressIndicator())
+   113	    : LayoutBuilder(
+   114	        builder: (context, constraints) {
+   115	          return InteractiveViewer(
+   116	            minScale: 0.1,
+   117	            maxScale: 4.0,
+   118	            constrained: false,
+   119	            child: SizedBox(
+   120	              width: constraints.maxWidth,
+   121	              height: constraints.maxHeight,
+   122	              child: Image.file(
+   123	                File(_state.imagePath!),
+   124	                fit: BoxFit.contain,
+   125	              ),
+   126	            ),
+   127	          );
+   128	        },
+   129	      ),
+   130	    );
+   131	  }
+   132	}
+=== lib/services/log_service.dart ===
+     1	import 'dart:convert';
+     2	import 'dart:math' as math;
+     3	
+     4	import 'package:collection/collection.dart';
+     5	import 'package:gps_info/gps_info.dart';
+     6	import 'package:shared_preferences/shared_preferences.dart';
+     7	
+     8	import '../log_entry.dart';
+     9	import '../utils/geo_utils.dart';
+    10	
+    11	class LogService {
+    12	  Future<List<LogItem>> loadLogEntries() async {
+    13	    final prefs = await SharedPreferences.getInstance();
+    14	    final String? logJson = prefs.getString('log_items');
+    15	
+    16	    if (logJson != null) {
+    17	      try {
+    18	        final List<dynamic> decodedList = jsonDecode(logJson);
+    19	        return decodedList.map((e) => logItemFromJson(e)).toList();
+    20	      } catch (e) {
+    21	        return [];
+    22	      }
+    23	    }
+    24	
+    25	    return [];
+    26	  }
+    27	
+    28	  Future<void> saveLogEntries(List<LogItem> logItems) async {
+    29	    final prefs = await SharedPreferences.getInstance();
+    30	    await prefs.setString(
+    31	      'log_items',
+    32	      jsonEncode(logItems.map((e) => e.toJson()).toList()),
+    33	    );
+    34	  }
+    35	
+    36	  Future<SetWaypointResult?> setWaypoint({
+    37	    required List<LogItem> currentLogItems,
+    38	    required GpsData currentGpsData,
+    39	    required double magneticDeclination,
+    40	  }) async {
+    41	    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
+    42	      return null;
+    43	    }
+    44	
+    45	    final logItems = await loadLogEntries();
+    46	
+    47	    final lastIncompleteEntry =
+    48	        logItems.lastWhereOrNull(
+    49	              (item) => item is LogEntry && item.distance == null,
+    50	            )
+    51	            as LogEntry?;
+    52	
+    53	    if (lastIncompleteEntry != null) {
+    54	      final distance = calculateDistance(
+    55	        lastIncompleteEntry.latitude,
+    56	        lastIncompleteEntry.longitude,
+    57	        currentGpsData.latitude!,
+    58	        currentGpsData.longitude!,
+    59	      );
+    60	
+    61	      final bearing = calculateTrueBearing(
+    62	        lastIncompleteEntry.latitude,
+    63	        lastIncompleteEntry.longitude,
+    64	        currentGpsData.latitude!,
+    65	        currentGpsData.longitude!,
+    66	      );
+    67	
+    68	      lastIncompleteEntry.distance = distance;
+    69	      lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
+    70	    }
+    71	
+    72	    final existingTrackEntries = logItems.whereType<LogEntry>();
+    73	    final newId = existingTrackEntries.isEmpty
+    74	        ? 1
+    75	        : existingTrackEntries.map((e) => e.id).reduce(math.max) + 1;
+    76	
+    77	    final newEntry = LogEntry(
+    78	      id: newId,
+    79	      latitude: currentGpsData.latitude!,
+    80	      longitude: currentGpsData.longitude!,
+    81	    );
+    82	
+    83	    logItems.add(newEntry);
+    84	    await saveLogEntries(logItems);
+    85	
+    86	    return SetWaypointResult(logItems: logItems, waypoint: currentGpsData);
+    87	  }
+    88	
+    89	  Future<ClearWaypointResult> clearWaypoint({
+    90	    required List<LogItem> currentLogItems,
+    91	    required GpsData currentGpsData,
+    92	    required double magneticDeclination,
+    93	  }) async {
+    94	    final logItems = await loadLogEntries();
+    95	
+    96	    final lastIncompleteEntry =
+    97	        logItems.lastWhereOrNull(
+    98	              (item) => item is LogEntry && item.distance == null,
+    99	            )
+   100	            as LogEntry?;
+   101	
+   102	    if (lastIncompleteEntry == null) {
+   103	      return ClearWaypointResult(
+   104	        logItems: logItems,
+   105	        waypoint: null,
+   106	        clearedOnly: true,
+   107	      );
+   108	    }
+   109	
+   110	    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
+   111	      return ClearWaypointResult(
+   112	        logItems: currentLogItems,
+   113	        waypoint: null,
+   114	        clearedOnly: true,
+   115	      );
+   116	    }
+   117	
+   118	    final distance = calculateDistance(
+   119	      lastIncompleteEntry.latitude,
+   120	      lastIncompleteEntry.longitude,
+   121	      currentGpsData.latitude!,
+   122	      currentGpsData.longitude!,
+   123	    );
+   124	
+   125	    final bearing = calculateTrueBearing(
+   126	      lastIncompleteEntry.latitude,
+   127	      lastIncompleteEntry.longitude,
+   128	      currentGpsData.latitude!,
+   129	      currentGpsData.longitude!,
+   130	    );
+   131	
+   132	    lastIncompleteEntry.distance = distance;
+   133	    lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
+   134	
+   135	    await saveLogEntries(logItems);
+   136	
+   137	    return ClearWaypointResult(
+   138	      logItems: logItems,
+   139	      waypoint: null,
+   140	      clearedOnly: true,
+   141	    );
+   142	  }
+   143	
+   144	  Future<List<LogItem>> addTargetCreationLogEntry({
+   145	    required List<LogItem> currentLogItems,
+   146	    required double baseLatitude,
+   147	    required double baseLongitude,
+   148	    required double azimuth,
+   149	    required double distance,
+   150	    required double targetLatitude,
+   151	    required double targetLongitude,
+   152	  }) async {
+   153	    final logItems = await loadLogEntries();
+   154	
+   155	    final newId = logItems.whereType<TargetCreationLogEntry>().isNotEmpty
+   156	        ? logItems
+   157	                  .whereType<TargetCreationLogEntry>()
+   158	                  .map((e) => e.id)
+   159	                  .reduce(math.max) +
+   160	              1
+   161	        : 1;
+   162	
+   163	    final entry = TargetCreationLogEntry(
+   164	      id: newId,
+   165	      baseLatitude: baseLatitude,
+   166	      baseLongitude: baseLongitude,
+   167	      azimuth: azimuth,
+   168	      distance: distance,
+   169	      targetLatitude: targetLatitude,
+   170	      targetLongitude: targetLongitude,
+   171	    );
+   172	
+   173	    logItems.add(entry);
+   174	    await saveLogEntries(logItems);
+   175	    return logItems;
+   176	  }
+   177	}
+   178	
+   179	class SetWaypointResult {
+   180	  final List<LogItem> logItems;
+   181	  final GpsData waypoint;
+   182	
+   183	  SetWaypointResult({required this.logItems, required this.waypoint});
+   184	}
+   185	
+   186	class ClearWaypointResult {
+   187	  final List<LogItem> logItems;
+   188	  final GpsData? waypoint;
+   189	  final bool clearedOnly;
+   190	
+   191	  ClearWaypointResult({
+   192	    required this.logItems,
+   193	    required this.waypoint,
+   194	    required this.clearedOnly,
+   195	  });
+   196	}
+
+=== lib/services/map_storage_service.dart ===
+     1	import 'dart:convert';
+     2	import 'dart:io';
+     3	import 'package:path_provider/path_provider.dart';
+     4	import 'package:shared_preferences/shared_preferences.dart';
+     5	import '../models/map_project.dart';
+     6	import '../models/map_anchor.dart';
+     7	import '../models/map_target.dart';
+     8	
+     9	class MapStorageService {
+    10	  static const String _projectsKey = 'map_projects';
+    11	  static const String _currentProjectIdKey = 'current_map_project_id';
+    12	
+    13	  Future<Directory> _getMapsDirectory() async {
+    14	    final appDir = await getApplicationDocumentsDirectory();
+    15	    final mapsDir = Directory('${appDir.path}/compass40_maps');
+    16	    if (!await mapsDir.exists()) {
+    17	      await mapsDir.create(recursive: true);
+    18	    }
+    19	    return mapsDir;
+    20	  }
+    21	
+    22	  Future<String> saveImageToAppStorage(String sourcePath) async {
+    23	    final mapsDir = await _getMapsDirectory();
+    24	    final fileName = DateTime.now().millisecondsSinceEpoch.toString();
+    25	    final ext = sourcePath.split('.').last;
+    26	    final destPath = '${mapsDir.path}/$fileName.$ext';
+    27	    await File(sourcePath).copy(destPath);
+    28	    return destPath;
+    29	  }
+    30	
+    31	  Future<void> saveProject(MapProject project) async {
+    32	    final prefs = await SharedPreferences.getInstance();
+    33	    final projectsJson = prefs.getString(_projectsKey) ?? '{}';
+    34	    final Map<String, dynamic> projects = jsonDecode(projectsJson);
+    35	    
+    36	    projects[project.id] = {
+    37	      'id': project.id,
+    38	      'imagePath': project.imagePath,
+    39	      'anchors': project.anchors.map((a) => {
+    40	        'id': a.id,
+    41	        'imageX': a.imageX,
+    42	        'imageY': a.imageY,
+    43	        'latitude': a.latitude,
+    44	        'longitude': a.longitude,
+    45	        'createdAt': a.createdAt.toIso8601String(),
+    46	      }).toList(),
+    47	      'targets': project.targets.map((t) => {
+    48	        'id': t.id,
+    49	        'imageX': t.imageX,
+    50	        'imageY': t.imageY,
+    51	        'latitude': t.latitude,
+    52	        'longitude': t.longitude,
+    53	        'status': t.status.index,
+    54	        'createdAt': t.createdAt.toIso8601String(),
+    55	      }).toList(),
+    56	    };
+    57	    
+    58	    await prefs.setString(_projectsKey, jsonEncode(projects));
+    59	  }
+    60	
+    61	  Future<MapProject?> loadProject(String id) async {
+    62	    final prefs = await SharedPreferences.getInstance();
+    63	    final projectsJson = prefs.getString(_projectsKey);
+    64	    if (projectsJson == null) return null;
+    65	    
+    66	    final Map<String, dynamic> projects = jsonDecode(projectsJson);
+    67	    final projectData = projects[id];
+    68	    if (projectData == null) return null;
+    69	    
+    70	    return MapProject(
+    71	      id: projectData['id'],
+    72	      imagePath: projectData['imagePath'],
+    73	      anchors: (projectData['anchors'] as List).map((a) => MapAnchor(
+    74	        id: a['id'],
+    75	        imageX: a['imageX'],
+    76	        imageY: a['imageY'],
+    77	        latitude: a['latitude'],
+    78	        longitude: a['longitude'],
+    79	        createdAt: DateTime.parse(a['createdAt']),
+    80	      )).toList(),
+    81	      targets: (projectData['targets'] as List).map((t) => MapTarget(
+    82	        id: t['id'],
+    83	        imageX: t['imageX'],
+    84	        imageY: t['imageY'],
+    85	        latitude: t['latitude'],
+    86	        longitude: t['longitude'],
+    87	        status: MapTargetStatus.values[t['status']],
+    88	        createdAt: DateTime.parse(t['createdAt']),
+    89	      )).toList(),
+    90	    );
+    91	  }
+    92	
+    93	  Future<void> setCurrentProjectId(String? id) async {
+    94	    final prefs = await SharedPreferences.getInstance();
+    95	    if (id == null) {
+    96	      await prefs.remove(_currentProjectIdKey);
+    97	    } else {
+    98	      await prefs.setString(_currentProjectIdKey, id);
+    99	    }
+   100	  }
+   101	
+   102	  Future<String?> getCurrentProjectId() async {
+   103	    final prefs = await SharedPreferences.getInstance();
+   104	    return prefs.getString(_currentProjectIdKey);
+   105	  }
+   106	}
+=== lib/services/sensor_service.dart ===
+     1	import 'dart:async';
+     2	import 'dart:developer' as developer;
+     3	
+     4	import 'package:gps_info/gps_info.dart';
+     5	import 'package:my_compass/my_compass.dart';
+     6	import 'package:permission_handler/permission_handler.dart';
+     7	import 'package:shared_preferences/shared_preferences.dart';
+     8	
+     9	import '../controllers/home_state.dart';
+    10	
+    11	class SensorService {
+    12	  Future<SensorSettings> loadSettings() async {
+    13	    final prefs = await SharedPreferences.getInstance();
+    14	
+    15	    final useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
+    16	    final magneticDeclination = useManualDeclination
+    17	        ? (prefs.getDouble('manualDeclination') ?? 0.0)
+    18	        : 0.0;
+    19	
+    20	    final compassModeIndex = prefs.getInt('compassMode') ?? 0;
+    21	    final compassMode = CompassMode.values[compassModeIndex];
+    22	    final autoSwitchSpeedKmh = prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0;
+    23	
+    24	    return SensorSettings(
+    25	      useManualDeclination: useManualDeclination,
+    26	      magneticDeclination: magneticDeclination,
+    27	      averagingPeriod: prefs.getInt('averagingPeriod') ?? 500,
+    28	      smoothingFactor: prefs.getDouble('smoothingFactor') ?? 0.5,
+    29	      uiUpdatePeriod: prefs.getInt('uiUpdatePeriod') ?? 250,
+    30	      gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
+    31	      compassMode: compassMode,
+    32	      autoSwitchSpeedKmh: autoSwitchSpeedKmh,
+    33	    );
+    34	  }
+    35	
+    36	  Future<void> saveCompassMode(CompassMode mode) async {
+    37	    final prefs = await SharedPreferences.getInstance();
+    38	    await prefs.setInt('compassMode', mode.index);
+    39	  }
+    40	
+    41	  Future<void> saveAutoSwitchSpeed(double speedKmh) async {
+    42	    final prefs = await SharedPreferences.getInstance();
+    43	    await prefs.setDouble('autoSwitchSpeedKmh', speedKmh);
+    44	  }
+    45	
+    46	  Future<bool> requestLocationPermission() async {
+    47	    return (await Permission.location.request()).isGranted;
+    48	  }
+    49	
+    50	  StreamSubscription<GpsData> subscribeToGps({
+    51	    required GpsInfo gpsInfo,
+    52	    required int intervalSeconds,
+    53	    required void Function(GpsData gpsData) onData,
+    54	  }) {
+    55	    return gpsInfo
+    56	        .getGpsDataStream(intervalSeconds * 1000)
+    57	        .handleError((error, stack) {
+    58	          developer.log(
+    59	            'Error in GPS stream',
+    60	            name: 'by.fortydegree.testgps',
+    61	            error: error,
+    62	            stackTrace: stack,
+    63	          );
+    64	        })
+    65	        .listen(onData);
+    66	  }
+    67	
+    68	  StreamSubscription<List<double>> subscribeToCompass({
+    69	    required void Function(List<double> data) onData,
+    70	  }) {
+    71	    return MyCompass.events.listen(onData);
+    72	  }
+    73	}
+    74	
+    75	class SensorSettings {
+    76	  final bool useManualDeclination;
+    77	  final double magneticDeclination;
+    78	  final int averagingPeriod;
+    79	  final double smoothingFactor;
+    80	  final int uiUpdatePeriod;
+    81	  final int gpsInterval;
+    82	  final CompassMode compassMode;
+    83	  final double autoSwitchSpeedKmh;
+    84	
+    85	  SensorSettings({
+    86	    required this.useManualDeclination,
+    87	    required this.magneticDeclination,
+    88	    required this.averagingPeriod,
+    89	    required this.smoothingFactor,
+    90	    required this.uiUpdatePeriod,
+    91	    required this.gpsInterval,
+    92	    required this.compassMode,
+    93	    required this.autoSwitchSpeedKmh,
+    94	  });
+    95	}
+
+=== lib/settings_screen.dart ===
+     1	import 'package:flutter/material.dart';
+     2	import 'package:provider/provider.dart';
+     3	import 'package:shared_preferences/shared_preferences.dart';
+     4	
+     5	import 'theme_provider.dart';
+     6	import 'controllers/home_state.dart';
+     7	
+     8	class SettingsScreen extends StatefulWidget {
+     9	  const SettingsScreen({super.key});
+    10	
+    11	  @override
+    12	  State<SettingsScreen> createState() => _SettingsScreenState();
+    13	}
+    14	
+    15	class _SettingsScreenState extends State<SettingsScreen> {
+    16	  late Future<void> _settingsFuture;
+    17	  bool _useManualDeclination = false;
+    18	  final _declinationController = TextEditingController();
+    19	  final _averagingPeriodController = TextEditingController();
+    20	  final _gpsIntervalController = TextEditingController();
+    21	  final _uiUpdatePeriodController = TextEditingController();
+    22	  final _autoSwitchSpeedController = TextEditingController();
+    23	  double _smoothingFactor = 0.5;
+    24	  CompassMode _compassMode = CompassMode.magnetic;
+    25	
+    26	  @override
+    27	  void initState() {
+    28	    super.initState();
+    29	    _settingsFuture = _loadSettings();
+    30	  }
+    31	
+    32	  Future<void> _loadSettings() async {
+    33	    final prefs = await SharedPreferences.getInstance();
+    34	
+    35	    _useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
+    36	    _declinationController.text = (prefs.getDouble('manualDeclination') ?? '')
+    37	        .toString();
+    38	    _averagingPeriodController.text = (prefs.getInt('averagingPeriod') ?? 500)
+    39	        .toString();
+    40	    _gpsIntervalController.text = (prefs.getInt('gpsUpdateInterval') ?? 1)
+    41	        .toString();
+    42	    _uiUpdatePeriodController.text = (prefs.getInt('uiUpdatePeriod') ?? 250)
+    43	        .toString();
+    44	    _autoSwitchSpeedController.text =
+    45	        (prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0).toString();
+    46	
+    47	    double smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
+    48	    smoothingFactor = smoothingFactor.clamp(0.01, 0.99);
+    49	    _smoothingFactor = smoothingFactor;
+    50	
+    51	    final modeIndex = prefs.getInt('compassMode') ?? 0;
+    52	    _compassMode = CompassMode.values[modeIndex];
+    53	  }
+    54	
+    55	  Future<void> _saveSettings() async {
+    56	    final prefs = await SharedPreferences.getInstance();
+    57	
+    58	    await prefs.setBool('useManualDeclination', _useManualDeclination);
+    59	
+    60	    final declination = double.tryParse(_declinationController.text);
+    61	    if (declination != null) {
+    62	      await prefs.setDouble('manualDeclination', declination);
+    63	    } else {
+    64	      await prefs.remove('manualDeclination');
+    65	    }
+    66	
+    67	    final period = int.tryParse(_averagingPeriodController.text);
+    68	    await prefs.setInt('averagingPeriod', period ?? 500);
+    69	
+    70	    final interval = int.tryParse(_gpsIntervalController.text);
+    71	    await prefs.setInt('gpsUpdateInterval', interval ?? 1);
+    72	
+    73	    final uiPeriod = int.tryParse(_uiUpdatePeriodController.text);
+    74	    await prefs.setInt('uiUpdatePeriod', uiPeriod ?? 250);
+    75	
+    76	    await prefs.setDouble('smoothingFactor', _smoothingFactor);
+    77	    await prefs.setInt('compassMode', _compassMode.index);
+    78	
+    79	    final autoSpeed = double.tryParse(_autoSwitchSpeedController.text);
+    80	    await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? 3.0);
+    81	  }
+    82	
+    83	  Widget _buildTextFieldRow(
+    84	    String label,
+    85	    TextEditingController controller,
+    86	    String hint, {
+    87	    bool isInt = true,
+    88	  }) {
+    89	    return Row(
+    90	      children: [
+    91	        Text(label, style: Theme.of(context).textTheme.titleMedium),
+    92	        const SizedBox(width: 16),
+    93	        Expanded(
+    94	          child: TextField(
+    95	            controller: controller,
+    96	            textAlign: TextAlign.end,
+    97	            keyboardType: TextInputType.numberWithOptions(
+    98	              decimal: !isInt,
+    99	              signed: true,
+   100	            ),
+   101	            decoration: InputDecoration(
+   102	              isDense: true,
+   103	              hintText: hint,
+   104	              border: InputBorder.none,
+   105	              contentPadding: EdgeInsets.zero,
+   106	            ),
+   107	            onChanged: (_) => _saveSettings(),
+   108	          ),
+   109	        ),
+   110	      ],
+   111	    );
+   112	  }
+   113	
+   114	  @override
+   115	  void dispose() {
+   116	    _declinationController.dispose();
+   117	    _averagingPeriodController.dispose();
+   118	    _gpsIntervalController.dispose();
+   119	    _uiUpdatePeriodController.dispose();
+   120	    _autoSwitchSpeedController.dispose();
+   121	    super.dispose();
+   122	  }
+   123	
+   124	  @override
+   125	  Widget build(BuildContext context) {
+   126	    final themeProvider = Provider.of<ThemeProvider>(context);
+   127	
+   128	    return Scaffold(
+   129	      appBar: AppBar(title: const Text('Настройки')),
+   130	      body: FutureBuilder(
+   131	        future: _settingsFuture,
+   132	        builder: (context, snapshot) {
+   133	          if (snapshot.connectionState == ConnectionState.waiting) {
+   134	            return const SizedBox.shrink();
+   135	          }
+   136	          if (snapshot.hasError) {
+   137	            return const Center(child: Text('Ошибка загрузки настроек'));
+   138	          }
+   139	
+   140	          return SingleChildScrollView(
+   141	            child: Padding(
+   142	              padding: const EdgeInsets.all(16.0),
+   143	              child: Column(
+   144	                crossAxisAlignment: CrossAxisAlignment.start,
+   145	                children: [
+   146	                  // Тема
+   147	                  Row(
+   148	                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+   149	                    children: [
+   150	                      Text(
+   151	                        'Тема',
+   152	                        style: Theme.of(context).textTheme.titleLarge,
+   153	                      ),
+   154	                      SegmentedButton<ThemeMode>(
+   155	                        segments: const [
+   156	                          ButtonSegment(
+   157	                            value: ThemeMode.light,
+   158	                            label: Text('Светлая'),
+   159	                            icon: Icon(Icons.light_mode),
+   160	                          ),
+   161	                          ButtonSegment(
+   162	                            value: ThemeMode.dark,
+   163	                            label: Text('Темная'),
+   164	                            icon: Icon(Icons.dark_mode),
+   165	                          ),
+   166	                        ],
+   167	                        selected: {
+   168	                          themeProvider.themeMode == ThemeMode.system
+   169	                              ? ThemeMode.light
+   170	                              : themeProvider.themeMode,
+   171	                        },
+   172	                        onSelectionChanged: (s) =>
+   173	                            themeProvider.setThemeMode(s.first),
+   174	                        showSelectedIcon: false,
+   175	                      ),
+   176	                    ],
+   177	                  ),
+   178	                  const SizedBox(height: 24),
+   179	
+   180	                  // ✅ Режим компаса
+   181	                  Text(
+   182	                    'Режим компаса',
+   183	                    style: Theme.of(context).textTheme.titleMedium,
+   184	                  ),
+   185	                  const SizedBox(height: 8),
+   186	                  SegmentedButton<CompassMode>(
+   187	                    segments: const [
+   188	                      ButtonSegment(
+   189	                        value: CompassMode.magnetic,
+   190	                        label: Text('Магнитный'),
+   191	                        icon: Icon(Icons.explore),
+   192	                      ),
+   193	                      ButtonSegment(
+   194	                        value: CompassMode.gps,
+   195	                        label: Text('GPS'),
+   196	                        icon: Icon(Icons.satellite_alt),
+   197	                      ),
+   198	                      ButtonSegment(
+   199	                        value: CompassMode.auto,
+   200	                        label: Text('Авто'),
+   201	                        icon: Icon(Icons.auto_mode),
+   202	                      ),
+   203	                    ],
+   204	                    selected: {_compassMode},
+   205	                    onSelectionChanged: (s) {
+   206	                      setState(() => _compassMode = s.first);
+   207	                      _saveSettings();
+   208	                    },
+   209	                    showSelectedIcon: false,
+   210	                  ),
+   211	                  const SizedBox(height: 16),
+   212	
+   213	                  // ✅ Скорость автопереключения
+   214	                  if (_compassMode == CompassMode.auto) ...[
+   215	                    _buildTextFieldRow(
+   216	                      'Скорость авто (км/ч):',
+   217	                      _autoSwitchSpeedController,
+   218	                      '3.0',
+   219	                      isInt: false,
+   220	                    ),
+   221	                    const SizedBox(height: 16),
+   222	                  ],
+   223	
+   224	                  // GPS интервал
+   225	                  _buildTextFieldRow(
+   226	                    'Интервал GPS (сек):',
+   227	                    _gpsIntervalController,
+   228	                    '1',
+   229	                  ),
+   230	                  const SizedBox(height: 16),
+   231	
+   232	                  // Магнитное склонение
+   233	                  Row(
+   234	                    children: [
+   235	                      Text(
+   236	                        'Магнитное склонение:',
+   237	                        style: Theme.of(context).textTheme.titleMedium,
+   238	                      ),
+   239	                      const SizedBox(width: 16),
+   240	                      Expanded(
+   241	                        child: _useManualDeclination
+   242	                            ? TextField(
+   243	                                controller: _declinationController,
+   244	                                textAlign: TextAlign.end,
+   245	                                keyboardType:
+   246	                                    const TextInputType.numberWithOptions(
+   247	                                      decimal: true,
+   248	                                      signed: true,
+   249	                                    ),
+   250	                                decoration: const InputDecoration(
+   251	                                  isDense: true,
+   252	                                  hintText: '°',
+   253	                                  border: InputBorder.none,
+   254	                                  contentPadding: EdgeInsets.zero,
+   255	                                ),
+   256	                                onChanged: (_) => _saveSettings(),
+   257	                              )
+   258	                            : const Text(
+   259	                                'авто',
+   260	                                textAlign: TextAlign.end,
+   261	                                style: TextStyle(color: Colors.grey),
+   262	                              ),
+   263	                      ),
+   264	                      const SizedBox(width: 8),
+   265	                      Switch(
+   266	                        value: _useManualDeclination,
+   267	                        onChanged: (v) {
+   268	                          setState(() => _useManualDeclination = v);
+   269	                          _saveSettings();
+   270	                        },
+   271	                      ),
+   272	                    ],
+   273	                  ),
+   274	                  const SizedBox(height: 16),
+   275	
+   276	                  // Усреднение
+   277	                  _buildTextFieldRow(
+   278	                    'Усреднение (мс):',
+   279	                    _averagingPeriodController,
+   280	                    '500',
+   281	                  ),
+   282	                  const SizedBox(height: 16),
+   283	
+   284	                  // Сглаживание
+   285	                  Row(
+   286	                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+   287	                    crossAxisAlignment: CrossAxisAlignment.baseline,
+   288	                    textBaseline: TextBaseline.alphabetic,
+   289	                    children: [
+   290	                      Text(
+   291	                        'плавная',
+   292	                        style: Theme.of(context).textTheme.bodySmall,
+   293	                      ),
+   294	                      Text(
+   295	                        'Стрелка',
+   296	                        style: Theme.of(context).textTheme.titleMedium,
+   297	                      ),
+   298	                      Text(
+   299	                        'быстрая',
+   300	                        style: Theme.of(context).textTheme.bodySmall,
+   301	                      ),
+   302	                    ],
+   303	                  ),
+   304	                  Slider(
+   305	                    value: _smoothingFactor,
+   306	                    min: 0.01,
+   307	                    max: 0.99,
+   308	                    divisions: 98,
+   309	                    label: _smoothingFactor.toStringAsFixed(2),
+   310	                    onChanged: (v) => setState(() => _smoothingFactor = v),
+   311	                    onChangeEnd: (_) => _saveSettings(),
+   312	                  ),
+   313	                  const SizedBox(height: 8),
+   314	
+   315	                  // Частота UI
+   316	                  _buildTextFieldRow(
+   317	                    'Частота UI (мс):',
+   318	                    _uiUpdatePeriodController,
+   319	                    '250',
+   320	                  ),
+   321	                ],
+   322	              ),
+   323	            ),
+   324	          );
+   325	        },
+   326	      ),
+   327	    );
+   328	  }
+   329	}
+
+=== lib/target_screen.dart ===
+     1	import 'package:flutter/material.dart';
+     2	import 'package:flutter/services.dart';
+     3	
+     4	class TargetScreen extends StatefulWidget {
+     5	  const TargetScreen({super.key});
+     6	
+     7	  @override
+     8	  State<TargetScreen> createState() => _TargetScreenState();
+     9	}
+    10	
+    11	class _TargetScreenState extends State<TargetScreen> {
+    12	  final _azimuthController = TextEditingController();
+    13	  final _distanceController = TextEditingController();
+    14	  final _formKey = GlobalKey<FormState>();
+    15	
+    16	  // Обычное нажатие: использует текущее местоположение как базу.
+    17	  void _setTarget() {
+    18	    if (_formKey.currentState!.validate()) {
+    19	      final azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
+    20	      final distance = double.tryParse(_distanceController.text) ?? 0.0;
+    21	      Navigator.pop(context, {
+    22	        'azimuth': azimuth,
+    23	        'distance': distance,
+    24	        'useClipboardAsBase': false, // Явно указываем, что база - не из буфера
+    25	      });
+    26	    }
+    27	  }
+    28	
+    29	  // Долгое нажатие: использует координаты из буфера как базу для расчета.
+    30	  Future<void> _setTargetWithClipboardBase() async {
+    31	    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    32	    if (!mounted) return;
+    33	
+    34	    if (clipboardData == null || clipboardData.text == null) {
+    35	      ScaffoldMessenger.of(
+    36	        context,
+    37	      ).showSnackBar(const SnackBar(content: Text('Буфер обмена пуст')));
+    38	      return;
+    39	    }
+    40	
+    41	    final coords = clipboardData.text!.split(',');
+    42	    if (coords.length == 2) {
+    43	      final lat = double.tryParse(coords[0].trim());
+    44	      final lon = double.tryParse(coords[1].trim());
+    45	
+    46	      if (lat != null && lon != null) {
+    47	        // Берем азимут и дистанцию из полей, если пустые - то 0.
+    48	        final azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
+    49	        final distance = double.tryParse(_distanceController.text) ?? 0.0;
+    50	
+    51	        // Возвращаем все данные для расчета на главный экран
+    52	        Navigator.pop(context, {
+    53	          'base_latitude': lat,
+    54	          'base_longitude': lon,
+    55	          'azimuth': azimuth,
+    56	          'distance': distance,
+    57	          'useClipboardAsBase': true, // Явно указываем, что база из буфера
+    58	        });
+    59	      } else {
+    60	        ScaffoldMessenger.of(context).showSnackBar(
+    61	          const SnackBar(
+    62	            content: Text('Неверный формат координат в буфере обмена'),
+    63	          ),
+    64	        );
+    65	      }
+    66	    } else {
+    67	      ScaffoldMessenger.of(context).showSnackBar(
+    68	        const SnackBar(
+    69	          content: Text('Неверный формат координат в буфере обмена'),
+    70	        ),
+    71	      );
+    72	    }
+    73	  }
+    74	
+    75	  @override
+    76	  void dispose() {
+    77	    _azimuthController.dispose();
+    78	    _distanceController.dispose();
+    79	    super.dispose();
+    80	  }
+    81	
+    82	  @override
+    83	  Widget build(BuildContext context) {
+    84	    return Scaffold(
+    85	      appBar: AppBar(title: const Text('Установить цель')),
+    86	      body: Padding(
+    87	        padding: const EdgeInsets.all(16.0),
+    88	        child: Form(
+    89	          key: _formKey,
+    90	          child: Column(
+    91	            crossAxisAlignment: CrossAxisAlignment.stretch,
+    92	            children: [
+    93	              TextFormField(
+    94	                controller: _distanceController,
+    95	                decoration: const InputDecoration(
+    96	                  labelText: 'Дистанция (метры)',
+    97	                  border: OutlineInputBorder(),
+    98	                  hintText: '0 (по умолчанию)',
+    99	                ),
+   100	                keyboardType: const TextInputType.numberWithOptions(
+   101	                  decimal: true,
+   102	                ),
+   103	                validator: (value) {
+   104	                  if (value == null || value.isEmpty) {
+   105	                    return null; // Пустое поле валидно (будет 0)
+   106	                  }
+   107	                  final n = double.tryParse(value);
+   108	                  if (n == null || n < 0) {
+   109	                    return 'Введите корректное положительное число';
+   110	                  }
+   111	                  return null;
+   112	                },
+   113	              ),
+   114	              const SizedBox(height: 16),
+   115	              TextFormField(
+   116	                controller: _azimuthController,
+   117	                decoration: const InputDecoration(
+   118	                  labelText: 'Азимут (градусы)',
+   119	                  border: OutlineInputBorder(),
+   120	                  hintText: '0-360 (0 по умолчанию)',
+   121	                ),
+   122	                keyboardType: const TextInputType.numberWithOptions(
+   123	                  decimal: true,
+   124	                ),
+   125	                validator: (value) {
+   126	                  if (value == null || value.isEmpty) {
+   127	                    return null; // Пустое поле валидно (будет 0)
+   128	                  }
+   129	                  final n = double.tryParse(value);
+   130	                  if (n == null) {
+   131	                    return 'Введите корректное число';
+   132	                  }
+   133	                  if (n < 0 || n > 360) {
+   134	                    return 'Азимут должен быть в диапазоне 0-360';
+   135	                  }
+   136	                  return null;
+   137	                },
+   138	              ),
+   139	              const SizedBox(height: 32),
+   140	              GestureDetector(
+   141	                onLongPress: _setTargetWithClipboardBase, // Долгое нажатие
+   142	                child: ElevatedButton(
+   143	                  onPressed: _setTarget, // Обычное нажатие
+   144	                  style: ElevatedButton.styleFrom(
+   145	                    padding: const EdgeInsets.symmetric(vertical: 16),
+   146	                    textStyle: const TextStyle(fontSize: 18),
+   147	                  ),
+   148	                  child: const Text('Начать ведение к Цели'),
+   149	                ),
+   150	              ),
+   151	            ],
+   152	          ),
+   153	        ),
+   154	      ),
+   155	    );
+   156	  }
+   157	}
+
+=== lib/theme_provider.dart ===
+     1	import 'package:flutter/material.dart';
+     2	import 'package:shared_preferences/shared_preferences.dart';
+     3	
+     4	class ThemeProvider with ChangeNotifier {
+     5	  ThemeMode _themeMode = ThemeMode.light;
+     6	  final String _key = "themeMode";
+     7	
+     8	  ThemeMode get themeMode => _themeMode;
+     9	
+    10	  ThemeProvider() {
+    11	    loadTheme();
+    12	  }
+    13	
+    14	  Future<void> loadTheme() async {
+    15	    final prefs = await SharedPreferences.getInstance();
+    16	    final themeIndex = prefs.getInt(_key) ?? ThemeMode.light.index;
+    17	    _themeMode = ThemeMode.values[themeIndex];
+    18	    notifyListeners();
+    19	  }
+    20	
+    21	  Future<void> setThemeMode(ThemeMode mode) async {
+    22	    if (mode == ThemeMode.system) {
+    23	      _themeMode = ThemeMode.light;
+    24	    } else {
+    25	      _themeMode = mode;
+    26	    }
+    27	    final prefs = await SharedPreferences.getInstance();
+    28	    await prefs.setInt(_key, _themeMode.index);
+    29	    notifyListeners();
+    30	  }
+    31	}
+
+=== lib/utils/geo_utils.dart ===
+     1	import 'dart:math' as math;
+     2	
+     3	/// Расчёт координат цели по дистанции и истинному азимуту
+     4	Map<String, double> calculateTargetCoordinates({
+     5	  required double startLat,
+     6	  required double startLon,
+     7	  required double distanceMeters,
+     8	  required double trueBearingDegrees, // истинный азимут
+     9	}) {
+    10	  const R = 6371000.0;
+    11	
+    12	  final phi1 = startLat * math.pi / 180;
+    13	  final lambda1 = startLon * math.pi / 180;
+    14	  final theta = trueBearingDegrees * math.pi / 180;
+    15	  final dR = distanceMeters / R;
+    16	
+    17	  final sinPhi2 =
+    18	      math.sin(phi1) * math.cos(dR) +
+    19	      math.cos(phi1) * math.sin(dR) * math.cos(theta);
+    20	  final phi2 = math.asin(sinPhi2);
+    21	  final y = math.sin(theta) * math.sin(dR) * math.cos(phi1);
+    22	  final x = math.cos(dR) - math.sin(phi1) * math.sin(phi2);
+    23	  final lambda2 = lambda1 + math.atan2(y, x);
+    24	
+    25	  return {
+    26	    'latitude': phi2 * 180 / math.pi,
+    27	    'longitude': lambda2 * 180 / math.pi,
+    28	  };
+    29	}
+    30	
+    31	double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    32	  const R = 6371e3;
+    33	  final phi1 = lat1 * math.pi / 180;
+    34	  final phi2 = lat2 * math.pi / 180;
+    35	  final dPhi = (lat2 - lat1) * math.pi / 180;
+    36	  final dLambda = (lon2 - lon1) * math.pi / 180;
+    37	
+    38	  final a =
+    39	      math.sin(dPhi / 2) * math.sin(dPhi / 2) +
+    40	      math.cos(phi1) *
+    41	          math.cos(phi2) *
+    42	          math.sin(dLambda / 2) *
+    43	          math.sin(dLambda / 2);
+    44	  final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    45	  return R * c;
+    46	}
+    47	
+    48	/// Возвращает истинный азимут
+    49	double calculateTrueBearing(
+    50	  double lat1,
+    51	  double lon1,
+    52	  double lat2,
+    53	  double lon2,
+    54	) {
+    55	  final phi1 = lat1 * math.pi / 180;
+    56	  final phi2 = lat2 * math.pi / 180;
+    57	  final dLambda = (lon2 - lon1) * math.pi / 180;
+    58	
+    59	  final y = math.sin(dLambda) * math.cos(phi2);
+    60	  final x =
+    61	      math.cos(phi1) * math.sin(phi2) -
+    62	      math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
+    63	  return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
+    64	}
+
+=== lib/widgets/compass_painters.dart ===
+     1	import 'dart:math' as math;
+     2	import 'package:flutter/material.dart';
+     3	
+     4	class TargetPainter extends CustomPainter {
+     5	  @override
+     6	  void paint(Canvas canvas, Size size) {
+     7	    final fill = Paint()
+     8	      ..color = Colors.green
+     9	      ..style = PaintingStyle.fill;
+    10	    final border = Paint()
+    11	      ..color = Colors.black.withAlpha(178)
+    12	      ..style = PaintingStyle.stroke
+    13	      ..strokeWidth = 1.5;
+    14	    final path = Path()
+    15	      ..moveTo(size.width / 2, 0)
+    16	      ..lineTo(0, size.height)
+    17	      ..lineTo(size.width, size.height)
+    18	      ..close();
+    19	    canvas.drawPath(path, fill);
+    20	    canvas.drawPath(path, border);
+    21	  }
+    22	
+    23	  @override
+    24	  bool shouldRepaint(_) => false;
+    25	}
+    26	
+    27	class WaypointPainter extends CustomPainter {
+    28	  @override
+    29	  void paint(Canvas canvas, Size size) {
+    30	    final fill = Paint()
+    31	      ..color = Colors.orange
+    32	      ..style = PaintingStyle.fill;
+    33	    final border = Paint()
+    34	      ..color = Colors.black.withAlpha(178)
+    35	      ..style = PaintingStyle.stroke
+    36	      ..strokeWidth = 1.5;
+    37	    final path = Path()
+    38	      ..moveTo(size.width / 2, 0)
+    39	      ..lineTo(0, size.height)
+    40	      ..lineTo(size.width, size.height)
+    41	      ..close();
+    42	    canvas.drawPath(path, fill);
+    43	    canvas.drawPath(path, border);
+    44	  }
+    45	
+    46	  @override
+    47	  bool shouldRepaint(_) => false;
+    48	}
+    49	
+    50	class WindRosePainter extends CustomPainter {
+    51	  final bool isDarkMode;
+    52	  final double heading;
+    53	  WindRosePainter({required this.isDarkMode, required this.heading});
+    54	
+    55	  @override
+    56	  void paint(Canvas canvas, Size size) {
+    57	    const stroke = 22.0;
+    58	    final radius = size.width / 2 - stroke / 2;
+    59	    final center = Offset(size.width / 2, size.height / 2);
+    60	    final colors = [
+    61	      Colors.red,
+    62	      Colors.green,
+    63	      Colors.yellow,
+    64	      Colors.cyan,
+    65	      Colors.red,
+    66	      Colors.green,
+    67	      Colors.yellow,
+    68	      Colors.cyan,
+    69	    ];
+    70	    final paint = Paint()
+    71	      ..style = PaintingStyle.stroke
+    72	      ..strokeWidth = stroke;
+    73	
+    74	    const sect = math.pi / 4;
+    75	    for (int i = 0; i < 8; i++) {
+    76	      paint.color = colors[i];
+    77	      final start = -math.pi / 2 - sect / 2 + i * sect;
+    78	      canvas.drawArc(
+    79	        Rect.fromCircle(center: center, radius: radius),
+    80	        start,
+    81	        sect,
+    82	        false,
+    83	        paint,
+    84	      );
+    85	    }
+    86	
+    87	    // Разделительные линии (15 градусов)
+    88	    final linePaint = Paint()
+    89	      ..style = PaintingStyle.stroke
+    90	      ..strokeWidth = 1.0;
+    91	
+    92	    const subSect = math.pi / 12; // 15 градусов
+    93	    for (int i = 0; i < 8; i++) {
+    94	      final sectorColor = colors[i];
+    95	      final lineLuminance = sectorColor.computeLuminance();
+    96	      linePaint.color = lineLuminance > 0.5
+    97	          ? Colors.black.withAlpha(128)
+    98	          : Colors.white.withAlpha(128);
+    99	
+   100	      final majorStart = -math.pi / 2 - sect / 2 + i * sect;
+   101	      final line1Angle = majorStart + subSect;
+   102	      final line2Angle = majorStart + 2 * subSect;
+   103	
+   104	      void drawLineAtAngle(double angle) {
+   105	        final startPoint = Offset(
+   106	          center.dx + (radius - stroke / 2) * math.cos(angle),
+   107	          center.dy + (radius - stroke / 2) * math.sin(angle),
+   108	        );
+   109	        final endPoint = Offset(
+   110	          center.dx + (radius + stroke / 2) * math.cos(angle),
+   111	          center.dy + (radius + stroke / 2) * math.sin(angle),
+   112	        );
+   113	        canvas.drawLine(startPoint, endPoint, linePaint);
+   114	      }
+   115	
+   116	      drawLineAtAngle(line1Angle);
+   117	      drawLineAtAngle(line2Angle);
+   118	    }
+   119	
+   120	    // координатные метки N,E,S,W
+   121	    final letters = {0: 'С', 2: 'В', 4: 'Ю', 6: 'З'};
+   122	    for (var e in letters.entries) {
+   123	      final i = e.key;
+   124	      final t = e.value;
+   125	      final col = colors[i];
+   126	      final textColor = col.computeLuminance() > 0.5
+   127	          ? Colors.black
+   128	          : Colors.white;
+   129	      final tp = TextPainter(
+   130	        text: TextSpan(
+   131	          text: t,
+   132	          style: TextStyle(
+   133	            color: textColor,
+   134	            fontWeight: FontWeight.bold,
+   135	            fontSize: 14,
+   136	          ),
+   137	        ),
+   138	        textDirection: TextDirection.ltr,
+   139	      )..layout();
+   140	      final ang = -math.pi / 2 + i * sect;
+   141	      canvas.save();
+   142	      canvas.translate(center.dx, center.dy);
+   143	      canvas.rotate(ang);
+   144	      canvas.translate(radius, 0);
+   145	      canvas.rotate(-ang + heading * math.pi / 180);
+   146	      tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+   147	      canvas.restore();
+   148	    }
+   149	  }
+   150	
+   151	  @override
+   152	  bool shouldRepaint(covariant WindRosePainter old) =>
+   153	      old.isDarkMode != isDarkMode || old.heading != heading;
+   154	}
+   155	
+   156	class UprightTrianglePainter extends CustomPainter {
+   157	  final Color color;
+   158	  const UprightTrianglePainter({required this.color});
+   159	  @override
+   160	  void paint(Canvas c, Size s) {
+   161	    final p = Paint()
+   162	      ..color = color
+   163	      ..style = PaintingStyle.fill;
+   164	    final path = Path()
+   165	      ..moveTo(s.width / 2, 0)
+   166	      ..lineTo(0, s.height)
+   167	      ..lineTo(s.width, s.height)
+   168	      ..close();
+   169	    c.drawPath(path, p);
+   170	  }
+   171	
+   172	  @override
+   173	  bool shouldRepaint(covariant UprightTrianglePainter o) => o.color != color;
+   174	}
+   175	
+   176	class DownwardTrianglePainter extends CustomPainter {
+   177	  final Color color;
+   178	  const DownwardTrianglePainter({required this.color});
+   179	  @override
+   180	  void paint(Canvas c, Size s) {
+   181	    final p = Paint()
+   182	      ..color = color
+   183	      ..style = PaintingStyle.fill;
+   184	    final path = Path()
+   185	      ..moveTo(0, 0)
+   186	      ..lineTo(s.width, 0)
+   187	      ..lineTo(s.width / 2, s.height)
+   188	      ..close();
+   189	    c.drawPath(path, p);
+   190	  }
+   191	
+   192	  @override
+   193	  bool shouldRepaint(covariant DownwardTrianglePainter o) => o.color != color;
+   194	}
+
+=== lib/widgets/compass_section.dart ===
+     1	import 'dart:math' as math;
+     2	import 'package:flutter/material.dart';
+     3	import '../log_entry.dart';
+     4	import '../widgets/compass_painters.dart';
+     5	
+     6	class CompassSection extends StatelessWidget {
+     7	  final ValueNotifier<double> headingNotifier;
+     8	  final ValueNotifier<double> accuracyNotifier;
+     9	  final ValueNotifier<bool> isGpsCompassActiveNotifier;
+    10	  final ValueNotifier<double?> bearingToTarget;
+    11	  final ValueNotifier<double?> bearingToWaypoint;
+    12	  final List<LogItem> logItems;
+    13	  final Future<void> Function() setWaypoint;
+    14	  final Future<void> Function() clearWaypoint;
+    15	  final Function(DragEndDetails) onVerticalDragEnd;
+    16	  final String Function(double) getCardinalDirection;
+    17	  final Color Function(double) getAccuracyStatusColor;
+    18	  final String Function(double) getAccuracyText;
+    19	  final VoidCallback? onSwipeToOpenMap;
+    20	
+    21	  const CompassSection({
+    22	    super.key,
+    23	    required this.headingNotifier,
+    24	    required this.accuracyNotifier,
+    25	    required this.isGpsCompassActiveNotifier,
+    26	    required this.bearingToTarget,
+    27	    required this.bearingToWaypoint,
+    28	    required this.logItems,
+    29	    required this.setWaypoint,
+    30	    required this.clearWaypoint,
+    31	    required this.onVerticalDragEnd,
+    32	    required this.getCardinalDirection,
+    33	    required this.getAccuracyStatusColor,
+    34	    required this.getAccuracyText,
+    35	    this.onSwipeToOpenMap,
+    36	  });
+    37	
+    38	  @override
+    39	  Widget build(BuildContext context) {
+    40	    return GestureDetector(
+    41	      onTap: setWaypoint,
+    42	      onVerticalDragEnd: onVerticalDragEnd,
+    43	      onHorizontalDragEnd: (details) {
+    44	        if (details.primaryVelocity != null && 
+    45	            details.primaryVelocity!.abs() > 500) {
+    46	          onSwipeToOpenMap?.call();
+    47	        }
+    48	      },
+    49	      child: ValueListenableBuilder<double>(
+    50	        valueListenable: headingNotifier,
+    51	        builder: (context, heading, child) {
+    52	          final roseRotation = -heading * math.pi / 180;
+    53	          final textColor = Theme.of(context).brightness == Brightness.dark
+    54	              ? Colors.grey[400]
+    55	              : Colors.grey[700];
+    56	
+    57	          return Padding(
+    58	            padding: const EdgeInsets.only(top: 20),
+    59	            child: Column(
+    60	              mainAxisAlignment: MainAxisAlignment.center,
+    61	              children: [
+    62	                const SizedBox(
+    63	                  width: 20,
+    64	                  height: 20,
+    65	                  child: CustomPaint(
+    66	                    painter: UprightTrianglePainter(color: Colors.blue),
+    67	                  ),
+    68	                ),
+    69	                const SizedBox(height: 4),
+    70	                Text(
+    71	                  getCardinalDirection(heading),
+    72	                  style: TextStyle(
+    73	                    fontSize: 24,
+    74	                    fontWeight: FontWeight.bold,
+    75	                    color: textColor,
+    76	                  ),
+    77	                ),
+    78	                const SizedBox(height: 4),
+    79	                const SizedBox(
+    80	                  width: 12,
+    81	                  height: 12,
+    82	                  child: CustomPaint(
+    83	                    painter: DownwardTrianglePainter(color: Colors.blue),
+    84	                  ),
+    85	                ),
+    86	                Stack(
+    87	                  alignment: Alignment.center,
+    88	                  children: [
+    89	                    Transform.rotate(
+    90	                      angle: roseRotation,
+    91	                      child: Stack(
+    92	                        alignment: Alignment.center,
+    93	                        children: [
+    94	                          SizedBox(
+    95	                            width: 275,
+    96	                            height: 275,
+    97	                            child: CustomPaint(
+    98	                              painter: WindRosePainter(
+    99	                                isDarkMode:
+   100	                                    Theme.of(context).brightness ==
+   101	                                    Brightness.dark,
+   102	                                heading: heading,
+   103	                              ),
+   104	                            ),
+   105	                          ),
+   106	                          _buildTargetArrow(),
+   107	                          _buildWaypointArrow(),
+   108	                        ],
+   109	                      ),
+   110	                    ),
+   111	                    Text(
+   112	                      '${heading.round()}°',
+   113	                      style: const TextStyle(
+   114	                        fontSize: 60,
+   115	                        fontWeight: FontWeight.bold,
+   116	                      ),
+   117	                    ),
+   118	                    Positioned(
+   119	                      bottom: 60,
+   120	                      child: ValueListenableBuilder<bool>(
+   121	                        valueListenable: isGpsCompassActiveNotifier,
+   122	                        builder: (context, isGpsActive, _) {
+   123	                          return ValueListenableBuilder<double>(
+   124	                            valueListenable: accuracyNotifier,
+   125	                            builder: (context, acc, _) {
+   126	                              final color = isGpsActive 
+   127	                                  ? Colors.grey 
+   128	                                  : getAccuracyStatusColor(acc);
+   129	                              
+   130	                              final text = isGpsActive 
+   131	                                  ? 'GPS компас' 
+   132	                                  : getAccuracyText(acc);
+   133	                                  
+   134	                              return Column(
+   135	                                mainAxisSize: MainAxisSize.min,
+   136	                                children: [
+   137	                                  Icon(
+   138	                                    Icons.shield_outlined,
+   139	                                    color: color,
+   140	                                    size: 28,
+   141	                                  ),
+   142	                                  Text(
+   143	                                    text,
+   144	                                    style: TextStyle(
+   145	                                      color: color,
+   146	                                      fontSize: 10,
+   147	                                    ),
+   148	                                  ),
+   149	                                ],
+   150	                              );
+   151	                            },
+   152	                          );
+   153	                        },
+   154	                      ),
+   155	                    ),
+   156	                  ],
+   157	                ),
+   158	              ],
+   159	            ),
+   160	          );
+   161	        },
+   162	      ),
+   163	    );
+   164	  }
+   165	
+   166	  Widget _buildTargetArrow() {
+   167	    return ValueListenableBuilder<double?>(
+   168	      valueListenable: bearingToTarget,
+   169	      builder: (c, b, _) {
+   170	        if (b == null) return const SizedBox.shrink();
+   171	        return Transform.rotate(
+   172	          angle: b * math.pi / 180,
+   173	          child: SizedBox(
+   174	            width: 275,
+   175	            height: 275,
+   176	            child: Align(
+   177	              alignment: Alignment.topCenter,
+   178	              child: Padding(
+   179	                padding: const EdgeInsets.only(top: 22),
+   180	                child: CustomPaint(
+   181	                  size: const Size(12, 26),
+   182	                  painter: TargetPainter(),
+   183	                ),
+   184	              ),
+   185	            ),
+   186	          ),
+   187	        );
+   188	      },
+   189	    );
+   190	  }
+   191	
+   192	  Widget _buildWaypointArrow() {
+   193	    return ValueListenableBuilder<double?>(
+   194	      valueListenable: bearingToWaypoint,
+   195	      builder: (c, b, _) {
+   196	        if (b == null) return const SizedBox.shrink();
+   197	        return Transform.rotate(
+   198	          angle: b * math.pi / 180,
+   199	          child: SizedBox(
+   200	            width: 275,
+   201	            height: 275,
+   202	            child: Align(
+   203	              alignment: Alignment.topCenter,
+   204	              child: Padding(
+   205	                padding: const EdgeInsets.only(top: 22),
+   206	                child: CustomPaint(
+   207	                  size: const Size(12, 22),
+   208	                  painter: WaypointPainter(),
+   209	                ),
+   210	              ),
+   211	            ),
+   212	          ),
+   213	        );
+   214	      },
+   215	    );
+   216	  }
+   217	}
+=== lib/widgets/exit_confirm_dialog.dart ===
+     1	import 'package:flutter/material.dart';
+     2	
+     3	Future<bool?> showExitConfirmDialog(BuildContext context) {
+     4	  return showDialog<bool>(
+     5	    context: context,
+     6	    builder: (context) => AlertDialog(
+     7	      title: const Text('Вы уверены?'),
+     8	      content: const Text('Вы хотите закрыть приложение?'),
+     9	      actions: <Widget>[
+    10	        TextButton(
+    11	          onPressed: () => Navigator.of(context).pop(false),
+    12	          child: const Text('Нет'),
+    13	        ),
+    14	        TextButton(
+    15	          onPressed: () => Navigator.of(context).pop(true),
+    16	          child: const Text('Да'),
+    17	        ),
+    18	      ],
+    19	    ),
+    20	  );
+    21	}
+
+=== lib/widgets/gps_section.dart ===
+     1	import 'dart:async';
+     2	import 'package:flutter/material.dart';
+     3	import 'package:flutter/services.dart';
+     4	import 'package:gps_info/gps_info.dart';
+     5	import '../log_entry.dart';
+     6	
+     7	class GpsSection extends StatefulWidget {
+     8	  final ValueNotifier<GpsData> gpsDataNotifier;
+     9	  final ValueNotifier<double> accuracyNotifier;
+    10	  final ValueNotifier<double?> distanceToTarget;
+    11	  final ValueNotifier<double?> bearingToTarget;
+    12	  final ValueNotifier<double?> distanceToWaypoint;
+    13	  final ValueNotifier<double?> bearingToWaypoint;
+    14	  final GpsData? waypoint;
+    15	  final Map<String, double>? target;
+    16	  final List<LogItem> logItems;
+    17	  final double magneticDeclination;
+    18	  final VoidCallback onClearTarget;
+    19	  final VoidCallback onClearWaypoint;
+    20	
+    21	  const GpsSection({
+    22	    super.key,
+    23	    required this.gpsDataNotifier,
+    24	    required this.accuracyNotifier,
+    25	    required this.distanceToTarget,
+    26	    required this.bearingToTarget,
+    27	    required this.distanceToWaypoint,
+    28	    required this.bearingToWaypoint,
+    29	    required this.waypoint,
+    30	    required this.target,
+    31	    required this.logItems,
+    32	    required this.magneticDeclination,
+    33	    required this.onClearTarget,
+    34	    required this.onClearWaypoint,
+    35	  });
+    36	
+    37	  @override
+    38	  State<GpsSection> createState() => _GpsSectionState();
+    39	}
+    40	
+    41	class _GpsSectionState extends State<GpsSection> {
+    42	  bool _isCoordinatesCopied = false;
+    43	
+    44	  @override
+    45	  Widget build(BuildContext context) {
+    46	    final baseStyle = Theme.of(context).textTheme.bodyLarge;
+    47	    final iconColor = Theme.of(context).colorScheme.primary;
+    48	
+    49	    return ValueListenableBuilder<GpsData>(
+    50	      valueListenable: widget.gpsDataNotifier,
+    51	      builder: (context, gps, _) {
+    52	        return ValueListenableBuilder<double>(
+    53	          valueListenable: widget.accuracyNotifier,
+    54	          builder: (context, acc, _) {
+    55	            final speedKmh = (gps.speed ?? 0) * 3.6;
+    56	            final decl = widget.magneticDeclination;
+    57	
+    58	            final coordsText = (gps.latitude != null && gps.longitude != null)
+    59	                ? '${gps.latitude!.toStringAsFixed(6)},${gps.longitude!.toStringAsFixed(6)}'
+    60	                : '--,--';
+    61	
+    62	            final copied = _isCoordinatesCopied;
+    63	            final inverted = Theme.of(context).scaffoldBackgroundColor;
+    64	            final origColor =
+    65	                baseStyle?.color ??
+    66	                (Theme.of(context).brightness == Brightness.dark
+    67	                    ? Colors.white70
+    68	                    : Colors.black87);
+    69	
+    70	            final coordsWidget = GestureDetector(
+    71	              onTap: () {
+    72	                if (gps.latitude != null && gps.longitude != null) {
+    73	                  Clipboard.setData(ClipboardData(text: coordsText));
+    74	                  if (!mounted) return;
+    75	                  setState(() => _isCoordinatesCopied = true);
+    76	                  Timer(const Duration(milliseconds: 200), () {
+    77	                    if (mounted) {
+    78	                      setState(() => _isCoordinatesCopied = false);
+    79	                    }
+    80	                  });
+    81	                }
+    82	              },
+    83	              child: AnimatedContainer(
+    84	                duration: const Duration(milliseconds: 150),
+    85	                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    86	                decoration: BoxDecoration(
+    87	                  color: copied ? origColor : Colors.transparent,
+    88	                  borderRadius: BorderRadius.circular(4),
+    89	                ),
+    90	                child: _buildIconValue(
+    91	                  context,
+    92	                  Icons.location_on,
+    93	                  coordsText,
+    94	                  copied ? baseStyle?.copyWith(color: inverted) : baseStyle,
+    95	                  copied ? inverted : iconColor,
+    96	                ),
+    97	              ),
+    98	            );
+    99	
+   100	            return Padding(
+   101	              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+   102	              child: Column(
+   103	                children: [
+   104	                  _buildWaypointInfo(),
+   105	                  _buildTargetInfo(),
+   106	                  const Divider(),
+   107	                  _buildIconValue(
+   108	                    context,
+   109	                    Icons.speed,
+   110	                    '${speedKmh.toStringAsFixed(1)} km/h',
+   111	                    baseStyle?.copyWith(
+   112	                      fontSize: (baseStyle.fontSize ?? 18) * 1.5,
+   113	                      fontWeight: FontWeight.bold,
+   114	                    ),
+   115	                    iconColor,
+   116	                  ),
+   117	                  const Divider(),
+   118	                  Row(
+   119	                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+   120	                    children: [
+   121	                      _buildIconValue(
+   122	                        context,
+   123	                        Icons.satellite_alt,
+   124	                        '${gps.satellitesUsed ?? 0}/${gps.satellitesInView ?? 0}',
+   125	                        baseStyle,
+   126	                        iconColor,
+   127	                      ),
+   128	                      _buildIconValue(
+   129	                        context,
+   130	                        Icons.track_changes,
+   131	                        '${gps.accuracy?.toStringAsFixed(1)} m',
+   132	                        baseStyle,
+   133	                        iconColor,
+   134	                      ),
+   135	                      _buildIconValue(
+   136	                        context,
+   137	                        Icons.height,
+   138	                        '${gps.mslAltitude?.toStringAsFixed(1)} m',
+   139	                        baseStyle,
+   140	                        iconColor,
+   141	                      ),
+   142	                    ],
+   143	                  ),
+   144	                  const Divider(),
+   145	                  Row(
+   146	                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+   147	                    children: [
+   148	                      _buildIconValue(
+   149	                        context,
+   150	                        Icons.explore,
+   151	                        '${decl.toStringAsFixed(1)}°',
+   152	                        baseStyle,
+   153	                        iconColor,
+   154	                      ),
+   155	                      coordsWidget,
+   156	                    ],
+   157	                  ),
+   158	                ],
+   159	              ),
+   160	            );
+   161	          },
+   162	        );
+   163	      },
+   164	    );
+   165	  }
+   166	
+   167	  Widget _buildTargetInfo() {
+   168	    const minH = 48.0;
+   169	    if (widget.target == null) {
+   170	      return const SizedBox(height: minH);
+   171	    }
+   172	    return Dismissible(
+   173	      key: const Key('target_info'),
+   174	      onDismissed: (direction) => widget.onClearTarget(),
+   175	      background: Container(color: Colors.transparent),
+   176	      secondaryBackground: Container(color: Colors.transparent),
+   177	      child: ValueListenableBuilder<double?>(
+   178	        valueListenable: widget.distanceToTarget,
+   179	        builder: (context, dist, _) {
+   180	          return ValueListenableBuilder<double?>(
+   181	            valueListenable: widget.bearingToTarget,
+   182	            builder: (context, bear, _) {
+   183	              if (bear == null || dist == null) {
+   184	                return const SizedBox(height: minH);
+   185	              }
+   186	              final distText = dist > 1000
+   187	                  ? '${(dist / 1000).toStringAsFixed(2)} km'
+   188	                  : '${dist.round()} m';
+   189	              final text = 'ДО ЦЕЛИ: -> $distText, ${bear.round().toString()}°';
+   190	              return Container(
+   191	                height: minH,
+   192	                alignment: Alignment.center,
+   193	                child: FittedBox(
+   194	                  fit: BoxFit.scaleDown,
+   195	                  child: Text(
+   196	                    text,
+   197	                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+   198	                      color: Colors.blueAccent,
+   199	                      fontWeight: FontWeight.bold,
+   200	                    ),
+   201	                  ),
+   202	                ),
+   203	              );
+   204	            },
+   205	          );
+   206	        },
+   207	      ),
+   208	    );
+   209	  }
+   210	
+   211	  Widget _buildWaypointInfo() {
+   212	    const minH = 48.0;
+   213	    if (widget.waypoint == null) {
+   214	      return const SizedBox(height: minH);
+   215	    }
+   216	    return Dismissible(
+   217	      key: const Key('waypoint_info'),
+   218	      onDismissed: (direction) => widget.onClearWaypoint(),
+   219	      background: Container(color: Colors.transparent),
+   220	      secondaryBackground: Container(color: Colors.transparent),
+   221	      child: ValueListenableBuilder<double?>(
+   222	        valueListenable: widget.distanceToWaypoint,
+   223	        builder: (context, dist, _) {
+   224	          return ValueListenableBuilder<double?>(
+   225	            valueListenable: widget.bearingToWaypoint,
+   226	            builder: (context, bear, _) {
+   227	              if (dist == null || bear == null) {
+   228	                return const SizedBox(height: minH);
+   229	              }
+   230	              final n = widget.logItems.whereType<LogEntry>().length;
+   231	              final distText = dist > 1000
+   232	                  ? '${(dist / 1000).toStringAsFixed(2)} km'
+   233	                  : '${dist.round()} m';
+   234	              final text = 'ОТ КП$n: -> $distText, ${bear.round()}°';
+   235	              return Container(
+   236	                height: minH,
+   237	                alignment: Alignment.center,
+   238	                child: FittedBox(
+   239	                  fit: BoxFit.scaleDown,
+   240	                  child: Text(
+   241	                    text,
+   242	                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+   243	                      color: Colors.orange,
+   244	                      fontWeight: FontWeight.bold,
+   245	                    ),
+   246	                  ),
+   247	                ),
+   248	              );
+   249	            },
+   250	          );
+   251	        },
+   252	      ),
+   253	    );
+   254	  }
+   255	
+   256	  Widget _buildIconValue(
+   257	    BuildContext c,
+   258	    IconData icon,
+   259	    String val,
+   260	    TextStyle? st,
+   261	    Color? clr,
+   262	  ) {
+   263	    return Row(
+   264	      mainAxisSize: MainAxisSize.min,
+   265	      children: [
+   266	        Icon(icon, color: clr, size: 28),
+   267	        const SizedBox(width: 8),
+   268	        Flexible(
+   269	          child: Text(val, style: st, overflow: TextOverflow.ellipsis),
+   270	        ),
+   271	      ],
+   272	    );
+   273	  }
+   274	}
+
+=== packages/gps_info/android/src/main/kotlin/com/example/gps_info/GpsInfoPlugin.kt ===
+     1	package com.example.gps_info
+     2	
+     3	import android.Manifest
+     4	import android.app.Activity
+     5	import android.content.Context
+     6	import android.content.pm.PackageManager
+     7	import android.hardware.GeomagneticField
+     8	import android.location.GnssStatus
+     9	import android.location.Location
+    10	import android.location.LocationListener
+    11	import android.location.LocationManager
+    12	import android.location.OnNmeaMessageListener
+    13	import android.os.Build
+    14	import android.os.Bundle
+    15	import androidx.core.app.ActivityCompat
+    16	import androidx.core.content.ContextCompat
+    17	import io.flutter.embedding.engine.plugins.FlutterPlugin
+    18	import io.flutter.embedding.engine.plugins.activity.ActivityAware
+    19	import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+    20	import io.flutter.plugin.common.EventChannel
+    21	import io.flutter.plugin.common.PluginRegistry
+    22	
+    23	class GpsInfoPlugin : FlutterPlugin, ActivityAware,
+    24	    PluginRegistry.RequestPermissionsResultListener {
+    25	
+    26	    private var activity: Activity? = null
+    27	    private lateinit var locationManager: LocationManager
+    28	    private var eventSink: EventChannel.EventSink? = null
+    29	    private val GPS_DATA_CHANNEL_NAME = "com.example.gps_info/gps_data_stream"
+    30	    private val LOCATION_PERMISSION_REQUEST_CODE = 34
+    31	
+    32	    private var satellitesUsed = 0
+    33	    private var satellitesInView = 0
+    34	    private var lastLocation: Location? = null
+    35	    private var mslAltitude: Double? = null
+    36	    private var magneticDeclination: Float? = null
+    37	    private var updateInterval: Long = 1000L
+    38	
+    39	    override fun onAttachedToEngine(
+    40	        flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
+    41	    ) {
+    42	        val eventChannel = EventChannel(
+    43	            flutterPluginBinding.binaryMessenger,
+    44	            GPS_DATA_CHANNEL_NAME
+    45	        )
+    46	        locationManager = flutterPluginBinding.applicationContext
+    47	            .getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    48	
+    49	        eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
+    50	            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+    51	                eventSink = events
+    52	                if (arguments is Int) {
+    53	                    updateInterval = arguments.toLong()
+    54	                }
+    55	                startGpsListener()
+    56	            }
+    57	
+    58	            override fun onCancel(arguments: Any?) {
+    59	                stopGpsListener()
+    60	                eventSink = null
+    61	            }
+    62	        })
+    63	    }
+    64	
+    65	    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+    66	        activity = binding.activity
+    67	        binding.addRequestPermissionsResultListener(this)
+    68	    }
+    69	
+    70	    override fun onDetachedFromActivity() { activity = null }
+    71	
+    72	    override fun onReattachedToActivityForConfigChanges(
+    73	        binding: ActivityPluginBinding
+    74	    ) { onAttachedToActivity(binding) }
+    75	
+    76	    override fun onDetachedFromActivityForConfigChanges() {
+    77	        onDetachedFromActivity()
+    78	    }
+    79	
+    80	    private fun hasLocationPermission(): Boolean {
+    81	        return activity?.let {
+    82	            ContextCompat.checkSelfPermission(
+    83	                it,
+    84	                Manifest.permission.ACCESS_FINE_LOCATION
+    85	            ) == PackageManager.PERMISSION_GRANTED
+    86	        } ?: false
+    87	    }
+    88	
+    89	    private fun requestLocationPermission() {
+    90	        activity?.let {
+    91	            ActivityCompat.requestPermissions(
+    92	                it,
+    93	                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
+    94	                LOCATION_PERMISSION_REQUEST_CODE
+    95	            )
+    96	        }
+    97	    }
+    98	
+    99	    override fun onRequestPermissionsResult(
+   100	        requestCode: Int,
+   101	        permissions: Array<out String>,
+   102	        grantResults: IntArray
+   103	    ): Boolean {
+   104	        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+   105	            if (grantResults.isNotEmpty() &&
+   106	                grantResults[0] == PackageManager.PERMISSION_GRANTED
+   107	            ) {
+   108	                startGpsListener()
+   109	                return true
+   110	            } else {
+   111	                eventSink?.error(
+   112	                    "PERMISSION_DENIED",
+   113	                    "Location permission not granted.",
+   114	                    null
+   115	                )
+   116	            }
+   117	        }
+   118	        return false
+   119	    }
+   120	
+   121	    private fun sendDataUpdate() {
+   122	        if (eventSink == null) return
+   123	
+   124	        val data = HashMap<String, Any?>()
+   125	        data["satellitesUsed"] = satellitesUsed
+   126	        data["satellitesInView"] = satellitesInView
+   127	
+   128	        lastLocation?.let {
+   129	            data["latitude"] = it.latitude
+   130	            data["longitude"] = it.longitude
+   131	            data["accuracy"] = it.accuracy
+   132	            data["speed"] = it.speed
+   133	            data["altitude"] = it.altitude
+   134	
+   135	            // ✅ Отправляем истинный GPS bearing как есть
+   136	            data["gpsBearing"] = if (it.hasBearing()) {
+   137	                it.bearing.toDouble()
+   138	            } else {
+   139	                null
+   140	            }
+   141	
+   142	            val geoField = GeomagneticField(
+   143	                it.latitude.toFloat(),
+   144	                it.longitude.toFloat(),
+   145	                it.altitude.toFloat(),
+   146	                System.currentTimeMillis()
+   147	            )
+   148	            magneticDeclination = geoField.declination
+   149	            data["magneticDeclination"] = magneticDeclination
+   150	        }
+   151	
+   152	        mslAltitude?.let {
+   153	            data["msl_altitude"] = it
+   154	        }
+   155	
+   156	        activity?.runOnUiThread {
+   157	            eventSink?.success(data)
+   158	        }
+   159	    }
+   160	
+   161	    private val locationListener = object : LocationListener {
+   162	        override fun onLocationChanged(location: Location) {
+   163	            lastLocation = location
+   164	            sendDataUpdate()
+   165	        }
+   166	        override fun onStatusChanged(
+   167	            provider: String?, status: Int, extras: Bundle?
+   168	        ) {}
+   169	        override fun onProviderEnabled(provider: String) {}
+   170	        override fun onProviderDisabled(provider: String) {}
+   171	    }
+   172	
+   173	    private val nmeaListener =
+   174	        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+   175	            OnNmeaMessageListener { message, _ ->
+   176	                if (message.startsWith("\$GPGGA") ||
+   177	                    message.startsWith("\$GNGGA")
+   178	                ) {
+   179	                    val parts = message.split(",")
+   180	                    if (parts.size > 9 && parts[9].isNotEmpty()) {
+   181	                        try {
+   182	                            mslAltitude = parts[9].toDouble()
+   183	                        } catch (e: NumberFormatException) { }
+   184	                    }
+   185	                }
+   186	            }
+   187	        } else null
+   188	
+   189	    private val gnssStatusCallback =
+   190	        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+   191	            object : GnssStatus.Callback() {
+   192	                override fun onSatelliteStatusChanged(status: GnssStatus) {
+   193	                    satellitesUsed = (0 until status.satelliteCount)
+   194	                        .count { status.usedInFix(it) }
+   195	                    satellitesInView = status.satelliteCount
+   196	                    sendDataUpdate()
+   197	                }
+   198	            }
+   199	        } else null
+   200	
+   201	    @Suppress("deprecation")
+   202	    private fun startGpsListener() {
+   203	        if (activity == null) {
+   204	            eventSink?.error(
+   205	                "NO_ACTIVITY",
+   206	                "Plugin is not attached to an activity.",
+   207	                null
+   208	            )
+   209	            return
+   210	        }
+   211	        if (!hasLocationPermission()) {
+   212	            requestLocationPermission()
+   213	            return
+   214	        }
+   215	        try {
+   216	            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+   217	                locationManager.registerGnssStatusCallback(
+   218	                    gnssStatusCallback!!, null
+   219	                )
+   220	                nmeaListener?.let {
+   221	                    locationManager.addNmeaListener(it, null)
+   222	                }
+   223	            }
+   224	            locationManager.requestLocationUpdates(
+   225	                LocationManager.GPS_PROVIDER,
+   226	                updateInterval,
+   227	                0f,
+   228	                locationListener
+   229	            )
+   230	        } catch (e: SecurityException) {
+   231	            eventSink?.error(
+   232	                "SECURITY_EXCEPTION",
+   233	                "Failed to register GPS listener.",
+   234	                e.message
+   235	            )
+   236	        }
+   237	    }
+   238	
+   239	    @Suppress("deprecation")
+   240	    private fun stopGpsListener() {
+   241	        if (hasLocationPermission()) {
+   242	            locationManager.removeUpdates(locationListener)
+   243	            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+   244	                locationManager.unregisterGnssStatusCallback(gnssStatusCallback!!)
+   245	                nmeaListener?.let {
+   246	                    locationManager.removeNmeaListener(it)
+   247	                }
+   248	            }
+   249	        }
+   250	    }
+   251	
+   252	    override fun onDetachedFromEngine(
+   253	        binding: FlutterPlugin.FlutterPluginBinding
+   254	    ) {
+   255	        stopGpsListener()
+   256	    }
+   257	}
+
+=== packages/gps_info/lib/gps_data.dart ===
+     1	class GpsData {
+     2	  final double? latitude;
+     3	  final double? longitude;
+     4	  final double? accuracy;
+     5	  final double? speed;
+     6	  final double? altitude;
+     7	  final double? mslAltitude;
+     8	  final int? satellitesUsed;
+     9	  final int? satellitesInView;
+    10	  final double? magneticDeclination;
+    11	  final double? gpsBearing; // ✅ новое поле
+    12	
+    13	  GpsData({
+    14	    this.latitude,
+    15	    this.longitude,
+    16	    this.accuracy,
+    17	    this.speed,
+    18	    this.altitude,
+    19	    this.mslAltitude,
+    20	    this.satellitesUsed,
+    21	    this.satellitesInView,
+    22	    this.magneticDeclination,
+    23	    this.gpsBearing,
+    24	  });
+    25	
+    26	  factory GpsData.fromMap(Map<dynamic, dynamic> map) {
+    27	    return GpsData(
+    28	      latitude: map['latitude'] as double?,
+    29	      longitude: map['longitude'] as double?,
+    30	      accuracy: map['accuracy'] as double?,
+    31	      speed: map['speed'] as double?,
+    32	      altitude: map['altitude'] as double?,
+    33	      mslAltitude: map['msl_altitude'] as double?,
+    34	      satellitesUsed: map['satellitesUsed'] as int?,
+    35	      satellitesInView: map['satellitesInView'] as int?,
+    36	      magneticDeclination: map['magneticDeclination'] as double?,
+    37	      gpsBearing: map['gpsBearing'] as double?,
+    38	    );
+    39	  }
+    40	}
+
+=== packages/gps_info/lib/gps_info.dart ===
+     1	import 'dart:async';
+     2	import 'package:flutter/services.dart';
+     3	import 'package:gps_info/gps_data.dart';
+     4	
+     5	export 'gps_data.dart'; // Экспортируем модель
+     6	
+     7	class GpsInfo {
+     8	  static const EventChannel _gpsDataChannel = EventChannel(
+     9	    'com.example.gps_info/gps_data_stream',
+    10	  );
+    11	
+    12	  Stream<GpsData> getGpsDataStream([int? interval]) {
+    13	    return _gpsDataChannel
+    14	        .receiveBroadcastStream(interval)
+    15	        .map<GpsData>(
+    16	          (dynamic data) => GpsData.fromMap(data as Map<dynamic, dynamic>),
+    17	        );
+    18	  }
+    19	}
+
+=== packages/my_compass/android/src/main/kotlin/com/example/my_compass/MyCompassPlugin.kt ===
+     1	package com.example.my_compass
+     2	
+     3	import android.content.Context
+     4	import android.hardware.Sensor
+     5	import android.hardware.SensorEvent
+     6	import android.hardware.SensorEventListener
+     7	import android.hardware.SensorManager
+     8	import android.view.Surface
+     9	import android.view.WindowManager
+    10	import io.flutter.embedding.engine.plugins.FlutterPlugin
+    11	import io.flutter.plugin.common.EventChannel
+    12	import kotlin.math.roundToInt
+    13	
+    14	class MyCompassPlugin : FlutterPlugin, EventChannel.StreamHandler, SensorEventListener {
+    15	    private lateinit var sensorManager: SensorManager
+    16	    private var windowManager: WindowManager? = null
+    17	    private var eventSink: EventChannel.EventSink? = null
+    18	
+    19	    // Sensors
+    20	    private var rotationVectorSensor: Sensor? = null
+    21	    private var accelerometerSensor: Sensor? = null
+    22	    private var magneticFieldSensor: Sensor? = null
+    23	
+    24	    // Fallback sensor data
+    25	    private val accelerometerReading = FloatArray(3)
+    26	    private val magnetometerReading = FloatArray(3)
+    27	
+    28	    // Matrices / orientation
+    29	    private val rotationMatrix = FloatArray(9)
+    30	    private val remappedRotationMatrix = FloatArray(9)
+    31	    private val orientationAngles = FloatArray(3)
+    32	
+    33	    private var accuracy: Int = SensorManager.SENSOR_STATUS_UNRELIABLE
+    34	    private var useRotationVector = false
+    35	
+    36	    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    37	        val context = binding.applicationContext
+    38	        sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    39	        windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    40	
+    41	        rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+    42	        accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    43	        magneticFieldSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+    44	
+    45	        val eventChannel = EventChannel(binding.binaryMessenger, "my_compass/events")
+    46	        eventChannel.setStreamHandler(this)
+    47	    }
+    48	
+    49	    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    50	        stopListening()
+    51	    }
+    52	
+    53	    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+    54	        eventSink = events
+    55	        startListening()
+    56	    }
+    57	
+    58	    override fun onCancel(arguments: Any?) {
+    59	        stopListening()
+    60	        eventSink = null
+    61	    }
+    62	
+    63	    private fun startListening() {
+    64	        stopListening()
+    65	
+    66	        useRotationVector = rotationVectorSensor != null
+    67	
+    68	        if (useRotationVector) {
+    69	            rotationVectorSensor?.also { sensor ->
+    70	                sensorManager.registerListener(
+    71	                    this,
+    72	                    sensor,
+    73	                    SensorManager.SENSOR_DELAY_GAME
+    74	                )
+    75	            }
+    76	        } else {
+    77	            accelerometerSensor?.also { sensor ->
+    78	                sensorManager.registerListener(
+    79	                    this,
+    80	                    sensor,
+    81	                    SensorManager.SENSOR_DELAY_GAME
+    82	                )
+    83	            }
+    84	            magneticFieldSensor?.also { sensor ->
+    85	                sensorManager.registerListener(
+    86	                    this,
+    87	                    sensor,
+    88	                    SensorManager.SENSOR_DELAY_GAME
+    89	                )
+    90	            }
+    91	        }
+    92	    }
+    93	
+    94	    private fun stopListening() {
+    95	        sensorManager.unregisterListener(this)
+    96	    }
+    97	
+    98	    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+    99	        when (sensor?.type) {
+   100	            Sensor.TYPE_MAGNETIC_FIELD,
+   101	            Sensor.TYPE_ROTATION_VECTOR -> {
+   102	                this.accuracy = accuracy
+   103	            }
+   104	        }
+   105	    }
+   106	
+   107	    override fun onSensorChanged(event: SensorEvent) {
+   108	        when (event.sensor.type) {
+   109	            Sensor.TYPE_ROTATION_VECTOR -> {
+   110	                if (useRotationVector) {
+   111	                    SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+   112	                    updateOrientationAnglesFromMatrix(rotationMatrix)
+   113	                }
+   114	            }
+   115	
+   116	            Sensor.TYPE_ACCELEROMETER -> {
+   117	                if (!useRotationVector) {
+   118	                    System.arraycopy(
+   119	                        event.values,
+   120	                        0,
+   121	                        accelerometerReading,
+   122	                        0,
+   123	                        accelerometerReading.size
+   124	                    )
+   125	                    updateOrientationAnglesFallback()
+   126	                }
+   127	            }
+   128	
+   129	            Sensor.TYPE_MAGNETIC_FIELD -> {
+   130	                if (!useRotationVector) {
+   131	                    System.arraycopy(
+   132	                        event.values,
+   133	                        0,
+   134	                        magnetometerReading,
+   135	                        0,
+   136	                        magnetometerReading.size
+   137	                    )
+   138	                    updateOrientationAnglesFallback()
+   139	                }
+   140	            }
+   141	        }
+   142	    }
+   143	
+   144	    private fun updateOrientationAnglesFallback() {
+   145	        val success = SensorManager.getRotationMatrix(
+   146	            rotationMatrix,
+   147	            null,
+   148	            accelerometerReading,
+   149	            magnetometerReading
+   150	        )
+   151	
+   152	        if (success) {
+   153	            updateOrientationAnglesFromMatrix(rotationMatrix)
+   154	        }
+   155	    }
+   156	
+   157	    private fun updateOrientationAnglesFromMatrix(sourceMatrix: FloatArray) {
+   158	        val rotation = getDisplayRotation()
+   159	
+   160	        val (axisX, axisY) = when (rotation) {
+   161	            Surface.ROTATION_90 -> Pair(SensorManager.AXIS_Y, SensorManager.AXIS_MINUS_X)
+   162	            Surface.ROTATION_180 -> Pair(SensorManager.AXIS_MINUS_X, SensorManager.AXIS_MINUS_Y)
+   163	            Surface.ROTATION_270 -> Pair(SensorManager.AXIS_MINUS_Y, SensorManager.AXIS_X)
+   164	            else -> Pair(SensorManager.AXIS_X, SensorManager.AXIS_Y)
+   165	        }
+   166	
+   167	        SensorManager.remapCoordinateSystem(
+   168	            sourceMatrix,
+   169	            axisX,
+   170	            axisY,
+   171	            remappedRotationMatrix
+   172	        )
+   173	
+   174	        SensorManager.getOrientation(remappedRotationMatrix, orientationAngles)
+   175	
+   176	        val azimuthRad = orientationAngles[0].toDouble()
+   177	        val azimuthDeg = Math.toDegrees(azimuthRad)
+   178	
+   179	        val heading = ((azimuthDeg + 360.0) % 360.0)
+   180	
+   181	        eventSink?.success(listOf(heading, accuracy.toDouble()))
+   182	    }
+   183	
+   184	    @Suppress("DEPRECATION")
+   185	    private fun getDisplayRotation(): Int {
+   186	        return windowManager?.defaultDisplay?.rotation ?: Surface.ROTATION_0
+   187	    }
+   188	}
+
+=== packages/my_compass/lib/my_compass.dart ===
+     1	import 'dart:async';
+     2	
+     3	import 'package:flutter/services.dart';
+     4	
+     5	class MyCompass {
+     6	  static const EventChannel _eventChannel = EventChannel('my_compass/events');
+     7	  static Stream<List<double>>? _headingStream;
+     8	
+     9	  static Stream<List<double>> get events {
+    10	    _headingStream ??= _eventChannel.receiveBroadcastStream().map((
+    11	      dynamic event,
+    12	    ) {
+    13	      if (event is List) {
+    14	        return event.cast<double>();
+    15	      }
+    16	      // Handle the case where a single double is received for backward compatibility or error
+    17	      if (event is double) {
+    18	        return [event, 0.0]; // Default accuracy to 0.0
+    19	      }
+    20	      return [0.0, 0.0]; // Default value in case of unexpected type
+    21	    });
+    22	    return _headingStream!;
+    23	  }
+    24	}
+

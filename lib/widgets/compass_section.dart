@@ -16,6 +16,7 @@ class CompassSection extends StatelessWidget {
   final String Function(double) getCardinalDirection;
   final Color Function(double) getAccuracyStatusColor;
   final String Function(double) getAccuracyText;
+  final VoidCallback? onSwipeToOpenMap;
 
   const CompassSection({
     super.key,
@@ -31,6 +32,7 @@ class CompassSection extends StatelessWidget {
     required this.getCardinalDirection,
     required this.getAccuracyStatusColor,
     required this.getAccuracyText,
+    this.onSwipeToOpenMap,
   });
 
   @override
@@ -38,6 +40,12 @@ class CompassSection extends StatelessWidget {
     return GestureDetector(
       onTap: setWaypoint,
       onVerticalDragEnd: onVerticalDragEnd,
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity != null && 
+            details.primaryVelocity!.abs() > 500) {
+          onSwipeToOpenMap?.call();
+        }
+      },
       child: ValueListenableBuilder<double>(
         valueListenable: headingNotifier,
         builder: (context, heading, child) {
@@ -115,7 +123,6 @@ class CompassSection extends StatelessWidget {
                           return ValueListenableBuilder<double>(
                             valueListenable: accuracyNotifier,
                             builder: (context, acc, _) {
-                              // ✅ Серый цвет когда GPS-компас активен, обычные цвета — когда магнитный
                               final color = isGpsActive 
                                   ? Colors.grey 
                                   : getAccuracyStatusColor(acc);

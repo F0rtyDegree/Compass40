@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import 'map_screen.dart';
 import '../theme_provider.dart';
 import '../widgets/compass_section.dart';
 import '../widgets/gps_section.dart';
@@ -104,6 +105,12 @@ class _MyHomePageState extends State<MyHomePage> {
               getCardinalDirection: _logic.getCardinalDirection,
               getAccuracyStatusColor: _logic.getAccuracyStatusColor,
               getAccuracyText: _logic.getAccuracyText,
+              onSwipeToOpenMap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MapScreen()),
+                );
+              },
             ),
             GpsSection(
               gpsDataNotifier: _state.gpsDataNotifier,
