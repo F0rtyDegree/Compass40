@@ -108,7 +108,14 @@ class _MyHomePageState extends State<MyHomePage> {
               onSwipeToOpenMap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const MapScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => MapScreen(
+                      magneticDeclination: _state.magneticDeclination,
+                      onTargetActivated: (geo) {
+                        _logic.setTarget(geo);
+                      },
+                    ),
+                  ),
                 );
               },
             ),

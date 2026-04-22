@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import '../models/map_project.dart';
-import '../models/map_transform_state.dart';
 import '../models/map_target.dart';
+import '../models/map_transform_state.dart';
+import '../models/map_working_pair.dart';
 
 class MapScreenState {
   // Проект и изображение
@@ -10,7 +11,10 @@ class MapScreenState {
   Size? imageSize;
   MapProject? project;
 
-  // Трансформация карты
+  // Размер области отображения карты
+  Size? viewportSize;
+
+  // Трансформация карты (pan / zoom / rotate)
   MapTransformState transformState = const MapTransformState();
 
   // Режимы
@@ -18,19 +22,41 @@ class MapScreenState {
   bool rotateMapByHeading = false;
   bool crosshairInCenter = true;
 
-  // Позиции
-  Offset? currentUserScreenPoint; // позиция пользователя в экранных координатах
-  Offset?
-  currentUserImagePoint; // позиция пользователя в координатах изображения
-  Offset? crosshairImagePoint; // позиция прицела в координатах изображения
+  // Текущая рабочая пара привязок
+  MapWorkingPair? workingPair;
+
+  // Состояния доступности действий
+  bool canPlaceTarget = false;
+
+  // Позиция прицела
+  Offset? crosshairScreenPoint;
+  Offset? crosshairImagePoint;
+
+  // Текущая позиция пользователя
+  Offset? currentUserImagePoint;
+  Offset? currentUserScreenPoint;
+
+  // Предпросмотр расстояния/азимута (до точки под прицелом или до цели)
+  double? previewDistanceMeters;
+  double? previewBearingDegrees;
 
   // Цели
   MapTarget? plannedTarget;
   MapTarget? activeTarget;
 
-  // Таймеры
+  // Таймер восстановления режима сопровождения
   Timer? followRestoreTimer;
 
-  // Флаг, открыт ли экран (для предотвращения утечек)
+  // Флаг для предотвращения утечек
   bool isDisposed = false;
+
+  // Удобные геттеры
+
+  List<MapTarget> get passedTargets =>
+      project?.targets
+          .where((t) => t.status == MapTargetStatus.passed)
+          .toList() ??
+      [];
+
+  List<MapTarget> get allTargets => project?.targets ?? [];
 }
