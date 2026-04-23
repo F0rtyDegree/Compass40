@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 class MapCrosshair extends StatelessWidget {
   final bool inCenter;
 
-  const MapCrosshair({
-    super.key,
-    this.inCenter = true,
-  });
+  const MapCrosshair({super.key, this.inCenter = true});
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +60,9 @@ class _CrosshairPainter extends CustomPainter {
     canvas.drawCircle(
       center,
       2.0,
-      Paint()..color = Colors.red..style = PaintingStyle.fill,
+      Paint()
+        ..color = Colors.red
+        ..style = PaintingStyle.fill,
     );
   }
 

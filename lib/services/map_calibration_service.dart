@@ -71,7 +71,8 @@ class MapCalibrationService {
     final dPhi = (lat2 - lat1) * math.pi / 180;
     final dLambda = (lon2 - lon1) * math.pi / 180;
 
-    final a = math.sin(dPhi / 2) * math.sin(dPhi / 2) +
+    final a =
+        math.sin(dPhi / 2) * math.sin(dPhi / 2) +
         math.cos(phi1) *
             math.cos(phi2) *
             math.sin(dLambda / 2) *
@@ -158,8 +159,8 @@ class MapCalibrationService {
     final scale = geoLen / imgLen;
 
     // Угол поворота: image -> geo
-    final angle = math.atan2(geoVec.dy, geoVec.dx) -
-        math.atan2(imgVec.dy, imgVec.dx);
+    final angle =
+        math.atan2(geoVec.dy, geoVec.dx) - math.atan2(imgVec.dy, imgVec.dx);
 
     return _SimilarityTransform(
       originLat: originLat,
@@ -244,10 +245,7 @@ class MapCalibrationService {
     final dx = rotX / t.scale;
     final dy = rotY / t.scale;
 
-    return Offset(
-      t.referenceImageX + dx,
-      t.referenceImageY + dy,
-    );
+    return Offset(t.referenceImageX + dx, t.referenceImageY + dy);
   }
 
   // ---------------------------------------------------------
@@ -274,7 +272,8 @@ class MapCalibrationService {
     final dLambda = (toLon - fromLon) * math.pi / 180;
 
     final y = math.sin(dLambda) * math.cos(phi2);
-    final x = math.cos(phi1) * math.sin(phi2) -
+    final x =
+        math.cos(phi1) * math.sin(phi2) -
         math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
 
     final trueBearing = (math.atan2(y, x) * 180 / math.pi + 360) % 360;

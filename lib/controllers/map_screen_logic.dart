@@ -12,13 +12,14 @@ import '../models/map_transform_state.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import 'map_screen_state.dart';
+import '../services/sensor_service.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
   final State hostState;
   final MapStorageService storageService;
-  final GpsInfo gpsInfo;
   final MapCalibrationService calibration = MapCalibrationService();
+  final SensorService sensorService = SensorService();
 
   StreamSubscription<GpsData>? _gpsSub;
 
@@ -26,7 +27,6 @@ class MapScreenLogic {
     required this.state,
     required this.hostState,
     required this.storageService,
-    required this.gpsInfo,
   });
 
   bool get mounted => hostState.mounted;
@@ -305,7 +305,8 @@ class MapScreenLogic {
     final imageSize = state.imageSize!;
 
     final center = Offset(vp.width / 2, vp.height / 2);
-    final local = imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+    final local =
+        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
     final scaled = local * t.scale;
 
     final angle = t.rotationRadians;
@@ -709,17 +710,20 @@ class MapScreenLogic {
   // ---------------------------------------------------------
 
   void _startGpsSubscription() {
-    _gpsSub = gpsInfo.getGpsDataStream(1000).listen((gpsData) {
-      _lastGpsData = gpsData;
-      if (!mounted) return;
-
-      if (state.followMode) {
-        _recalculateUserImagePoint();
-        _centerMapOnUser();
-      } else {
-        _recalculateUserImagePoint();
-      }
-    });
+    _gpsSub = sensorService.subscribeToGps(
+      intervalSeconds: 1,
+      onData: (gpsData) {
+        _lastGpsData = gpsData;
+        if (!mounted) return;
+        
+        if (state.followMode) {
+          _recalculateUserImagePoint();
+          _centerMapOnUser();
+        } else {
+          _recalculateUserImagePoint();
+        }
+      },
+    );
   }
 
   GpsData? _lastGpsData;

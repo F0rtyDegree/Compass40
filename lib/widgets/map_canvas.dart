@@ -40,10 +40,7 @@ class _MapCanvasState extends State<MapCanvas> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final viewportSize = Size(
-          constraints.maxWidth,
-          constraints.maxHeight,
-        );
+        final viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           widget.onViewportSize(viewportSize);
@@ -110,7 +107,8 @@ class _MapCanvasState extends State<MapCanvas> {
       focalFromCenter.dx * sin + focalFromCenter.dy * cos,
     );
 
-    final newTranslation = _gestureStartTranslation +
+    final newTranslation =
+        _gestureStartTranslation +
         focalDelta -
         (rotatedFocal * scaleRatio - focalFromCenter);
 
@@ -145,8 +143,10 @@ class _MapPainter extends CustomPainter {
     canvas.save();
 
     // Применяем трансформацию относительно центра viewport
-    canvas.translate(center.dx + transformState.translation.dx,
-        center.dy + transformState.translation.dy);
+    canvas.translate(
+      center.dx + transformState.translation.dx,
+      center.dy + transformState.translation.dy,
+    );
     canvas.rotate(transformState.rotationRadians);
     canvas.scale(transformState.scale);
 

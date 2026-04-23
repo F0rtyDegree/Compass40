@@ -97,9 +97,8 @@ class HomeLogic {
     final settings = await sensorService.loadSettings();
 
     state.gpsDataSubscription = sensorService.subscribeToGps(
-      gpsInfo: state.gpsInfo,
-      intervalSeconds: settings.gpsInterval,
-      onData: (gpsData) {
+  intervalSeconds: settings.gpsInterval,
+  onData: (gpsData) {
         if (!mounted) return;
         state.gpsDataNotifier.value = gpsData;
 
@@ -278,12 +277,17 @@ class HomeLogic {
   // ----------------------------------------------------------------------
 
   void _calculateWaypointData() {
+    // ✅ Добавлены проверки на null
     if (state.waypoint == null ||
-        state.gpsDataNotifier.value.latitude == null) {
+        state.waypoint!.latitude == null ||
+        state.waypoint!.longitude == null) {
       return;
     }
 
     final nowData = state.gpsDataNotifier.value;
+    if (nowData.latitude == null || nowData.longitude == null) {
+      return; // Нет GPS — не считаем
+    }
 
     state.distanceToWaypoint.value = calculateDistance(
       state.waypoint!.latitude!,
@@ -304,11 +308,12 @@ class HomeLogic {
   }
 
   void _calculateTargetData() {
-    if (state.target == null || state.gpsDataNotifier.value.latitude == null) {
-      return;
-    }
+    if (state.target == null) return;
 
     final nowData = state.gpsDataNotifier.value;
+    if (nowData.latitude == null || nowData.longitude == null) {
+      return; // Нет GPS — не считаем
+    }
 
     state.distanceToTarget.value = calculateDistance(
       nowData.latitude!,

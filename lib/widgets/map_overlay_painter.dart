@@ -42,9 +42,7 @@ class MapOverlayPainter extends CustomPainter {
 
     // Якоря
     for (final anchor in anchors) {
-      final screen = imageToScreen(
-        Offset(anchor.imageX, anchor.imageY),
-      );
+      final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
       _drawAnchor(canvas, screen);
     }
 
@@ -84,8 +82,8 @@ class MapOverlayPainter extends CustomPainter {
     final center = Offset(viewportSize.width / 2, viewportSize.height / 2);
 
     // Вектор от центра изображения
-    final local = imagePoint -
-        Offset(imageSize.width / 2, imageSize.height / 2);
+    final local =
+        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
 
     // Масштаб
     final scaled = local * transformState.scale;
@@ -119,7 +117,13 @@ class MapOverlayPainter extends CustomPainter {
 
     // Якорь — восьмиугольник или простой круг с крестиком
     canvas.drawCircle(screen, 10, borderPaint);
-    canvas.drawCircle(screen, 10, paint..style = PaintingStyle.stroke..strokeWidth = 2.0);
+    canvas.drawCircle(
+      screen,
+      10,
+      paint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0,
+    );
 
     // Якорь-иконка: просто крестик
     final linePaint = Paint()
@@ -238,8 +242,7 @@ class MapOverlayPainter extends CustomPainter {
     bool drawing = true;
 
     while (drawn < totalLength) {
-      final segLen =
-          drawing ? dashLength : gapLength;
+      final segLen = drawing ? dashLength : gapLength;
       final end = math.min(drawn + segLen, totalLength);
 
       if (drawing) {
@@ -287,11 +290,7 @@ class MapOverlayPainter extends CustomPainter {
           fontSize: 12,
           fontWeight: FontWeight.bold,
           shadows: const [
-            Shadow(
-              color: Colors.white,
-              offset: Offset(1, 1),
-              blurRadius: 2,
-            ),
+            Shadow(color: Colors.white, offset: Offset(1, 1), blurRadius: 2),
           ],
         ),
       ),
@@ -302,13 +301,12 @@ class MapOverlayPainter extends CustomPainter {
   }
 
   @override
-bool shouldRepaint(covariant MapOverlayPainter oldDelegate) {
-  return oldDelegate.transformState != transformState ||
-      oldDelegate.anchors.length != anchors.length ||
-      oldDelegate.targets.length != targets.length ||
-      oldDelegate.currentUserImagePoint != currentUserImagePoint ||
-      oldDelegate.activeTargetImagePoint != activeTargetImagePoint ||
-      oldDelegate.previewDistanceMeters != previewDistanceMeters;
-}
-
+  bool shouldRepaint(covariant MapOverlayPainter oldDelegate) {
+    return oldDelegate.transformState != transformState ||
+        oldDelegate.anchors.length != anchors.length ||
+        oldDelegate.targets.length != targets.length ||
+        oldDelegate.currentUserImagePoint != currentUserImagePoint ||
+        oldDelegate.activeTargetImagePoint != activeTargetImagePoint ||
+        oldDelegate.previewDistanceMeters != previewDistanceMeters;
+  }
 }

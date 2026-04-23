@@ -9,6 +9,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/home_state.dart';
 
 class SensorService {
+  static final SensorService _instance = SensorService._internal();
+  factory SensorService() => _instance;
+  SensorService._internal();
+
+  // Broadcast стримы
+  Stream<GpsData>? _gpsBroadcastStream;
+  Stream<List<double>>? _compassBroadcastStream;
+  int? _gpsIntervalMs;
+
+  final GpsInfo _gpsInfo = GpsInfo();
+
   Future<SensorSettings> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -47,28 +58,58 @@ class SensorService {
     return (await Permission.location.request()).isGranted;
   }
 
+  // ------------------------------------------------------------
+  // GPS
+  // ------------------------------------------------------------
+  Stream<GpsData> _getOrCreateGpsStream(int intervalSeconds) {
+    final intervalMs = intervalSeconds * 1000;
+    
+    if (_gpsBroadcastStream == null || _gpsIntervalMs != intervalMs) {
+      _gpsIntervalMs = intervalMs;
+      _gpsBroadcastStream = _gpsInfo
+          .getGpsDataStream(intervalMs)
+          .handleError((error, stack) {
+            developer.log(
+              'Error in GPS stream',
+              name: 'by.fortydegree.compass40',
+              error: error,
+              stackTrace: stack,
+            );
+          })
+          .asBroadcastStream();
+    }
+    return _gpsBroadcastStream!;
+  }
+
   StreamSubscription<GpsData> subscribeToGps({
-    required GpsInfo gpsInfo,
     required int intervalSeconds,
     required void Function(GpsData gpsData) onData,
   }) {
-    return gpsInfo
-        .getGpsDataStream(intervalSeconds * 1000)
-        .handleError((error, stack) {
-          developer.log(
-            'Error in GPS stream',
-            name: 'by.fortydegree.testgps',
-            error: error,
-            stackTrace: stack,
-          );
-        })
-        .listen(onData);
+    return _getOrCreateGpsStream(intervalSeconds).listen(onData);
+  }
+
+  // ------------------------------------------------------------
+  // Компас
+  // ------------------------------------------------------------
+  Stream<List<double>> _getOrCreateCompassStream() {
+    _compassBroadcastStream ??= MyCompass.events.asBroadcastStream();
+    return _compassBroadcastStream!;
   }
 
   StreamSubscription<List<double>> subscribeToCompass({
     required void Function(List<double> data) onData,
   }) {
-    return MyCompass.events.listen(onData);
+    return _getOrCreateCompassStream().listen(
+      onData,
+      onError: (error, stack) {
+        developer.log(
+          'Compass stream error',
+          name: 'by.fortydegree.compass40',
+          error: error,
+          stackTrace: stack,
+        );
+      },
+    );
   }
 }
 

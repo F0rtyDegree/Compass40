@@ -21,6 +21,7 @@ class MapScreenState {
   bool followMode = false;
   bool rotateMapByHeading = false;
   bool crosshairInCenter = true;
+  bool rotateMode = false;
 
   // Текущая рабочая пара привязок
   MapWorkingPair? workingPair;
