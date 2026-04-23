@@ -36,6 +36,7 @@ class MapScreenState {
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;
   Offset? currentUserScreenPoint;
+  double? heading; // Азимут
 
   // Предпросмотр расстояния/азимута (до точки под прицелом или до цели)
   double? previewDistanceMeters;

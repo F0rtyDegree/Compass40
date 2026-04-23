@@ -199,6 +199,7 @@ class _MapScreenState extends State<MapScreen> {
                       : null,
                   previewDistanceMeters: _state.previewDistanceMeters,
                   previewBearingDegrees: _state.previewBearingDegrees,
+                  heading: _state.heading,
                 ),
               ),
 
@@ -474,31 +475,31 @@ class _MapScreenState extends State<MapScreen> {
     if (pointerCount == 2) {
       final scaleChange = (details.scale - 1.0).abs();
       final rotationChange = details.rotation.abs();
-      
+
       // Определяем, что преобладает
       if (scaleChange > rotationChange) {
         // ---------- МАСШТАБИРОВАНИЕ ----------
         final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
-        
+
         if (_gestureStartPivotImage != null) {
           final pivotScreen = _logic.getCrosshairScreenPoint();
-          
+
           final tempTransform = MapTransformState(
             scale: newScale,
             rotationRadians: _state.transformState.rotationRadians,
             translation: _gestureStartTranslation,
           );
-          
+
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          
+
           final pivotScreenAfterScale = _logic.imageToScreen(_gestureStartPivotImage!);
-          
+
           _state.transformState = oldTransform;
-          
+
           final delta = pivotScreen - pivotScreenAfterScale;
           final newTranslation = _gestureStartTranslation + delta;
-          
+
           _logic.updateTransform(
             MapTransformState(
               scale: newScale,
@@ -518,27 +519,27 @@ class _MapScreenState extends State<MapScreen> {
       } else {
         // ---------- ВРАЩЕНИЕ ----------
         final pivotScreen = _logic.getCrosshairScreenPoint();
-        
+
         // Накопление угла для плавного вращения
         final currentRotation = _gestureStartRotation + details.rotation;
-        
+
         if (_gestureStartPivotImage != null) {
           final tempTransform = MapTransformState(
             scale: _state.transformState.scale,
             rotationRadians: currentRotation,
             translation: _gestureStartTranslation,
           );
-          
+
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          
+
           final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
-          
+
           _state.transformState = oldTransform;
-          
+
           final delta = pivotScreen - pivotScreenAfterRotate;
           final newTranslation = _gestureStartTranslation + delta;
-          
+
           _logic.updateTransform(
             MapTransformState(
               scale: _state.transformState.scale,

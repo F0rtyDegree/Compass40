@@ -22,6 +22,9 @@ class MapScreenLogic {
   final SensorService sensorService = SensorService();
 
   StreamSubscription<GpsData>? _gpsSub;
+  GpsData? _previousGpsData;
+  GpsData? _lastGpsData;
+  late SensorSettings _sensorSettings;
 
   MapScreenLogic({
     required this.state,
@@ -43,6 +46,7 @@ class MapScreenLogic {
   // ---------------------------------------------------------
 
   Future<void> init() async {
+    _sensorSettings = await sensorService.loadSettings();
     await _loadLastProject();
     _startGpsSubscription();
   }
@@ -715,7 +719,27 @@ class MapScreenLogic {
       onData: (gpsData) {
         _lastGpsData = gpsData;
         if (!mounted) return;
-        
+
+        // Вычисляем азимут, если есть предыдущая точка
+        if (_previousGpsData != null) {
+          final speedKmh = (gpsData.speed ?? 0) * 3.6;
+          if (speedKmh > _sensorSettings.autoSwitchSpeedKmh) {
+            final bd = calibration.bearingAndDistance(
+              fromLat: _previousGpsData!.latitude!,
+              fromLon: _previousGpsData!.longitude!,
+              toLat: gpsData.latitude!,
+              toLon: gpsData.longitude!,
+              magneticDeclination: 0, // Не используется для направления
+            );
+            setState(() {
+              state.heading = bd.magneticBearing;
+            });
+          }
+        }
+        _previousGpsData = gpsData; 
+
+
+        // Обновление позиции
         if (state.followMode) {
           _recalculateUserImagePoint();
           _centerMapOnUser();
@@ -726,7 +750,6 @@ class MapScreenLogic {
     );
   }
 
-  GpsData? _lastGpsData;
 
   // ---------------------------------------------------------
   // Вспомогательные
