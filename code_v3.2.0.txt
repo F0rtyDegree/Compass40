@@ -2,7 +2,7 @@
      1	name: compass40
      2	description: "Compass 40°"
      3	publish_to: 'none'
-     4	version: 3.1.10
+     4	version: 3.2.0
      5	environment:
      6	  sdk: ^3.9.0
      7	
@@ -925,723 +925,747 @@
     22	  final SensorService sensorService = SensorService();
     23	
     24	  StreamSubscription<GpsData>? _gpsSub;
-    25	
-    26	  MapScreenLogic({
-    27	    required this.state,
-    28	    required this.hostState,
-    29	    required this.storageService,
-    30	  });
-    31	
-    32	  bool get mounted => hostState.mounted;
-    33	
-    34	  void setState(VoidCallback fn) {
-    35	    if (mounted) {
-    36	      // ignore: invalid_use_of_protected_member
-    37	      hostState.setState(fn);
-    38	    }
-    39	  }
-    40	
-    41	  // ---------------------------------------------------------
-    42	  // Инициализация
-    43	  // ---------------------------------------------------------
-    44	
-    45	  Future<void> init() async {
-    46	    await _loadLastProject();
-    47	    _startGpsSubscription();
-    48	  }
-    49	
-    50	  void dispose() {
-    51	    state.followRestoreTimer?.cancel();
-    52	    _gpsSub?.cancel();
-    53	    state.isDisposed = true;
-    54	  }
-    55	
-    56	  // ---------------------------------------------------------
-    57	  // Загрузка проекта
-    58	  // ---------------------------------------------------------
+    25	  GpsData? _previousGpsData;
+    26	  GpsData? _lastGpsData;
+    27	  late SensorSettings _sensorSettings;
+    28	
+    29	  MapScreenLogic({
+    30	    required this.state,
+    31	    required this.hostState,
+    32	    required this.storageService,
+    33	  });
+    34	
+    35	  bool get mounted => hostState.mounted;
+    36	
+    37	  void setState(VoidCallback fn) {
+    38	    if (mounted) {
+    39	      // ignore: invalid_use_of_protected_member
+    40	      hostState.setState(fn);
+    41	    }
+    42	  }
+    43	
+    44	  // ---------------------------------------------------------
+    45	  // Инициализация
+    46	  // ---------------------------------------------------------
+    47	
+    48	  Future<void> init() async {
+    49	    _sensorSettings = await sensorService.loadSettings();
+    50	    await _loadLastProject();
+    51	    _startGpsSubscription();
+    52	  }
+    53	
+    54	  void dispose() {
+    55	    state.followRestoreTimer?.cancel();
+    56	    _gpsSub?.cancel();
+    57	    state.isDisposed = true;
+    58	  }
     59	
-    60	  Future<void> _loadLastProject() async {
-    61	    final projectId = await storageService.getCurrentProjectId();
-    62	    if (projectId == null) return;
+    60	  // ---------------------------------------------------------
+    61	  // Загрузка проекта
+    62	  // ---------------------------------------------------------
     63	
-    64	    final project = await storageService.loadProject(projectId);
-    65	    if (project == null || !mounted) return;
-    66	
-    67	    // Восстанавливаем сохранённый transform
-    68	    final savedTransform = await storageService.loadTransform(projectId);
-    69	
-    70	    setState(() {
-    71	      state.project = project;
-    72	      state.imagePath = project.imagePath;
-    73	      if (savedTransform != null) {
-    74	        state.transformState = savedTransform;
-    75	      }
-    76	      // Восстанавливаем активную цель
-    77	      state.activeTarget = project.targets
-    78	          .where((t) => t.status == MapTargetStatus.active)
-    79	          .firstOrNull;
-    80	    });
-    81	
-    82	    await _loadImageSize();
-    83	    _recalculateWorkingPair();
-    84	    _recalculateCanPlaceTarget();
-    85	  }
-    86	
-    87	  Future<void> _loadImageSize() async {
-    88	    if (state.imagePath == null) return;
-    89	    final file = File(state.imagePath!);
-    90	    if (!await file.exists()) return;
-    91	
-    92	    final bytes = await file.readAsBytes();
-    93	    final decoded = await decodeImageFromList(bytes);
-    94	
-    95	    if (!mounted) return;
-    96	
-    97	    final imgW = decoded.width.toDouble();
-    98	    final imgH = decoded.height.toDouble();
-    99	
-   100	    setState(() {
-   101	      state.imageSize = Size(imgW, imgH);
-   102	    });
+    64	  Future<void> _loadLastProject() async {
+    65	    final projectId = await storageService.getCurrentProjectId();
+    66	    if (projectId == null) return;
+    67	
+    68	    final project = await storageService.loadProject(projectId);
+    69	    if (project == null || !mounted) return;
+    70	
+    71	    // Восстанавливаем сохранённый transform
+    72	    final savedTransform = await storageService.loadTransform(projectId);
+    73	
+    74	    setState(() {
+    75	      state.project = project;
+    76	      state.imagePath = project.imagePath;
+    77	      if (savedTransform != null) {
+    78	        state.transformState = savedTransform;
+    79	      }
+    80	      // Восстанавливаем активную цель
+    81	      state.activeTarget = project.targets
+    82	          .where((t) => t.status == MapTargetStatus.active)
+    83	          .firstOrNull;
+    84	    });
+    85	
+    86	    await _loadImageSize();
+    87	    _recalculateWorkingPair();
+    88	    _recalculateCanPlaceTarget();
+    89	  }
+    90	
+    91	  Future<void> _loadImageSize() async {
+    92	    if (state.imagePath == null) return;
+    93	    final file = File(state.imagePath!);
+    94	    if (!await file.exists()) return;
+    95	
+    96	    final bytes = await file.readAsBytes();
+    97	    final decoded = await decodeImageFromList(bytes);
+    98	
+    99	    if (!mounted) return;
+   100	
+   101	    final imgW = decoded.width.toDouble();
+   102	    final imgH = decoded.height.toDouble();
    103	
-   104	    // Если transform не был восстановлен — подбираем fit
-   105	    if (state.transformState.scale == 1.0 &&
-   106	        state.transformState.translation == Offset.zero) {
-   107	      _waitForViewportAndFit(imgW, imgH);
-   108	    }
-   109	  }
-   110	
-   111	  void _waitForViewportAndFit(double imgW, double imgH) {
-   112	    if (state.viewportSize != null) {
-   113	      _fitImageToViewport(imgW, imgH);
-   114	      return;
-   115	    }
-   116	    WidgetsBinding.instance.addPostFrameCallback((_) {
-   117	      if (!state.isDisposed) {
-   118	        _waitForViewportAndFit(imgW, imgH);
-   119	      }
-   120	    });
-   121	  }
-   122	
-   123	  void _fitImageToViewport(double imgW, double imgH) {
-   124	    final vp = state.viewportSize;
-   125	    if (vp == null || imgW == 0 || imgH == 0) return;
+   104	    setState(() {
+   105	      state.imageSize = Size(imgW, imgH);
+   106	    });
+   107	
+   108	    // Если transform не был восстановлен — подбираем fit
+   109	    if (state.transformState.scale == 1.0 &&
+   110	        state.transformState.translation == Offset.zero) {
+   111	      _waitForViewportAndFit(imgW, imgH);
+   112	    }
+   113	  }
+   114	
+   115	  void _waitForViewportAndFit(double imgW, double imgH) {
+   116	    if (state.viewportSize != null) {
+   117	      _fitImageToViewport(imgW, imgH);
+   118	      return;
+   119	    }
+   120	    WidgetsBinding.instance.addPostFrameCallback((_) {
+   121	      if (!state.isDisposed) {
+   122	        _waitForViewportAndFit(imgW, imgH);
+   123	      }
+   124	    });
+   125	  }
    126	
-   127	    final fitScale = math.min(vp.width / imgW, vp.height / imgH) * 0.92;
-   128	
-   129	    if (!mounted) return;
+   127	  void _fitImageToViewport(double imgW, double imgH) {
+   128	    final vp = state.viewportSize;
+   129	    if (vp == null || imgW == 0 || imgH == 0) return;
    130	
-   131	    setState(() {
-   132	      state.transformState = MapTransformState(
-   133	        scale: fitScale,
-   134	        rotationRadians: 0,
-   135	        translation: Offset.zero,
-   136	      );
-   137	    });
-   138	
-   139	    _recalculateCrosshairImagePoint();
-   140	  }
-   141	
-   142	  // ---------------------------------------------------------
-   143	  // Выбор фото
-   144	  // ---------------------------------------------------------
+   131	    final fitScale = math.min(vp.width / imgW, vp.height / imgH) * 0.92;
+   132	
+   133	    if (!mounted) return;
+   134	
+   135	    setState(() {
+   136	      state.transformState = MapTransformState(
+   137	        scale: fitScale,
+   138	        rotationRadians: 0,
+   139	        translation: Offset.zero,
+   140	      );
+   141	    });
+   142	
+   143	    _recalculateCrosshairImagePoint();
+   144	  }
    145	
-   146	  Future<void> pickImage() async {
-   147	    try {
-   148	      final picker = ImagePicker();
-   149	      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-   150	      if (image == null || !mounted) return;
-   151	
-   152	      final savedPath = await storageService.saveImageToAppStorage(image.path);
-   153	      final projectId = DateTime.now().millisecondsSinceEpoch.toString();
-   154	      final project = MapProject(
-   155	        id: projectId,
-   156	        imagePath: savedPath,
-   157	        anchors: [],
-   158	        targets: [],
-   159	      );
-   160	
-   161	      await storageService.saveProject(project);
-   162	      await storageService.setCurrentProjectId(projectId);
-   163	
-   164	      setState(() {
-   165	        state.project = project;
-   166	        state.imagePath = savedPath;
-   167	        state.imageSize = null;
-   168	        state.workingPair = null;
-   169	        state.canPlaceTarget = false;
-   170	        state.transformState = const MapTransformState();
-   171	        state.plannedTarget = null;
-   172	        state.activeTarget = null;
-   173	      });
-   174	
-   175	      await _loadImageSize();
-   176	    } catch (e) {
-   177	      debugPrint('MapScreenLogic.pickImage error: $e');
-   178	    }
-   179	  }
-   180	
-   181	  // ---------------------------------------------------------
-   182	  // Закрытие карты
-   183	  // ---------------------------------------------------------
+   146	  // ---------------------------------------------------------
+   147	  // Выбор фото
+   148	  // ---------------------------------------------------------
+   149	
+   150	  Future<void> pickImage() async {
+   151	    try {
+   152	      final picker = ImagePicker();
+   153	      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+   154	      if (image == null || !mounted) return;
+   155	
+   156	      final savedPath = await storageService.saveImageToAppStorage(image.path);
+   157	      final projectId = DateTime.now().millisecondsSinceEpoch.toString();
+   158	      final project = MapProject(
+   159	        id: projectId,
+   160	        imagePath: savedPath,
+   161	        anchors: [],
+   162	        targets: [],
+   163	      );
+   164	
+   165	      await storageService.saveProject(project);
+   166	      await storageService.setCurrentProjectId(projectId);
+   167	
+   168	      setState(() {
+   169	        state.project = project;
+   170	        state.imagePath = savedPath;
+   171	        state.imageSize = null;
+   172	        state.workingPair = null;
+   173	        state.canPlaceTarget = false;
+   174	        state.transformState = const MapTransformState();
+   175	        state.plannedTarget = null;
+   176	        state.activeTarget = null;
+   177	      });
+   178	
+   179	      await _loadImageSize();
+   180	    } catch (e) {
+   181	      debugPrint('MapScreenLogic.pickImage error: $e');
+   182	    }
+   183	  }
    184	
-   185	  Future<void> closeMap() async {
-   186	    await storageService.setCurrentProjectId(null);
-   187	    if (!mounted) return;
+   185	  // ---------------------------------------------------------
+   186	  // Закрытие карты
+   187	  // ---------------------------------------------------------
    188	
-   189	    setState(() {
-   190	      state.project = null;
-   191	      state.imagePath = null;
-   192	      state.imageSize = null;
-   193	      state.workingPair = null;
-   194	      state.canPlaceTarget = false;
-   195	      state.transformState = const MapTransformState();
-   196	      state.plannedTarget = null;
-   197	      state.activeTarget = null;
-   198	      state.currentUserImagePoint = null;
-   199	      state.currentUserScreenPoint = null;
-   200	    });
-   201	  }
-   202	
-   203	  // ---------------------------------------------------------
-   204	  // Трансформация карты
-   205	  // ---------------------------------------------------------
+   189	  Future<void> closeMap() async {
+   190	    await storageService.setCurrentProjectId(null);
+   191	    if (!mounted) return;
+   192	
+   193	    setState(() {
+   194	      state.project = null;
+   195	      state.imagePath = null;
+   196	      state.imageSize = null;
+   197	      state.workingPair = null;
+   198	      state.canPlaceTarget = false;
+   199	      state.transformState = const MapTransformState();
+   200	      state.plannedTarget = null;
+   201	      state.activeTarget = null;
+   202	      state.currentUserImagePoint = null;
+   203	      state.currentUserScreenPoint = null;
+   204	    });
+   205	  }
    206	
-   207	  void updateTransform(MapTransformState newTransform) {
-   208	    setState(() {
-   209	      state.transformState = newTransform;
-   210	    });
-   211	
-   212	    if (state.followMode) {
-   213	      _disableFollowModeTemporarily();
-   214	    }
+   207	  // ---------------------------------------------------------
+   208	  // Трансформация карты
+   209	  // ---------------------------------------------------------
+   210	
+   211	  void updateTransform(MapTransformState newTransform) {
+   212	    setState(() {
+   213	      state.transformState = newTransform;
+   214	    });
    215	
-   216	    _recalculateCrosshairImagePoint();
-   217	    _recalculateUserScreenPoint();
-   218	
-   219	    // Сохраняем transform асинхронно
-   220	    if (state.project != null) {
-   221	      storageService.saveTransform(state.project!.id, newTransform);
-   222	    }
-   223	  }
-   224	
-   225	  void updateViewportSize(Size size) {
-   226	    if (state.viewportSize == size) return;
-   227	    setState(() {
-   228	      state.viewportSize = size;
-   229	    });
-   230	    _recalculateCrosshairImagePoint();
-   231	    _recalculateUserScreenPoint();
-   232	  }
-   233	
-   234	  // ---------------------------------------------------------
-   235	  // Прицел
-   236	  // ---------------------------------------------------------
+   216	    if (state.followMode) {
+   217	      _disableFollowModeTemporarily();
+   218	    }
+   219	
+   220	    _recalculateCrosshairImagePoint();
+   221	    _recalculateUserScreenPoint();
+   222	
+   223	    // Сохраняем transform асинхронно
+   224	    if (state.project != null) {
+   225	      storageService.saveTransform(state.project!.id, newTransform);
+   226	    }
+   227	  }
+   228	
+   229	  void updateViewportSize(Size size) {
+   230	    if (state.viewportSize == size) return;
+   231	    setState(() {
+   232	      state.viewportSize = size;
+   233	    });
+   234	    _recalculateCrosshairImagePoint();
+   235	    _recalculateUserScreenPoint();
+   236	  }
    237	
-   238	  /// Публичный метод — используется в map_screen.dart для жестов
-   239	  Offset getCrosshairScreenPoint() => _getCrosshairScreenPoint();
-   240	
-   241	  void toggleCrosshairPosition() {
-   242	    setState(() {
-   243	      state.crosshairInCenter = !state.crosshairInCenter;
-   244	    });
-   245	    _recalculateCrosshairImagePoint();
-   246	  }
-   247	
-   248	  Offset _getCrosshairScreenPoint() {
-   249	    if (state.viewportSize == null) return Offset.zero;
-   250	    final vp = state.viewportSize!;
-   251	    if (state.crosshairInCenter) {
-   252	      return Offset(vp.width / 2, vp.height / 2);
-   253	    } else {
-   254	      return Offset(vp.width / 2, vp.height * 3 / 4);
-   255	    }
-   256	  }
-   257	
-   258	  void _recalculateCrosshairImagePoint() {
-   259	    if (state.imageSize == null || state.viewportSize == null) return;
-   260	
-   261	    final screenPoint = _getCrosshairScreenPoint();
-   262	    final imagePoint = screenToImage(screenPoint);
-   263	
-   264	    setState(() {
-   265	      state.crosshairScreenPoint = screenPoint;
-   266	      state.crosshairImagePoint = imagePoint;
-   267	    });
-   268	  }
-   269	
-   270	  // ---------------------------------------------------------
-   271	  // Преобразования screen ↔ image
-   272	  // ---------------------------------------------------------
+   238	  // ---------------------------------------------------------
+   239	  // Прицел
+   240	  // ---------------------------------------------------------
+   241	
+   242	  /// Публичный метод — используется в map_screen.dart для жестов
+   243	  Offset getCrosshairScreenPoint() => _getCrosshairScreenPoint();
+   244	
+   245	  void toggleCrosshairPosition() {
+   246	    setState(() {
+   247	      state.crosshairInCenter = !state.crosshairInCenter;
+   248	    });
+   249	    _recalculateCrosshairImagePoint();
+   250	  }
+   251	
+   252	  Offset _getCrosshairScreenPoint() {
+   253	    if (state.viewportSize == null) return Offset.zero;
+   254	    final vp = state.viewportSize!;
+   255	    if (state.crosshairInCenter) {
+   256	      return Offset(vp.width / 2, vp.height / 2);
+   257	    } else {
+   258	      return Offset(vp.width / 2, vp.height * 3 / 4);
+   259	    }
+   260	  }
+   261	
+   262	  void _recalculateCrosshairImagePoint() {
+   263	    if (state.imageSize == null || state.viewportSize == null) return;
+   264	
+   265	    final screenPoint = _getCrosshairScreenPoint();
+   266	    final imagePoint = screenToImage(screenPoint);
+   267	
+   268	    setState(() {
+   269	      state.crosshairScreenPoint = screenPoint;
+   270	      state.crosshairImagePoint = imagePoint;
+   271	    });
+   272	  }
    273	
-   274	  Offset screenToImage(Offset screenPoint) {
-   275	    if (state.imageSize == null || state.viewportSize == null) {
-   276	      return screenPoint;
-   277	    }
-   278	
-   279	    final vp = state.viewportSize!;
-   280	    final t = state.transformState;
-   281	    final imageSize = state.imageSize!;
+   274	  // ---------------------------------------------------------
+   275	  // Преобразования screen ↔ image
+   276	  // ---------------------------------------------------------
+   277	
+   278	  Offset screenToImage(Offset screenPoint) {
+   279	    if (state.imageSize == null || state.viewportSize == null) {
+   280	      return screenPoint;
+   281	    }
    282	
-   283	    final center = Offset(vp.width / 2, vp.height / 2);
-   284	    final relative = screenPoint - center - t.translation;
-   285	
-   286	    final angle = -t.rotationRadians;
-   287	    final cos = math.cos(angle);
-   288	    final sin = math.sin(angle);
-   289	    final derotated = Offset(
-   290	      relative.dx * cos - relative.dy * sin,
-   291	      relative.dx * sin + relative.dy * cos,
-   292	    );
-   293	
-   294	    final unscaled = derotated / t.scale;
-   295	    return unscaled + Offset(imageSize.width / 2, imageSize.height / 2);
-   296	  }
+   283	    final vp = state.viewportSize!;
+   284	    final t = state.transformState;
+   285	    final imageSize = state.imageSize!;
+   286	
+   287	    final center = Offset(vp.width / 2, vp.height / 2);
+   288	    final relative = screenPoint - center - t.translation;
+   289	
+   290	    final angle = -t.rotationRadians;
+   291	    final cos = math.cos(angle);
+   292	    final sin = math.sin(angle);
+   293	    final derotated = Offset(
+   294	      relative.dx * cos - relative.dy * sin,
+   295	      relative.dx * sin + relative.dy * cos,
+   296	    );
    297	
-   298	  Offset imageToScreen(Offset imagePoint) {
-   299	    if (state.imageSize == null || state.viewportSize == null) {
-   300	      return imagePoint;
-   301	    }
-   302	
-   303	    final vp = state.viewportSize!;
-   304	    final t = state.transformState;
-   305	    final imageSize = state.imageSize!;
+   298	    final unscaled = derotated / t.scale;
+   299	    return unscaled + Offset(imageSize.width / 2, imageSize.height / 2);
+   300	  }
+   301	
+   302	  Offset imageToScreen(Offset imagePoint) {
+   303	    if (state.imageSize == null || state.viewportSize == null) {
+   304	      return imagePoint;
+   305	    }
    306	
-   307	    final center = Offset(vp.width / 2, vp.height / 2);
-   308	    final local =
-   309	        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
-   310	    final scaled = local * t.scale;
-   311	
-   312	    final angle = t.rotationRadians;
-   313	    final cos = math.cos(angle);
-   314	    final sin = math.sin(angle);
-   315	    final rotated = Offset(
-   316	      scaled.dx * cos - scaled.dy * sin,
-   317	      scaled.dx * sin + scaled.dy * cos,
-   318	    );
-   319	
-   320	    return center + t.translation + rotated;
-   321	  }
-   322	
-   323	  // ---------------------------------------------------------
-   324	  // Якоря
-   325	  // ---------------------------------------------------------
+   307	    final vp = state.viewportSize!;
+   308	    final t = state.transformState;
+   309	    final imageSize = state.imageSize!;
+   310	
+   311	    final center = Offset(vp.width / 2, vp.height / 2);
+   312	    final local =
+   313	        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+   314	    final scaled = local * t.scale;
+   315	
+   316	    final angle = t.rotationRadians;
+   317	    final cos = math.cos(angle);
+   318	    final sin = math.sin(angle);
+   319	    final rotated = Offset(
+   320	      scaled.dx * cos - scaled.dy * sin,
+   321	      scaled.dx * sin + scaled.dy * cos,
+   322	    );
+   323	
+   324	    return center + t.translation + rotated;
+   325	  }
    326	
-   327	  Future<void> addAnchorFromCurrentGps() async {
-   328	    final gpsData = _lastGpsData;
-   329	    if (gpsData?.latitude == null || gpsData?.longitude == null) {
-   330	      _showSnackBar('Нет сигнала GPS');
-   331	      return;
-   332	    }
-   333	    if (state.crosshairImagePoint == null) {
-   334	      _showSnackBar('Прицел не определён');
+   327	  // ---------------------------------------------------------
+   328	  // Якоря
+   329	  // ---------------------------------------------------------
+   330	
+   331	  Future<void> addAnchorFromCurrentGps() async {
+   332	    final gpsData = _lastGpsData;
+   333	    if (gpsData?.latitude == null || gpsData?.longitude == null) {
+   334	      _showSnackBar('Нет сигнала GPS');
    335	      return;
    336	    }
-   337	    await _addAnchor(
-   338	      imagePoint: state.crosshairImagePoint!,
-   339	      latitude: gpsData!.latitude!,
-   340	      longitude: gpsData.longitude!,
-   341	    );
-   342	  }
-   343	
-   344	  Future<void> addAnchorFromClipboard() async {
-   345	    ClipboardData? clipboardData;
-   346	    try {
-   347	      clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-   348	    } catch (_) {
-   349	      _showSnackBar('Ошибка чтения буфера обмена');
-   350	      return;
-   351	    }
-   352	
-   353	    if (clipboardData?.text == null) {
-   354	      _showSnackBar('Буфер обмена пуст');
-   355	      return;
-   356	    }
-   357	
-   358	    final parts = clipboardData!.text!.split(',');
-   359	    if (parts.length != 2) {
-   360	      _showSnackBar('Неверный формат. Ожидается: широта,долгота');
-   361	      return;
-   362	    }
-   363	
-   364	    final lat = double.tryParse(parts[0].trim());
-   365	    final lon = double.tryParse(parts[1].trim());
-   366	
-   367	    if (lat == null || lon == null) {
-   368	      _showSnackBar('Не удалось распознать координаты');
-   369	      return;
-   370	    }
-   371	
-   372	    if (state.crosshairImagePoint == null) {
-   373	      _showSnackBar('Прицел не определён');
-   374	      return;
-   375	    }
-   376	
-   377	    await _addAnchor(
-   378	      imagePoint: state.crosshairImagePoint!,
-   379	      latitude: lat,
-   380	      longitude: lon,
-   381	    );
-   382	  }
-   383	
-   384	  Future<void> _addAnchor({
-   385	    required Offset imagePoint,
-   386	    required double latitude,
-   387	    required double longitude,
-   388	  }) async {
-   389	    final project = state.project;
-   390	    if (project == null) return;
-   391	
-   392	    final anchor = MapAnchor(
-   393	      id: DateTime.now().millisecondsSinceEpoch.toString(),
-   394	      imageX: imagePoint.dx,
-   395	      imageY: imagePoint.dy,
-   396	      latitude: latitude,
-   397	      longitude: longitude,
-   398	      createdAt: DateTime.now(),
-   399	    );
-   400	
-   401	    final updatedAnchors = [...project.anchors, anchor];
-   402	    final updatedProject = project.copyWith(anchors: updatedAnchors);
-   403	
-   404	    await storageService.saveProject(updatedProject);
-   405	
-   406	    setState(() {
-   407	      state.project = updatedProject;
-   408	    });
+   337	    if (state.crosshairImagePoint == null) {
+   338	      _showSnackBar('Прицел не определён');
+   339	      return;
+   340	    }
+   341	    await _addAnchor(
+   342	      imagePoint: state.crosshairImagePoint!,
+   343	      latitude: gpsData!.latitude!,
+   344	      longitude: gpsData.longitude!,
+   345	    );
+   346	  }
+   347	
+   348	  Future<void> addAnchorFromClipboard() async {
+   349	    ClipboardData? clipboardData;
+   350	    try {
+   351	      clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+   352	    } catch (_) {
+   353	      _showSnackBar('Ошибка чтения буфера обмена');
+   354	      return;
+   355	    }
+   356	
+   357	    if (clipboardData?.text == null) {
+   358	      _showSnackBar('Буфер обмена пуст');
+   359	      return;
+   360	    }
+   361	
+   362	    final parts = clipboardData!.text!.split(',');
+   363	    if (parts.length != 2) {
+   364	      _showSnackBar('Неверный формат. Ожидается: широта,долгота');
+   365	      return;
+   366	    }
+   367	
+   368	    final lat = double.tryParse(parts[0].trim());
+   369	    final lon = double.tryParse(parts[1].trim());
+   370	
+   371	    if (lat == null || lon == null) {
+   372	      _showSnackBar('Не удалось распознать координаты');
+   373	      return;
+   374	    }
+   375	
+   376	    if (state.crosshairImagePoint == null) {
+   377	      _showSnackBar('Прицел не определён');
+   378	      return;
+   379	    }
+   380	
+   381	    await _addAnchor(
+   382	      imagePoint: state.crosshairImagePoint!,
+   383	      latitude: lat,
+   384	      longitude: lon,
+   385	    );
+   386	  }
+   387	
+   388	  Future<void> _addAnchor({
+   389	    required Offset imagePoint,
+   390	    required double latitude,
+   391	    required double longitude,
+   392	  }) async {
+   393	    final project = state.project;
+   394	    if (project == null) return;
+   395	
+   396	    final anchor = MapAnchor(
+   397	      id: DateTime.now().millisecondsSinceEpoch.toString(),
+   398	      imageX: imagePoint.dx,
+   399	      imageY: imagePoint.dy,
+   400	      latitude: latitude,
+   401	      longitude: longitude,
+   402	      createdAt: DateTime.now(),
+   403	    );
+   404	
+   405	    final updatedAnchors = [...project.anchors, anchor];
+   406	    final updatedProject = project.copyWith(anchors: updatedAnchors);
+   407	
+   408	    await storageService.saveProject(updatedProject);
    409	
-   410	    _recalculateWorkingPair();
-   411	    _recalculateCanPlaceTarget();
-   412	    _recalculateUserImagePoint();
-   413	    recalculateTargetsAfterNewAnchor();
-   414	
-   415	    _showSnackBar('Привязка добавлена. Всего: ${updatedAnchors.length}');
-   416	  }
-   417	
-   418	  // ---------------------------------------------------------
-   419	  // Цели
-   420	  // ---------------------------------------------------------
+   410	    setState(() {
+   411	      state.project = updatedProject;
+   412	    });
+   413	
+   414	    _recalculateWorkingPair();
+   415	    _recalculateCanPlaceTarget();
+   416	    _recalculateUserImagePoint();
+   417	    recalculateTargetsAfterNewAnchor();
+   418	
+   419	    _showSnackBar('Привязка добавлена. Всего: ${updatedAnchors.length}');
+   420	  }
    421	
-   422	  void placePlannedTargetAtCrosshair() {
-   423	    if (!state.canPlaceTarget) return;
-   424	    if (state.crosshairImagePoint == null) return;
+   422	  // ---------------------------------------------------------
+   423	  // Цели
+   424	  // ---------------------------------------------------------
    425	
-   426	    final geo = calibration.imagePointToGeo(
-   427	      imagePoint: state.crosshairImagePoint!,
-   428	      pair: state.workingPair!,
-   429	    );
-   430	
-   431	    final target = MapTarget(
-   432	      id: DateTime.now().millisecondsSinceEpoch.toString(),
-   433	      imageX: state.crosshairImagePoint!.dx,
-   434	      imageY: state.crosshairImagePoint!.dy,
-   435	      latitude: geo?.latitude,
-   436	      longitude: geo?.longitude,
-   437	      status: MapTargetStatus.planned,
-   438	      createdAt: DateTime.now(),
-   439	    );
-   440	
-   441	    setState(() {
-   442	      state.plannedTarget = target;
-   443	    });
-   444	  }
-   445	
-   446	  void cancelPlannedTarget() {
-   447	    setState(() {
-   448	      state.plannedTarget = null;
-   449	    });
-   450	  }
-   451	
-   452	  Future<void> activatePlannedTarget({
-   453	    required double magneticDeclination,
-   454	    required void Function(Map<String, double> targetGeo) onActivate,
-   455	  }) async {
-   456	    final planned = state.plannedTarget;
-   457	    if (planned == null) return;
-   458	
-   459	    final project = state.project;
-   460	    if (project == null) return;
-   461	
-   462	    if (planned.latitude == null || planned.longitude == null) {
-   463	      _showSnackBar('Координаты цели не определены — добавьте привязку');
-   464	      return;
-   465	    }
-   466	
-   467	    // Старую активную → passed
-   468	    final updatedTargets = project.targets.map((t) {
-   469	      if (t.status == MapTargetStatus.active) {
-   470	        return MapTarget(
-   471	          id: t.id,
-   472	          imageX: t.imageX,
-   473	          imageY: t.imageY,
-   474	          latitude: t.latitude,
-   475	          longitude: t.longitude,
-   476	          status: MapTargetStatus.passed,
-   477	          createdAt: t.createdAt,
-   478	        );
-   479	      }
-   480	      return t;
-   481	    }).toList();
-   482	
-   483	    final activeTarget = MapTarget(
-   484	      id: planned.id,
-   485	      imageX: planned.imageX,
-   486	      imageY: planned.imageY,
-   487	      latitude: planned.latitude,
-   488	      longitude: planned.longitude,
-   489	      status: MapTargetStatus.active,
-   490	      createdAt: planned.createdAt,
-   491	    );
-   492	
-   493	    updatedTargets.add(activeTarget);
-   494	
-   495	    final updatedProject = project.copyWith(targets: updatedTargets);
-   496	    await storageService.saveProject(updatedProject);
-   497	
-   498	    setState(() {
-   499	      state.project = updatedProject;
-   500	      state.activeTarget = activeTarget;
-   501	      state.plannedTarget = null;
-   502	    });
-   503	
-   504	    // Пересчёт preview
-   505	    _recalculatePreview();
-   506	
-   507	    // ✅ Запускаем ведение через callback
-   508	    onActivate({
-   509	      'latitude': planned.latitude!,
-   510	      'longitude': planned.longitude!,
-   511	    });
-   512	  }
-   513	
-   514	  void markActiveTargetAsPassed() async {
-   515	    final active = state.activeTarget;
-   516	    if (active == null) return;
+   426	  void placePlannedTargetAtCrosshair() {
+   427	    if (!state.canPlaceTarget) return;
+   428	    if (state.crosshairImagePoint == null) return;
+   429	
+   430	    final geo = calibration.imagePointToGeo(
+   431	      imagePoint: state.crosshairImagePoint!,
+   432	      pair: state.workingPair!,
+   433	    );
+   434	
+   435	    final target = MapTarget(
+   436	      id: DateTime.now().millisecondsSinceEpoch.toString(),
+   437	      imageX: state.crosshairImagePoint!.dx,
+   438	      imageY: state.crosshairImagePoint!.dy,
+   439	      latitude: geo?.latitude,
+   440	      longitude: geo?.longitude,
+   441	      status: MapTargetStatus.planned,
+   442	      createdAt: DateTime.now(),
+   443	    );
+   444	
+   445	    setState(() {
+   446	      state.plannedTarget = target;
+   447	    });
+   448	  }
+   449	
+   450	  void cancelPlannedTarget() {
+   451	    setState(() {
+   452	      state.plannedTarget = null;
+   453	    });
+   454	  }
+   455	
+   456	  Future<void> activatePlannedTarget({
+   457	    required double magneticDeclination,
+   458	    required void Function(Map<String, double> targetGeo) onActivate,
+   459	  }) async {
+   460	    final planned = state.plannedTarget;
+   461	    if (planned == null) return;
+   462	
+   463	    final project = state.project;
+   464	    if (project == null) return;
+   465	
+   466	    if (planned.latitude == null || planned.longitude == null) {
+   467	      _showSnackBar('Координаты цели не определены — добавьте привязку');
+   468	      return;
+   469	    }
+   470	
+   471	    // Старую активную → passed
+   472	    final updatedTargets = project.targets.map((t) {
+   473	      if (t.status == MapTargetStatus.active) {
+   474	        return MapTarget(
+   475	          id: t.id,
+   476	          imageX: t.imageX,
+   477	          imageY: t.imageY,
+   478	          latitude: t.latitude,
+   479	          longitude: t.longitude,
+   480	          status: MapTargetStatus.passed,
+   481	          createdAt: t.createdAt,
+   482	        );
+   483	      }
+   484	      return t;
+   485	    }).toList();
+   486	
+   487	    final activeTarget = MapTarget(
+   488	      id: planned.id,
+   489	      imageX: planned.imageX,
+   490	      imageY: planned.imageY,
+   491	      latitude: planned.latitude,
+   492	      longitude: planned.longitude,
+   493	      status: MapTargetStatus.active,
+   494	      createdAt: planned.createdAt,
+   495	    );
+   496	
+   497	    updatedTargets.add(activeTarget);
+   498	
+   499	    final updatedProject = project.copyWith(targets: updatedTargets);
+   500	    await storageService.saveProject(updatedProject);
+   501	
+   502	    setState(() {
+   503	      state.project = updatedProject;
+   504	      state.activeTarget = activeTarget;
+   505	      state.plannedTarget = null;
+   506	    });
+   507	
+   508	    // Пересчёт preview
+   509	    _recalculatePreview();
+   510	
+   511	    // ✅ Запускаем ведение через callback
+   512	    onActivate({
+   513	      'latitude': planned.latitude!,
+   514	      'longitude': planned.longitude!,
+   515	    });
+   516	  }
    517	
-   518	    final project = state.project;
-   519	    if (project == null) return;
-   520	
-   521	    final updatedTargets = project.targets.map((t) {
-   522	      if (t.status == MapTargetStatus.active) {
-   523	        return MapTarget(
-   524	          id: t.id,
-   525	          imageX: t.imageX,
-   526	          imageY: t.imageY,
-   527	          latitude: t.latitude,
-   528	          longitude: t.longitude,
-   529	          status: MapTargetStatus.passed,
-   530	          createdAt: t.createdAt,
-   531	        );
-   532	      }
-   533	      return t;
-   534	    }).toList();
-   535	
-   536	    final updatedProject = project.copyWith(targets: updatedTargets);
-   537	    await storageService.saveProject(updatedProject);
-   538	
-   539	    setState(() {
-   540	      state.project = updatedProject;
-   541	      state.activeTarget = null;
-   542	    });
-   543	  }
-   544	
-   545	  // ---------------------------------------------------------
-   546	  // Пересчёты
-   547	  // ---------------------------------------------------------
+   518	  void markActiveTargetAsPassed() async {
+   519	    final active = state.activeTarget;
+   520	    if (active == null) return;
+   521	
+   522	    final project = state.project;
+   523	    if (project == null) return;
+   524	
+   525	    final updatedTargets = project.targets.map((t) {
+   526	      if (t.status == MapTargetStatus.active) {
+   527	        return MapTarget(
+   528	          id: t.id,
+   529	          imageX: t.imageX,
+   530	          imageY: t.imageY,
+   531	          latitude: t.latitude,
+   532	          longitude: t.longitude,
+   533	          status: MapTargetStatus.passed,
+   534	          createdAt: t.createdAt,
+   535	        );
+   536	      }
+   537	      return t;
+   538	    }).toList();
+   539	
+   540	    final updatedProject = project.copyWith(targets: updatedTargets);
+   541	    await storageService.saveProject(updatedProject);
+   542	
+   543	    setState(() {
+   544	      state.project = updatedProject;
+   545	      state.activeTarget = null;
+   546	    });
+   547	  }
    548	
-   549	  void _recalculateWorkingPair() {
-   550	    final anchors = state.project?.anchors ?? [];
-   551	    setState(() {
-   552	      state.workingPair = calibration.selectWorkingPair(anchors);
-   553	    });
-   554	  }
-   555	
-   556	  void _recalculateCanPlaceTarget() {
-   557	    setState(() {
-   558	      state.canPlaceTarget = state.workingPair != null;
-   559	    });
-   560	  }
-   561	
-   562	  void _recalculateUserImagePoint() {
-   563	    final gps = _lastGpsData;
-   564	    if (gps?.latitude == null || state.workingPair == null) return;
+   549	  // ---------------------------------------------------------
+   550	  // Пересчёты
+   551	  // ---------------------------------------------------------
+   552	
+   553	  void _recalculateWorkingPair() {
+   554	    final anchors = state.project?.anchors ?? [];
+   555	    setState(() {
+   556	      state.workingPair = calibration.selectWorkingPair(anchors);
+   557	    });
+   558	  }
+   559	
+   560	  void _recalculateCanPlaceTarget() {
+   561	    setState(() {
+   562	      state.canPlaceTarget = state.workingPair != null;
+   563	    });
+   564	  }
    565	
-   566	    final imagePoint = calibration.geoToImagePoint(
-   567	      latitude: gps!.latitude!,
-   568	      longitude: gps.longitude!,
-   569	      pair: state.workingPair!,
-   570	    );
-   571	    if (imagePoint == null) return;
-   572	
-   573	    setState(() {
-   574	      state.currentUserImagePoint = imagePoint;
-   575	    });
-   576	    _recalculateUserScreenPoint();
-   577	    _recalculatePreview();
-   578	  }
-   579	
-   580	  void _recalculateUserScreenPoint() {
-   581	    final imagePoint = state.currentUserImagePoint;
-   582	    if (imagePoint == null) return;
+   566	  void _recalculateUserImagePoint() {
+   567	    final gps = _lastGpsData;
+   568	    if (gps?.latitude == null || state.workingPair == null) return;
+   569	
+   570	    final imagePoint = calibration.geoToImagePoint(
+   571	      latitude: gps!.latitude!,
+   572	      longitude: gps.longitude!,
+   573	      pair: state.workingPair!,
+   574	    );
+   575	    if (imagePoint == null) return;
+   576	
+   577	    setState(() {
+   578	      state.currentUserImagePoint = imagePoint;
+   579	    });
+   580	    _recalculateUserScreenPoint();
+   581	    _recalculatePreview();
+   582	  }
    583	
-   584	    setState(() {
-   585	      state.currentUserScreenPoint = imageToScreen(imagePoint);
-   586	    });
-   587	  }
-   588	
-   589	  /// Пересчёт preview: дистанция и азимут от пользователя до активной цели
-   590	  void _recalculatePreview() {
-   591	    final gps = _lastGpsData;
-   592	    final active = state.activeTarget;
-   593	
-   594	    if (gps?.latitude == null || active?.latitude == null) {
-   595	      setState(() {
-   596	        state.previewDistanceMeters = null;
-   597	        state.previewBearingDegrees = null;
-   598	      });
-   599	      return;
-   600	    }
-   601	
-   602	    final bd = calibration.bearingAndDistance(
-   603	      fromLat: gps!.latitude!,
-   604	      fromLon: gps.longitude!,
-   605	      toLat: active!.latitude!,
-   606	      toLon: active.longitude!,
-   607	      magneticDeclination: 0, // передаётся через onActivate
-   608	    );
-   609	
-   610	    setState(() {
-   611	      state.previewDistanceMeters = bd.distanceMeters;
-   612	      state.previewBearingDegrees = bd.magneticBearing;
-   613	    });
-   614	  }
-   615	
-   616	  void recalculateTargetsAfterNewAnchor() {
-   617	    final project = state.project;
-   618	    final pair = state.workingPair;
-   619	    if (project == null || pair == null) return;
-   620	
-   621	    final updatedTargets = project.targets.map((t) {
-   622	      final geo = calibration.imagePointToGeo(
-   623	        imagePoint: Offset(t.imageX, t.imageY),
-   624	        pair: pair,
-   625	      );
-   626	      if (geo == null) return t;
-   627	      return MapTarget(
-   628	        id: t.id,
-   629	        imageX: t.imageX,
-   630	        imageY: t.imageY,
-   631	        latitude: geo.latitude,
-   632	        longitude: geo.longitude,
-   633	        status: t.status,
-   634	        createdAt: t.createdAt,
-   635	      );
-   636	    }).toList();
-   637	
-   638	    final updatedProject = project.copyWith(targets: updatedTargets);
-   639	    storageService.saveProject(updatedProject);
-   640	
-   641	    setState(() {
-   642	      state.project = updatedProject;
-   643	      state.activeTarget = updatedTargets
-   644	          .where((t) => t.status == MapTargetStatus.active)
-   645	          .firstOrNull;
-   646	    });
-   647	  }
-   648	
-   649	  // ---------------------------------------------------------
-   650	  // Follow mode
-   651	  // ---------------------------------------------------------
+   584	  void _recalculateUserScreenPoint() {
+   585	    final imagePoint = state.currentUserImagePoint;
+   586	    if (imagePoint == null) return;
+   587	
+   588	    setState(() {
+   589	      state.currentUserScreenPoint = imageToScreen(imagePoint);
+   590	    });
+   591	  }
+   592	
+   593	  /// Пересчёт preview: дистанция и азимут от пользователя до активной цели
+   594	  void _recalculatePreview() {
+   595	    final gps = _lastGpsData;
+   596	    final active = state.activeTarget;
+   597	
+   598	    if (gps?.latitude == null || active?.latitude == null) {
+   599	      setState(() {
+   600	        state.previewDistanceMeters = null;
+   601	        state.previewBearingDegrees = null;
+   602	      });
+   603	      return;
+   604	    }
+   605	
+   606	    final bd = calibration.bearingAndDistance(
+   607	      fromLat: gps!.latitude!,
+   608	      fromLon: gps.longitude!,
+   609	      toLat: active!.latitude!,
+   610	      toLon: active.longitude!,
+   611	      magneticDeclination: 0, // передаётся через onActivate
+   612	    );
+   613	
+   614	    setState(() {
+   615	      state.previewDistanceMeters = bd.distanceMeters;
+   616	      state.previewBearingDegrees = bd.magneticBearing;
+   617	    });
+   618	  }
+   619	
+   620	  void recalculateTargetsAfterNewAnchor() {
+   621	    final project = state.project;
+   622	    final pair = state.workingPair;
+   623	    if (project == null || pair == null) return;
+   624	
+   625	    final updatedTargets = project.targets.map((t) {
+   626	      final geo = calibration.imagePointToGeo(
+   627	        imagePoint: Offset(t.imageX, t.imageY),
+   628	        pair: pair,
+   629	      );
+   630	      if (geo == null) return t;
+   631	      return MapTarget(
+   632	        id: t.id,
+   633	        imageX: t.imageX,
+   634	        imageY: t.imageY,
+   635	        latitude: geo.latitude,
+   636	        longitude: geo.longitude,
+   637	        status: t.status,
+   638	        createdAt: t.createdAt,
+   639	      );
+   640	    }).toList();
+   641	
+   642	    final updatedProject = project.copyWith(targets: updatedTargets);
+   643	    storageService.saveProject(updatedProject);
+   644	
+   645	    setState(() {
+   646	      state.project = updatedProject;
+   647	      state.activeTarget = updatedTargets
+   648	          .where((t) => t.status == MapTargetStatus.active)
+   649	          .firstOrNull;
+   650	    });
+   651	  }
    652	
-   653	  void enableFollowMode() {
-   654	    state.followRestoreTimer?.cancel();
-   655	    setState(() => state.followMode = true);
-   656	  }
-   657	
-   658	  void _disableFollowModeTemporarily() {
-   659	    state.followRestoreTimer?.cancel();
-   660	    setState(() => state.followMode = false);
+   653	  // ---------------------------------------------------------
+   654	  // Follow mode
+   655	  // ---------------------------------------------------------
+   656	
+   657	  void enableFollowMode() {
+   658	    state.followRestoreTimer?.cancel();
+   659	    setState(() => state.followMode = true);
+   660	  }
    661	
-   662	    state.followRestoreTimer = Timer(const Duration(seconds: 15), () {
-   663	      if (!state.isDisposed && mounted) {
-   664	        setState(() => state.followMode = true);
-   665	        _centerMapOnUser();
-   666	      }
-   667	    });
-   668	  }
-   669	
-   670	  void _centerMapOnUser() {
-   671	    final imagePoint = state.currentUserImagePoint;
-   672	    if (imagePoint == null || state.viewportSize == null) return;
+   662	  void _disableFollowModeTemporarily() {
+   663	    state.followRestoreTimer?.cancel();
+   664	    setState(() => state.followMode = false);
+   665	
+   666	    state.followRestoreTimer = Timer(const Duration(seconds: 15), () {
+   667	      if (!state.isDisposed && mounted) {
+   668	        setState(() => state.followMode = true);
+   669	        _centerMapOnUser();
+   670	      }
+   671	    });
+   672	  }
    673	
-   674	    final crosshairScreen = _getCrosshairScreenPoint();
-   675	    final vp = state.viewportSize!;
-   676	    final vpCenter = Offset(vp.width / 2, vp.height / 2);
-   677	    final targetTranslation = crosshairScreen - vpCenter;
-   678	
-   679	    final t = state.transformState;
-   680	    final imageSize = state.imageSize;
-   681	    if (imageSize == null) return;
+   674	  void _centerMapOnUser() {
+   675	    final imagePoint = state.currentUserImagePoint;
+   676	    if (imagePoint == null || state.viewportSize == null) return;
+   677	
+   678	    final crosshairScreen = _getCrosshairScreenPoint();
+   679	    final vp = state.viewportSize!;
+   680	    final vpCenter = Offset(vp.width / 2, vp.height / 2);
+   681	    final targetTranslation = crosshairScreen - vpCenter;
    682	
-   683	    final local =
-   684	        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
-   685	    final scaled = local * t.scale;
+   683	    final t = state.transformState;
+   684	    final imageSize = state.imageSize;
+   685	    if (imageSize == null) return;
    686	
-   687	    final angle = t.rotationRadians;
-   688	    final cos = math.cos(angle);
-   689	    final sin = math.sin(angle);
-   690	    final rotated = Offset(
-   691	      scaled.dx * cos - scaled.dy * sin,
-   692	      scaled.dx * sin + scaled.dy * cos,
-   693	    );
-   694	
-   695	    final newTranslation = targetTranslation - rotated;
-   696	
-   697	    setState(() {
-   698	      state.transformState = MapTransformState(
-   699	        scale: t.scale,
-   700	        rotationRadians: t.rotationRadians,
-   701	        translation: newTranslation,
-   702	      );
-   703	    });
-   704	
-   705	    _recalculateUserScreenPoint();
-   706	  }
-   707	
-   708	  // ---------------------------------------------------------
-   709	  // GPS подписка
-   710	  // ---------------------------------------------------------
+   687	    final local =
+   688	        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+   689	    final scaled = local * t.scale;
+   690	
+   691	    final angle = t.rotationRadians;
+   692	    final cos = math.cos(angle);
+   693	    final sin = math.sin(angle);
+   694	    final rotated = Offset(
+   695	      scaled.dx * cos - scaled.dy * sin,
+   696	      scaled.dx * sin + scaled.dy * cos,
+   697	    );
+   698	
+   699	    final newTranslation = targetTranslation - rotated;
+   700	
+   701	    setState(() {
+   702	      state.transformState = MapTransformState(
+   703	        scale: t.scale,
+   704	        rotationRadians: t.rotationRadians,
+   705	        translation: newTranslation,
+   706	      );
+   707	    });
+   708	
+   709	    _recalculateUserScreenPoint();
+   710	  }
    711	
-   712	  void _startGpsSubscription() {
-   713	    _gpsSub = sensorService.subscribeToGps(
-   714	      intervalSeconds: 1,
-   715	      onData: (gpsData) {
-   716	        _lastGpsData = gpsData;
-   717	        if (!mounted) return;
-   718	        
-   719	        if (state.followMode) {
-   720	          _recalculateUserImagePoint();
-   721	          _centerMapOnUser();
-   722	        } else {
-   723	          _recalculateUserImagePoint();
-   724	        }
-   725	      },
-   726	    );
-   727	  }
-   728	
-   729	  GpsData? _lastGpsData;
-   730	
-   731	  // ---------------------------------------------------------
-   732	  // Вспомогательные
-   733	  // ---------------------------------------------------------
-   734	
-   735	  void _showSnackBar(String message) {
-   736	    if (!mounted) return;
-   737	    ScaffoldMessenger.of(hostState.context).showSnackBar(
-   738	      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-   739	    );
-   740	  }
-   741	}
+   712	  // ---------------------------------------------------------
+   713	  // GPS подписка
+   714	  // ---------------------------------------------------------
+   715	
+   716	  void _startGpsSubscription() {
+   717	    _gpsSub = sensorService.subscribeToGps(
+   718	      intervalSeconds: 1,
+   719	      onData: (gpsData) {
+   720	        _lastGpsData = gpsData;
+   721	        if (!mounted) return;
+   722	
+   723	        // Вычисляем азимут, если есть предыдущая точка
+   724	        if (_previousGpsData != null) {
+   725	          final speedKmh = (gpsData.speed ?? 0) * 3.6;
+   726	          if (speedKmh > _sensorSettings.autoSwitchSpeedKmh) {
+   727	            final bd = calibration.bearingAndDistance(
+   728	              fromLat: _previousGpsData!.latitude!,
+   729	              fromLon: _previousGpsData!.longitude!,
+   730	              toLat: gpsData.latitude!,
+   731	              toLon: gpsData.longitude!,
+   732	              magneticDeclination: 0, // Не используется для направления
+   733	            );
+   734	            setState(() {
+   735	              state.heading = bd.magneticBearing;
+   736	            });
+   737	          }
+   738	        }
+   739	        _previousGpsData = gpsData; 
+   740	
+   741	
+   742	        // Обновление позиции
+   743	        if (state.followMode) {
+   744	          _recalculateUserImagePoint();
+   745	          _centerMapOnUser();
+   746	        } else {
+   747	          _recalculateUserImagePoint();
+   748	        }
+   749	      },
+   750	    );
+   751	  }
+   752	
+   753	
+   754	  // ---------------------------------------------------------
+   755	  // Вспомогательные
+   756	  // ---------------------------------------------------------
+   757	
+   758	  void _showSnackBar(String message) {
+   759	    if (!mounted) return;
+   760	    ScaffoldMessenger.of(hostState.context).showSnackBar(
+   761	      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+   762	    );
+   763	  }
+   764	}
+
 === lib/controllers/map_screen_state.dart ===
      1	import 'dart:async';
      2	import 'package:flutter/widgets.dart';
@@ -1681,31 +1705,32 @@
     36	  // Текущая позиция пользователя
     37	  Offset? currentUserImagePoint;
     38	  Offset? currentUserScreenPoint;
-    39	
-    40	  // Предпросмотр расстояния/азимута (до точки под прицелом или до цели)
-    41	  double? previewDistanceMeters;
-    42	  double? previewBearingDegrees;
-    43	
-    44	  // Цели
-    45	  MapTarget? plannedTarget;
-    46	  MapTarget? activeTarget;
-    47	
-    48	  // Таймер восстановления режима сопровождения
-    49	  Timer? followRestoreTimer;
-    50	
-    51	  // Флаг для предотвращения утечек
-    52	  bool isDisposed = false;
-    53	
-    54	  // Удобные геттеры
-    55	
-    56	  List<MapTarget> get passedTargets =>
-    57	      project?.targets
-    58	          .where((t) => t.status == MapTargetStatus.passed)
-    59	          .toList() ??
-    60	      [];
-    61	
-    62	  List<MapTarget> get allTargets => project?.targets ?? [];
-    63	}
+    39	  double? heading; // Азимут
+    40	
+    41	  // Предпросмотр расстояния/азимута (до точки под прицелом или до цели)
+    42	  double? previewDistanceMeters;
+    43	  double? previewBearingDegrees;
+    44	
+    45	  // Цели
+    46	  MapTarget? plannedTarget;
+    47	  MapTarget? activeTarget;
+    48	
+    49	  // Таймер восстановления режима сопровождения
+    50	  Timer? followRestoreTimer;
+    51	
+    52	  // Флаг для предотвращения утечек
+    53	  bool isDisposed = false;
+    54	
+    55	  // Удобные геттеры
+    56	
+    57	  List<MapTarget> get passedTargets =>
+    58	      project?.targets
+    59	          .where((t) => t.status == MapTargetStatus.passed)
+    60	          .toList() ??
+    61	      [];
+    62	
+    63	  List<MapTarget> get allTargets => project?.targets ?? [];
+    64	}
 
 === lib/log_entry.dart ===
      1	// Базовый абстрактный класс для всех записей в журнале
@@ -2592,448 +2617,449 @@
    199	                      : null,
    200	                  previewDistanceMeters: _state.previewDistanceMeters,
    201	                  previewBearingDegrees: _state.previewBearingDegrees,
-   202	                ),
-   203	              ),
-   204	
-   205	              // Слой 3: прицел с зоной двойного тапа
-   206	              Builder(
-   207	                builder: (context) {
-   208	                  final vp = _state.viewportSize;
-   209	                  if (vp == null) return const SizedBox.shrink();
-   210	
-   211	                  final crosshairPosition = _logic.getCrosshairScreenPoint();
-   212	
-   213	                  return Stack(
-   214	                    children: [
-   215	                      Positioned(
-   216	                        left: crosshairPosition.dx - 40,
-   217	                        top: crosshairPosition.dy - 40,
-   218	                        width: 80,
-   219	                        height: 80,
-   220	                        child: GestureDetector(
-   221	                          onDoubleTap: _logic.toggleCrosshairPosition,
-   222	                          child: Container(color: Colors.transparent),
-   223	                        ),
-   224	                      ),
-   225	                      MapCrosshair(inCenter: _state.crosshairInCenter),
-   226	                    ],
-   227	                  );
-   228	                },
-   229	              ),
-   230	
-   231	              // Слой 4: бейдж привязок
-   232	              if (_state.project != null && _state.project!.anchors.isNotEmpty)
-   233	                Positioned(top: 12, right: 12, child: _buildAnchorBadge()),
-   234	
-   235	              // Слой 5: тулбар
-   236	              MapToolbar(
-   237	                onHereNowPressed: _logic.addAnchorFromCurrentGps,
-   238	                onHereFromClipboard: _logic.addAnchorFromClipboard,
-   239	                onTargetPressed: _state.canPlaceTarget
-   240	                    ? (_state.plannedTarget == null
-   241	                          ? _logic.placePlannedTargetAtCrosshair
-   242	                          : () => _logic.activatePlannedTarget(
-   243	                              magneticDeclination: widget.magneticDeclination,
-   244	                              onActivate: (geo) {
-   245	                                widget.onTargetActivated?.call(geo);
-   246	                              },
-   247	                            ))
-   248	                    : null,
-   249	                targetEnabled: _state.canPlaceTarget,
-   250	                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
-   251	              ),
-   252	
-   253	              // Слой 6: кнопки масштаба и поворота
-   254	              MapZoomButtons(
-   255	                visible: _state.imagePath != null && _state.imageSize != null,
-   256	                onZoomIn: _zoomIn,
-   257	                onZoomOut: _zoomOut,
-   258	                rotateMode: _state.rotateMode,
-   259	                onToggleRotateMode: () {
-   260	                  setState(() {
-   261	                    _state.rotateMode = !_state.rotateMode;
-   262	                  });
-   263	                },
-   264	                onResetRotation: _resetRotation,
-   265	              ),
-   266	            ],
-   267	          );
-   268	        },
-   269	      ),
-   270	    );
-   271	  }
-   272	
-   273	  // ---------------------------------------------------------
-   274	  // Кнопки масштаба
-   275	  // ---------------------------------------------------------
-   276	  void _zoomIn() {
-   277	    final current = _state.transformState;
-   278	    final newScale = (current.scale * 1.5).clamp(0.05, 20.0);
-   279	    _scaleAroundCrosshair(current, newScale);
-   280	  }
-   281	
-   282	  void _zoomOut() {
-   283	    final current = _state.transformState;
-   284	    final newScale = (current.scale / 1.5).clamp(0.05, 20.0);
-   285	    _scaleAroundCrosshair(current, newScale);
-   286	  }
-   287	
-   288	  void _scaleAroundCrosshair(MapTransformState current, double newScale) {
-   289	    if (_state.viewportSize == null || _state.imageSize == null) return;
-   290	
-   291	    final pivotScreen = _logic.getCrosshairScreenPoint();
-   292	    final pivotImage = _logic.screenToImage(pivotScreen);
-   293	
-   294	    final tempTransform = MapTransformState(
-   295	      scale: newScale,
-   296	      rotationRadians: current.rotationRadians,
-   297	      translation: current.translation,
-   298	    );
-   299	
-   300	    final oldTransform = _state.transformState;
-   301	    _state.transformState = tempTransform;
-   302	
-   303	    final pivotScreenAfterScale = _logic.imageToScreen(pivotImage);
-   304	
-   305	    _state.transformState = oldTransform;
-   306	
-   307	    final delta = pivotScreen - pivotScreenAfterScale;
-   308	    final newTranslation = current.translation + delta;
-   309	
-   310	    _logic.updateTransform(
-   311	      MapTransformState(
-   312	        scale: newScale,
-   313	        rotationRadians: current.rotationRadians,
-   314	        translation: newTranslation,
-   315	      ),
-   316	    );
-   317	  }
-   318	
-   319	  // ---------------------------------------------------------
-   320	  // Сброс поворота
-   321	  // ---------------------------------------------------------
-   322	  void _resetRotation() {
-   323	    final current = _state.transformState;
-   324	    const newRotation = 0.0;
-   325	
-   326	    if (_state.viewportSize != null && _state.imageSize != null) {
-   327	      final pivotScreen = _logic.getCrosshairScreenPoint();
-   328	      final pivotImage = _logic.screenToImage(pivotScreen);
-   329	
-   330	      final tempTransform = MapTransformState(
-   331	        scale: current.scale,
-   332	        rotationRadians: newRotation,
-   333	        translation: current.translation,
-   334	      );
-   335	
-   336	      final oldTransform = _state.transformState;
-   337	      _state.transformState = tempTransform;
-   338	
-   339	      final pivotScreenAfterReset = _logic.imageToScreen(pivotImage);
-   340	
-   341	      _state.transformState = oldTransform;
-   342	
-   343	      final delta = pivotScreen - pivotScreenAfterReset;
-   344	      final newTranslation = current.translation + delta;
-   345	
-   346	      _logic.updateTransform(
-   347	        MapTransformState(
-   348	          scale: current.scale,
-   349	          rotationRadians: newRotation,
-   350	          translation: newTranslation,
-   351	        ),
-   352	      );
-   353	    } else {
-   354	      _logic.updateTransform(
-   355	        MapTransformState(
-   356	          scale: current.scale,
-   357	          rotationRadians: newRotation,
-   358	          translation: current.translation,
-   359	        ),
-   360	      );
-   361	    }
-   362	  }
-   363	
-   364	  // ---------------------------------------------------------
-   365	  // Жесты:
-   366	  // - 1 палец: панорамирование ИЛИ поворот (в зависимости от rotateMode)
-   367	  // - 2 пальца: масштабирование (вокруг прицела)
-   368	  // - 3+ пальца: вращение (вокруг прицела)
-   369	  // ---------------------------------------------------------
-   370	  void _onScaleStart(ScaleStartDetails details) {
-   371	    _gestureStartTranslation = _state.transformState.translation;
-   372	    _gestureStartScale = _state.transformState.scale;
-   373	    _gestureStartRotation = _state.transformState.rotationRadians;
-   374	    _gestureStartFocalPoint = details.focalPoint;
-   375	
-   376	    // Запоминаем пиксель под прицелом
-   377	    if (_state.viewportSize != null && _state.imageSize != null) {
-   378	      final pivotScreen = _logic.getCrosshairScreenPoint();
-   379	      _gestureStartPivotImage = _logic.screenToImage(pivotScreen);
-   380	    } else {
-   381	      _gestureStartPivotImage = null;
-   382	    }
-   383	
-   384	    // Для вращения
-   385	    _accumulatedRotation = 0.0;
-   386	    if (_state.viewportSize != null && _state.imageSize != null) {
-   387	      final pivotScreen = _logic.getCrosshairScreenPoint();
-   388	      final startVector = _gestureStartFocalPoint - pivotScreen;
-   389	      _lastAngle = math.atan2(startVector.dy, startVector.dx);
-   390	    } else {
-   391	      _lastAngle = 0.0;
-   392	    }
-   393	  }
-   394	
-   395	  void _onScaleUpdate(ScaleUpdateDetails details) {
-   396	    if (_state.viewportSize == null || _state.imageSize == null) return;
-   397	
-   398	    final pointerCount = details.pointerCount;
-   399	
-   400	    // --------------------------------------------------------
-   401	    // 1 палец
-   402	    // --------------------------------------------------------
-   403	    if (pointerCount == 1) {
-   404	      if (_state.rotateMode) {
-   405	        // Вращение одним пальцем вокруг прицела
-   406	        final currentFocalPoint = details.focalPoint;
-   407	        final pivotScreen = _logic.getCrosshairScreenPoint();
-   408	
-   409	        final currentVector = currentFocalPoint - pivotScreen;
-   410	        final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
-   411	
-   412	        double deltaAngle = currentAngle - _lastAngle;
-   413	        if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
-   414	        if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
-   415	
-   416	        _accumulatedRotation += deltaAngle;
-   417	        _lastAngle = currentAngle;
-   418	
-   419	        const sensitivity = 0.8;
-   420	        final newRotation = _gestureStartRotation + _accumulatedRotation * sensitivity;
-   421	
-   422	        if (_gestureStartPivotImage != null) {
-   423	          final tempTransform = MapTransformState(
-   424	            scale: _state.transformState.scale,
-   425	            rotationRadians: newRotation,
-   426	            translation: _gestureStartTranslation,
-   427	          );
-   428	
-   429	          final oldTransform = _state.transformState;
-   430	          _state.transformState = tempTransform;
-   431	
-   432	          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
-   433	
-   434	          _state.transformState = oldTransform;
-   435	
-   436	          final delta = pivotScreen - pivotScreenAfterRotate;
-   437	          final newTranslation = _gestureStartTranslation + delta;
-   438	
-   439	          _logic.updateTransform(
-   440	            MapTransformState(
-   441	              scale: _state.transformState.scale,
-   442	              rotationRadians: newRotation,
-   443	              translation: newTranslation,
-   444	            ),
-   445	          );
-   446	        } else {
-   447	          _logic.updateTransform(
-   448	            MapTransformState(
-   449	              scale: _state.transformState.scale,
-   450	              rotationRadians: newRotation,
-   451	              translation: _state.transformState.translation,
-   452	            ),
-   453	          );
-   454	        }
-   455	      } else {
-   456	        // Панорамирование
-   457	        final delta = details.focalPoint - _gestureStartFocalPoint;
-   458	        final newTranslation = _gestureStartTranslation + delta;
-   459	
-   460	        _logic.updateTransform(
-   461	          MapTransformState(
-   462	            scale: _state.transformState.scale,
-   463	            rotationRadians: _state.transformState.rotationRadians,
-   464	            translation: newTranslation,
-   465	          ),
-   466	        );
-   467	      }
-   468	      return;
-   469	    }
-   470	
-   471	    // --------------------------------------------------------
-   472	    // 2 пальца — умное масштабирование/вращение
-   473	    // --------------------------------------------------------
-   474	    if (pointerCount == 2) {
-   475	      final scaleChange = (details.scale - 1.0).abs();
-   476	      final rotationChange = details.rotation.abs();
-   477	      
-   478	      // Определяем, что преобладает
-   479	      if (scaleChange > rotationChange) {
-   480	        // ---------- МАСШТАБИРОВАНИЕ ----------
-   481	        final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
-   482	        
-   483	        if (_gestureStartPivotImage != null) {
-   484	          final pivotScreen = _logic.getCrosshairScreenPoint();
-   485	          
-   486	          final tempTransform = MapTransformState(
-   487	            scale: newScale,
-   488	            rotationRadians: _state.transformState.rotationRadians,
-   489	            translation: _gestureStartTranslation,
-   490	          );
-   491	          
-   492	          final oldTransform = _state.transformState;
-   493	          _state.transformState = tempTransform;
-   494	          
-   495	          final pivotScreenAfterScale = _logic.imageToScreen(_gestureStartPivotImage!);
-   496	          
-   497	          _state.transformState = oldTransform;
-   498	          
-   499	          final delta = pivotScreen - pivotScreenAfterScale;
-   500	          final newTranslation = _gestureStartTranslation + delta;
-   501	          
-   502	          _logic.updateTransform(
-   503	            MapTransformState(
-   504	              scale: newScale,
-   505	              rotationRadians: _state.transformState.rotationRadians,
-   506	              translation: newTranslation,
-   507	            ),
-   508	          );
-   509	        } else {
-   510	          _logic.updateTransform(
-   511	            MapTransformState(
-   512	              scale: newScale,
-   513	              rotationRadians: _state.transformState.rotationRadians,
-   514	              translation: _gestureStartTranslation,
-   515	            ),
-   516	          );
-   517	        }
-   518	      } else {
-   519	        // ---------- ВРАЩЕНИЕ ----------
-   520	        final pivotScreen = _logic.getCrosshairScreenPoint();
-   521	        
-   522	        // Накопление угла для плавного вращения
-   523	        final currentRotation = _gestureStartRotation + details.rotation;
-   524	        
-   525	        if (_gestureStartPivotImage != null) {
-   526	          final tempTransform = MapTransformState(
-   527	            scale: _state.transformState.scale,
-   528	            rotationRadians: currentRotation,
-   529	            translation: _gestureStartTranslation,
-   530	          );
-   531	          
-   532	          final oldTransform = _state.transformState;
-   533	          _state.transformState = tempTransform;
-   534	          
-   535	          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
-   536	          
-   537	          _state.transformState = oldTransform;
-   538	          
-   539	          final delta = pivotScreen - pivotScreenAfterRotate;
-   540	          final newTranslation = _gestureStartTranslation + delta;
-   541	          
-   542	          _logic.updateTransform(
-   543	            MapTransformState(
-   544	              scale: _state.transformState.scale,
-   545	              rotationRadians: currentRotation,
-   546	              translation: newTranslation,
-   547	            ),
-   548	          );
-   549	        } else {
-   550	          _logic.updateTransform(
-   551	            MapTransformState(
-   552	              scale: _state.transformState.scale,
-   553	              rotationRadians: currentRotation,
-   554	              translation: _state.transformState.translation,
-   555	            ),
-   556	          );
-   557	        }
-   558	      }
-   559	      return;
-   560	    }
-   561	
-   562	    // --------------------------------------------------------
-   563	    // 3 и более пальцев — вращение вокруг прицела
-   564	    // --------------------------------------------------------
-   565	    if (pointerCount >= 3) {
-   566	      final currentFocalPoint = details.focalPoint;
-   567	      final pivotScreen = _logic.getCrosshairScreenPoint();
-   568	
-   569	      final startVector = _gestureStartFocalPoint - pivotScreen;
-   570	      final currentVector = currentFocalPoint - pivotScreen;
-   571	
-   572	      final startAngle = math.atan2(startVector.dy, startVector.dx);
-   573	      final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
-   574	
-   575	      double deltaAngle = currentAngle - startAngle;
-   576	      if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
-   577	      if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
-   578	
-   579	      const sensitivity = 0.8;
-   580	      final newRotation = _gestureStartRotation + deltaAngle * sensitivity;
-   581	
-   582	      if (_gestureStartPivotImage != null) {
-   583	        final tempTransform = MapTransformState(
-   584	          scale: _state.transformState.scale,
-   585	          rotationRadians: newRotation,
-   586	          translation: _gestureStartTranslation,
-   587	        );
-   588	
-   589	        final oldTransform = _state.transformState;
-   590	        _state.transformState = tempTransform;
-   591	
-   592	        final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
-   593	
-   594	        _state.transformState = oldTransform;
-   595	
-   596	        final delta = pivotScreen - pivotScreenAfterRotate;
-   597	        final newTranslation = _gestureStartTranslation + delta;
-   598	
-   599	        _logic.updateTransform(
-   600	          MapTransformState(
-   601	            scale: _state.transformState.scale,
-   602	            rotationRadians: newRotation,
-   603	            translation: newTranslation,
-   604	          ),
-   605	        );
-   606	      } else {
-   607	        _logic.updateTransform(
-   608	          MapTransformState(
-   609	            scale: _state.transformState.scale,
-   610	            rotationRadians: newRotation,
-   611	            translation: _state.transformState.translation,
-   612	          ),
-   613	        );
-   614	      }
-   615	      return;
-   616	    }
-   617	  }
-   618	
-   619	  Widget _buildAnchorBadge() {
-   620	    final count = _state.project!.anchors.length;
-   621	    final hasWorkingPair = _state.workingPair != null;
-   622	
-   623	    return Container(
-   624	      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-   625	      decoration: BoxDecoration(
-   626	        color: hasWorkingPair
-   627	            ? Colors.green.withAlpha(200)
-   628	            : Colors.orange.withAlpha(200),
-   629	        borderRadius: BorderRadius.circular(20),
-   630	      ),
-   631	      child: Text(
-   632	        hasWorkingPair
-   633	            ? 'Карта привязана ($count)'
-   634	            : 'Привязок: $count (нужно ≥2, расстояние ≥50м)',
-   635	        style: const TextStyle(
-   636	          color: Colors.white,
-   637	          fontSize: 11,
-   638	          fontWeight: FontWeight.bold,
-   639	        ),
-   640	      ),
-   641	    );
-   642	  }
-   643	}
+   202	                  heading: _state.heading,
+   203	                ),
+   204	              ),
+   205	
+   206	              // Слой 3: прицел с зоной двойного тапа
+   207	              Builder(
+   208	                builder: (context) {
+   209	                  final vp = _state.viewportSize;
+   210	                  if (vp == null) return const SizedBox.shrink();
+   211	
+   212	                  final crosshairPosition = _logic.getCrosshairScreenPoint();
+   213	
+   214	                  return Stack(
+   215	                    children: [
+   216	                      Positioned(
+   217	                        left: crosshairPosition.dx - 40,
+   218	                        top: crosshairPosition.dy - 40,
+   219	                        width: 80,
+   220	                        height: 80,
+   221	                        child: GestureDetector(
+   222	                          onDoubleTap: _logic.toggleCrosshairPosition,
+   223	                          child: Container(color: Colors.transparent),
+   224	                        ),
+   225	                      ),
+   226	                      MapCrosshair(inCenter: _state.crosshairInCenter),
+   227	                    ],
+   228	                  );
+   229	                },
+   230	              ),
+   231	
+   232	              // Слой 4: бейдж привязок
+   233	              if (_state.project != null && _state.project!.anchors.isNotEmpty)
+   234	                Positioned(top: 12, right: 12, child: _buildAnchorBadge()),
+   235	
+   236	              // Слой 5: тулбар
+   237	              MapToolbar(
+   238	                onHereNowPressed: _logic.addAnchorFromCurrentGps,
+   239	                onHereFromClipboard: _logic.addAnchorFromClipboard,
+   240	                onTargetPressed: _state.canPlaceTarget
+   241	                    ? (_state.plannedTarget == null
+   242	                          ? _logic.placePlannedTargetAtCrosshair
+   243	                          : () => _logic.activatePlannedTarget(
+   244	                              magneticDeclination: widget.magneticDeclination,
+   245	                              onActivate: (geo) {
+   246	                                widget.onTargetActivated?.call(geo);
+   247	                              },
+   248	                            ))
+   249	                    : null,
+   250	                targetEnabled: _state.canPlaceTarget,
+   251	                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
+   252	              ),
+   253	
+   254	              // Слой 6: кнопки масштаба и поворота
+   255	              MapZoomButtons(
+   256	                visible: _state.imagePath != null && _state.imageSize != null,
+   257	                onZoomIn: _zoomIn,
+   258	                onZoomOut: _zoomOut,
+   259	                rotateMode: _state.rotateMode,
+   260	                onToggleRotateMode: () {
+   261	                  setState(() {
+   262	                    _state.rotateMode = !_state.rotateMode;
+   263	                  });
+   264	                },
+   265	                onResetRotation: _resetRotation,
+   266	              ),
+   267	            ],
+   268	          );
+   269	        },
+   270	      ),
+   271	    );
+   272	  }
+   273	
+   274	  // ---------------------------------------------------------
+   275	  // Кнопки масштаба
+   276	  // ---------------------------------------------------------
+   277	  void _zoomIn() {
+   278	    final current = _state.transformState;
+   279	    final newScale = (current.scale * 1.5).clamp(0.05, 20.0);
+   280	    _scaleAroundCrosshair(current, newScale);
+   281	  }
+   282	
+   283	  void _zoomOut() {
+   284	    final current = _state.transformState;
+   285	    final newScale = (current.scale / 1.5).clamp(0.05, 20.0);
+   286	    _scaleAroundCrosshair(current, newScale);
+   287	  }
+   288	
+   289	  void _scaleAroundCrosshair(MapTransformState current, double newScale) {
+   290	    if (_state.viewportSize == null || _state.imageSize == null) return;
+   291	
+   292	    final pivotScreen = _logic.getCrosshairScreenPoint();
+   293	    final pivotImage = _logic.screenToImage(pivotScreen);
+   294	
+   295	    final tempTransform = MapTransformState(
+   296	      scale: newScale,
+   297	      rotationRadians: current.rotationRadians,
+   298	      translation: current.translation,
+   299	    );
+   300	
+   301	    final oldTransform = _state.transformState;
+   302	    _state.transformState = tempTransform;
+   303	
+   304	    final pivotScreenAfterScale = _logic.imageToScreen(pivotImage);
+   305	
+   306	    _state.transformState = oldTransform;
+   307	
+   308	    final delta = pivotScreen - pivotScreenAfterScale;
+   309	    final newTranslation = current.translation + delta;
+   310	
+   311	    _logic.updateTransform(
+   312	      MapTransformState(
+   313	        scale: newScale,
+   314	        rotationRadians: current.rotationRadians,
+   315	        translation: newTranslation,
+   316	      ),
+   317	    );
+   318	  }
+   319	
+   320	  // ---------------------------------------------------------
+   321	  // Сброс поворота
+   322	  // ---------------------------------------------------------
+   323	  void _resetRotation() {
+   324	    final current = _state.transformState;
+   325	    const newRotation = 0.0;
+   326	
+   327	    if (_state.viewportSize != null && _state.imageSize != null) {
+   328	      final pivotScreen = _logic.getCrosshairScreenPoint();
+   329	      final pivotImage = _logic.screenToImage(pivotScreen);
+   330	
+   331	      final tempTransform = MapTransformState(
+   332	        scale: current.scale,
+   333	        rotationRadians: newRotation,
+   334	        translation: current.translation,
+   335	      );
+   336	
+   337	      final oldTransform = _state.transformState;
+   338	      _state.transformState = tempTransform;
+   339	
+   340	      final pivotScreenAfterReset = _logic.imageToScreen(pivotImage);
+   341	
+   342	      _state.transformState = oldTransform;
+   343	
+   344	      final delta = pivotScreen - pivotScreenAfterReset;
+   345	      final newTranslation = current.translation + delta;
+   346	
+   347	      _logic.updateTransform(
+   348	        MapTransformState(
+   349	          scale: current.scale,
+   350	          rotationRadians: newRotation,
+   351	          translation: newTranslation,
+   352	        ),
+   353	      );
+   354	    } else {
+   355	      _logic.updateTransform(
+   356	        MapTransformState(
+   357	          scale: current.scale,
+   358	          rotationRadians: newRotation,
+   359	          translation: current.translation,
+   360	        ),
+   361	      );
+   362	    }
+   363	  }
+   364	
+   365	  // ---------------------------------------------------------
+   366	  // Жесты:
+   367	  // - 1 палец: панорамирование ИЛИ поворот (в зависимости от rotateMode)
+   368	  // - 2 пальца: масштабирование (вокруг прицела)
+   369	  // - 3+ пальца: вращение (вокруг прицела)
+   370	  // ---------------------------------------------------------
+   371	  void _onScaleStart(ScaleStartDetails details) {
+   372	    _gestureStartTranslation = _state.transformState.translation;
+   373	    _gestureStartScale = _state.transformState.scale;
+   374	    _gestureStartRotation = _state.transformState.rotationRadians;
+   375	    _gestureStartFocalPoint = details.focalPoint;
+   376	
+   377	    // Запоминаем пиксель под прицелом
+   378	    if (_state.viewportSize != null && _state.imageSize != null) {
+   379	      final pivotScreen = _logic.getCrosshairScreenPoint();
+   380	      _gestureStartPivotImage = _logic.screenToImage(pivotScreen);
+   381	    } else {
+   382	      _gestureStartPivotImage = null;
+   383	    }
+   384	
+   385	    // Для вращения
+   386	    _accumulatedRotation = 0.0;
+   387	    if (_state.viewportSize != null && _state.imageSize != null) {
+   388	      final pivotScreen = _logic.getCrosshairScreenPoint();
+   389	      final startVector = _gestureStartFocalPoint - pivotScreen;
+   390	      _lastAngle = math.atan2(startVector.dy, startVector.dx);
+   391	    } else {
+   392	      _lastAngle = 0.0;
+   393	    }
+   394	  }
+   395	
+   396	  void _onScaleUpdate(ScaleUpdateDetails details) {
+   397	    if (_state.viewportSize == null || _state.imageSize == null) return;
+   398	
+   399	    final pointerCount = details.pointerCount;
+   400	
+   401	    // --------------------------------------------------------
+   402	    // 1 палец
+   403	    // --------------------------------------------------------
+   404	    if (pointerCount == 1) {
+   405	      if (_state.rotateMode) {
+   406	        // Вращение одним пальцем вокруг прицела
+   407	        final currentFocalPoint = details.focalPoint;
+   408	        final pivotScreen = _logic.getCrosshairScreenPoint();
+   409	
+   410	        final currentVector = currentFocalPoint - pivotScreen;
+   411	        final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
+   412	
+   413	        double deltaAngle = currentAngle - _lastAngle;
+   414	        if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
+   415	        if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
+   416	
+   417	        _accumulatedRotation += deltaAngle;
+   418	        _lastAngle = currentAngle;
+   419	
+   420	        const sensitivity = 0.8;
+   421	        final newRotation = _gestureStartRotation + _accumulatedRotation * sensitivity;
+   422	
+   423	        if (_gestureStartPivotImage != null) {
+   424	          final tempTransform = MapTransformState(
+   425	            scale: _state.transformState.scale,
+   426	            rotationRadians: newRotation,
+   427	            translation: _gestureStartTranslation,
+   428	          );
+   429	
+   430	          final oldTransform = _state.transformState;
+   431	          _state.transformState = tempTransform;
+   432	
+   433	          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+   434	
+   435	          _state.transformState = oldTransform;
+   436	
+   437	          final delta = pivotScreen - pivotScreenAfterRotate;
+   438	          final newTranslation = _gestureStartTranslation + delta;
+   439	
+   440	          _logic.updateTransform(
+   441	            MapTransformState(
+   442	              scale: _state.transformState.scale,
+   443	              rotationRadians: newRotation,
+   444	              translation: newTranslation,
+   445	            ),
+   446	          );
+   447	        } else {
+   448	          _logic.updateTransform(
+   449	            MapTransformState(
+   450	              scale: _state.transformState.scale,
+   451	              rotationRadians: newRotation,
+   452	              translation: _state.transformState.translation,
+   453	            ),
+   454	          );
+   455	        }
+   456	      } else {
+   457	        // Панорамирование
+   458	        final delta = details.focalPoint - _gestureStartFocalPoint;
+   459	        final newTranslation = _gestureStartTranslation + delta;
+   460	
+   461	        _logic.updateTransform(
+   462	          MapTransformState(
+   463	            scale: _state.transformState.scale,
+   464	            rotationRadians: _state.transformState.rotationRadians,
+   465	            translation: newTranslation,
+   466	          ),
+   467	        );
+   468	      }
+   469	      return;
+   470	    }
+   471	
+   472	    // --------------------------------------------------------
+   473	    // 2 пальца — умное масштабирование/вращение
+   474	    // --------------------------------------------------------
+   475	    if (pointerCount == 2) {
+   476	      final scaleChange = (details.scale - 1.0).abs();
+   477	      final rotationChange = details.rotation.abs();
+   478	
+   479	      // Определяем, что преобладает
+   480	      if (scaleChange > rotationChange) {
+   481	        // ---------- МАСШТАБИРОВАНИЕ ----------
+   482	        final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
+   483	
+   484	        if (_gestureStartPivotImage != null) {
+   485	          final pivotScreen = _logic.getCrosshairScreenPoint();
+   486	
+   487	          final tempTransform = MapTransformState(
+   488	            scale: newScale,
+   489	            rotationRadians: _state.transformState.rotationRadians,
+   490	            translation: _gestureStartTranslation,
+   491	          );
+   492	
+   493	          final oldTransform = _state.transformState;
+   494	          _state.transformState = tempTransform;
+   495	
+   496	          final pivotScreenAfterScale = _logic.imageToScreen(_gestureStartPivotImage!);
+   497	
+   498	          _state.transformState = oldTransform;
+   499	
+   500	          final delta = pivotScreen - pivotScreenAfterScale;
+   501	          final newTranslation = _gestureStartTranslation + delta;
+   502	
+   503	          _logic.updateTransform(
+   504	            MapTransformState(
+   505	              scale: newScale,
+   506	              rotationRadians: _state.transformState.rotationRadians,
+   507	              translation: newTranslation,
+   508	            ),
+   509	          );
+   510	        } else {
+   511	          _logic.updateTransform(
+   512	            MapTransformState(
+   513	              scale: newScale,
+   514	              rotationRadians: _state.transformState.rotationRadians,
+   515	              translation: _gestureStartTranslation,
+   516	            ),
+   517	          );
+   518	        }
+   519	      } else {
+   520	        // ---------- ВРАЩЕНИЕ ----------
+   521	        final pivotScreen = _logic.getCrosshairScreenPoint();
+   522	
+   523	        // Накопление угла для плавного вращения
+   524	        final currentRotation = _gestureStartRotation + details.rotation;
+   525	
+   526	        if (_gestureStartPivotImage != null) {
+   527	          final tempTransform = MapTransformState(
+   528	            scale: _state.transformState.scale,
+   529	            rotationRadians: currentRotation,
+   530	            translation: _gestureStartTranslation,
+   531	          );
+   532	
+   533	          final oldTransform = _state.transformState;
+   534	          _state.transformState = tempTransform;
+   535	
+   536	          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+   537	
+   538	          _state.transformState = oldTransform;
+   539	
+   540	          final delta = pivotScreen - pivotScreenAfterRotate;
+   541	          final newTranslation = _gestureStartTranslation + delta;
+   542	
+   543	          _logic.updateTransform(
+   544	            MapTransformState(
+   545	              scale: _state.transformState.scale,
+   546	              rotationRadians: currentRotation,
+   547	              translation: newTranslation,
+   548	            ),
+   549	          );
+   550	        } else {
+   551	          _logic.updateTransform(
+   552	            MapTransformState(
+   553	              scale: _state.transformState.scale,
+   554	              rotationRadians: currentRotation,
+   555	              translation: _state.transformState.translation,
+   556	            ),
+   557	          );
+   558	        }
+   559	      }
+   560	      return;
+   561	    }
+   562	
+   563	    // --------------------------------------------------------
+   564	    // 3 и более пальцев — вращение вокруг прицела
+   565	    // --------------------------------------------------------
+   566	    if (pointerCount >= 3) {
+   567	      final currentFocalPoint = details.focalPoint;
+   568	      final pivotScreen = _logic.getCrosshairScreenPoint();
+   569	
+   570	      final startVector = _gestureStartFocalPoint - pivotScreen;
+   571	      final currentVector = currentFocalPoint - pivotScreen;
+   572	
+   573	      final startAngle = math.atan2(startVector.dy, startVector.dx);
+   574	      final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
+   575	
+   576	      double deltaAngle = currentAngle - startAngle;
+   577	      if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
+   578	      if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
+   579	
+   580	      const sensitivity = 0.8;
+   581	      final newRotation = _gestureStartRotation + deltaAngle * sensitivity;
+   582	
+   583	      if (_gestureStartPivotImage != null) {
+   584	        final tempTransform = MapTransformState(
+   585	          scale: _state.transformState.scale,
+   586	          rotationRadians: newRotation,
+   587	          translation: _gestureStartTranslation,
+   588	        );
+   589	
+   590	        final oldTransform = _state.transformState;
+   591	        _state.transformState = tempTransform;
+   592	
+   593	        final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+   594	
+   595	        _state.transformState = oldTransform;
+   596	
+   597	        final delta = pivotScreen - pivotScreenAfterRotate;
+   598	        final newTranslation = _gestureStartTranslation + delta;
+   599	
+   600	        _logic.updateTransform(
+   601	          MapTransformState(
+   602	            scale: _state.transformState.scale,
+   603	            rotationRadians: newRotation,
+   604	            translation: newTranslation,
+   605	          ),
+   606	        );
+   607	      } else {
+   608	        _logic.updateTransform(
+   609	          MapTransformState(
+   610	            scale: _state.transformState.scale,
+   611	            rotationRadians: newRotation,
+   612	            translation: _state.transformState.translation,
+   613	          ),
+   614	        );
+   615	      }
+   616	      return;
+   617	    }
+   618	  }
+   619	
+   620	  Widget _buildAnchorBadge() {
+   621	    final count = _state.project!.anchors.length;
+   622	    final hasWorkingPair = _state.workingPair != null;
+   623	
+   624	    return Container(
+   625	      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+   626	      decoration: BoxDecoration(
+   627	        color: hasWorkingPair
+   628	            ? Colors.green.withAlpha(200)
+   629	            : Colors.orange.withAlpha(200),
+   630	        borderRadius: BorderRadius.circular(20),
+   631	      ),
+   632	      child: Text(
+   633	        hasWorkingPair
+   634	            ? 'Карта привязана ($count)'
+   635	            : 'Привязок: $count (нужно ≥2, расстояние ≥50м)',
+   636	        style: const TextStyle(
+   637	          color: Colors.white,
+   638	          fontSize: 11,
+   639	          fontWeight: FontWeight.bold,
+   640	        ),
+   641	      ),
+   642	    );
+   643	  }
+   644	}
 
 === lib/services/log_service.dart ===
      1	import 'dart:convert';
@@ -5606,6 +5632,105 @@
    145	  }
    146	}
 
+=== lib/widgets/map_interaction_wrapper.dart ===
+     1	import 'package:flutter/material.dart';
+     2	import '../models/map_transform_state.dart';
+     3	
+     4	/// Виджет-обёртка для карты, который обрабатывает жесты
+     5	/// панорамирования, масштабирования и вращения.
+     6	class MapInteractionWrapper extends StatefulWidget {
+     7	  final Widget child;
+     8	  final MapTransformState transformState;
+     9	  final Function(MapTransformState) onTransform;
+    10	  final bool rotateMode;
+    11	
+    12	  const MapInteractionWrapper({
+    13	    super.key,
+    14	    required this.child,
+    15	    required this.transformState,
+    16	    required this.onTransform,
+    17	    required this.rotateMode,
+    18	  });
+    19	
+    20	  @override
+    21	  State<MapInteractionWrapper> createState() => _MapInteractionWrapperState();
+    22	}
+    23	
+    24	class _MapInteractionWrapperState extends State<MapInteractionWrapper> {
+    25	  late MapTransformState _currentTransform;
+    26	  late MapTransformState _startTransform;
+    27	
+    28	  @override
+    29	  void initState() {
+    30	    super.initState();
+    31	    _currentTransform = widget.transformState;
+    32	  }
+    33	
+    34	  @override
+    35	  void didUpdateWidget(covariant MapInteractionWrapper oldWidget) {
+    36	    super.didUpdateWidget(oldWidget);
+    37	    if (widget.transformState != _currentTransform) {
+    38	      setState(() {
+    39	        _currentTransform = widget.transformState;
+    40	      });
+    41	    }
+    42	  }
+    43	
+    44	  void _onScaleStart(ScaleStartDetails details) {
+    45	    _startTransform = _currentTransform;
+    46	  }
+    47	
+    48	  void _onScaleUpdate(ScaleUpdateDetails details) {
+    49	    final scaleDelta = details.scale;
+    50	    final rotationDelta = details.rotation;
+    51	    final panDelta = details.focalPoint - details.localFocalPoint;
+    52	
+    53	    if (widget.rotateMode) {
+    54	      // Режим вращения и масштабирования
+    55	      final newRotation = _startTransform.rotationRadians + rotationDelta;
+    56	      final newScale = _startTransform.scale * scaleDelta;
+    57	
+    58	      setState(() {
+    59	        _currentTransform = _currentTransform.copyWith(
+    60	          scale: newScale.clamp(0.1, 10.0), // Ограничиваем масштаб
+    61	          rotationRadians: newRotation,
+    62	        );
+    63	      });
+    64	    } else {
+    65	      // Режим панорамирования и масштабирования
+    66	      final newScale = _startTransform.scale * scaleDelta;
+    67	      final newTranslation = _startTransform.translation + panDelta;
+    68	
+    69	      setState(() {
+    70	        _currentTransform = _currentTransform.copyWith(
+    71	          scale: newScale.clamp(0.1, 10.0),
+    72	          translation: newTranslation,
+    73	        );
+    74	      });
+    75	    }
+    76	
+    77	    widget.onTransform(_currentTransform);
+    78	  }
+    79	
+    80	  @override
+    81	  Widget build(BuildContext context) {
+    82	    return GestureDetector(
+    83	      onScaleStart: _onScaleStart,
+    84	      onScaleUpdate: _onScaleUpdate,
+    85	      child: Transform.translate(
+    86	        offset: _currentTransform.translation,
+    87	        child: Transform.rotate(
+    88	          angle: _currentTransform.rotationRadians,
+    89	          child: Transform.scale(
+    90	            scale: _currentTransform.scale,
+    91	            child: widget.child,
+    92	          ),
+    93	        ),
+    94	      ),
+    95	    );
+    96	  }
+    97	}
+
 === lib/widgets/map_overlay_painter.dart ===
      1	import 'dart:math' as math;
      2	import 'package:flutter/material.dart';
@@ -5632,157 +5757,157 @@
     23	
     24	  final double? previewDistanceMeters;
     25	  final double? previewBearingDegrees;
-    26	
-    27	  const MapOverlayPainter({
-    28	    required this.imageSize,
-    29	    required this.transformState,
-    30	    required this.viewportSize,
-    31	    required this.anchors,
-    32	    required this.targets,
-    33	    this.currentUserImagePoint,
-    34	    this.activeTargetImagePoint,
-    35	    this.previewDistanceMeters,
-    36	    this.previewBearingDegrees,
-    37	  });
-    38	
-    39	  @override
-    40	  void paint(Canvas canvas, Size size) {
-    41	    // Рисуем все элементы в экранных координатах
-    42	
-    43	    // Якоря
-    44	    for (final anchor in anchors) {
-    45	      final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
-    46	      _drawAnchor(canvas, screen);
-    47	    }
-    48	
-    49	    // Текущая позиция
-    50	    if (currentUserImagePoint != null) {
-    51	      final screen = imageToScreen(currentUserImagePoint!);
-    52	      _drawCurrentPosition(canvas, screen);
-    53	
-    54	      // Линия до активной цели или placeholder
-    55	      if (activeTargetImagePoint != null) {
-    56	        final targetScreen = imageToScreen(activeTargetImagePoint!);
-    57	        _drawLine(canvas, screen, targetScreen);
-    58	        if (previewDistanceMeters != null && previewBearingDegrees != null) {
-    59	          _drawLabels(
-    60	            canvas,
-    61	            screen,
-    62	            targetScreen,
-    63	            previewDistanceMeters!,
-    64	            previewBearingDegrees!,
-    65	          );
-    66	        }
-    67	      }
-    68	    }
-    69	
-    70	    // Цели
-    71	    for (final target in targets) {
-    72	      final screen = imageToScreen(Offset(target.imageX, target.imageY));
-    73	      _drawTarget(canvas, screen, target.status);
-    74	    }
-    75	  }
-    76	
-    77	  // ---------------------------------------------------------
-    78	  // Преобразование image -> screen
-    79	  // ---------------------------------------------------------
-    80	
-    81	  Offset imageToScreen(Offset imagePoint) {
-    82	    final center = Offset(viewportSize.width / 2, viewportSize.height / 2);
+    26	  final double? heading;
+    27	
+    28	  const MapOverlayPainter({
+    29	    required this.imageSize,
+    30	    required this.transformState,
+    31	    required this.viewportSize,
+    32	    required this.anchors,
+    33	    required this.targets,
+    34	    this.currentUserImagePoint,
+    35	    this.activeTargetImagePoint,
+    36	    this.previewDistanceMeters,
+    37	    this.previewBearingDegrees,
+    38	    this.heading,
+    39	  });
+    40	
+    41	  @override
+    42	  void paint(Canvas canvas, Size size) {
+    43	    // Рисуем все элементы в экранных координатах
+    44	
+    45	    // Якоря
+    46	    for (final anchor in anchors) {
+    47	      final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
+    48	      _drawAnchor(canvas, screen);
+    49	    }
+    50	
+    51	    // Цели
+    52	    for (final target in targets) {
+    53	      final screen = imageToScreen(Offset(target.imageX, target.imageY));
+    54	      _drawTarget(canvas, screen, target.status);
+    55	    }
+    56	
+    57	    // Текущая позиция и линия до цели (рисуем последними, чтобы были поверх)
+    58	    if (currentUserImagePoint != null) {
+    59	      final screen = imageToScreen(currentUserImagePoint!);
+    60	
+    61	      // Линия до активной цели
+    62	      if (activeTargetImagePoint != null) {
+    63	        final targetScreen = imageToScreen(activeTargetImagePoint!);
+    64	        _drawLine(canvas, screen, targetScreen);
+    65	        if (previewDistanceMeters != null && previewBearingDegrees != null) {
+    66	          _drawLabels(
+    67	            canvas,
+    68	            screen,
+    69	            targetScreen,
+    70	            previewDistanceMeters!,
+    71	            previewBearingDegrees!,
+    72	          );
+    73	        }
+    74	      }
+    75	      // Рисуем сам курсор поверх линии
+    76	      _drawCurrentPosition(canvas, screen);
+    77	    }
+    78	  }
+    79	
+    80	  // ---------------------------------------------------------
+    81	  // Преобразование image -> screen
+    82	  // ---------------------------------------------------------
     83	
-    84	    // Вектор от центра изображения
-    85	    final local =
-    86	        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
-    87	
-    88	    // Масштаб
-    89	    final scaled = local * transformState.scale;
-    90	
-    91	    // Поворот
-    92	    final angle = transformState.rotationRadians;
-    93	    final cos = math.cos(angle);
-    94	    final sin = math.sin(angle);
-    95	    final rotated = Offset(
-    96	      scaled.dx * cos - scaled.dy * sin,
-    97	      scaled.dx * sin + scaled.dy * cos,
-    98	    );
-    99	
-   100	    // Перенос
-   101	    return center + transformState.translation + rotated;
-   102	  }
-   103	
-   104	  // ---------------------------------------------------------
-   105	  // Отрисовка якоря
-   106	  // ---------------------------------------------------------
-   107	
-   108	  void _drawAnchor(Canvas canvas, Offset screen) {
-   109	    final paint = Paint()
-   110	      ..color = Colors.purple
-   111	      ..style = PaintingStyle.fill;
-   112	
-   113	    final borderPaint = Paint()
-   114	      ..color = Colors.white
-   115	      ..style = PaintingStyle.stroke
-   116	      ..strokeWidth = 2.0;
-   117	
-   118	    // Якорь — восьмиугольник или простой круг с крестиком
-   119	    canvas.drawCircle(screen, 10, borderPaint);
-   120	    canvas.drawCircle(
-   121	      screen,
-   122	      10,
-   123	      paint
-   124	        ..style = PaintingStyle.stroke
-   125	        ..strokeWidth = 2.0,
-   126	    );
-   127	
-   128	    // Якорь-иконка: просто крестик
-   129	    final linePaint = Paint()
-   130	      ..color = Colors.purple
-   131	      ..strokeWidth = 2.0
-   132	      ..style = PaintingStyle.stroke;
-   133	
-   134	    canvas.drawLine(
-   135	      screen + const Offset(-5, 0),
-   136	      screen + const Offset(5, 0),
-   137	      linePaint,
-   138	    );
-   139	    canvas.drawLine(
-   140	      screen + const Offset(0, -8),
-   141	      screen + const Offset(0, 5),
-   142	      linePaint,
-   143	    );
-   144	
-   145	    // Нижняя часть якоря
-   146	    final path = Path()
-   147	      ..moveTo(screen.dx - 5, screen.dy + 5)
-   148	      ..lineTo(screen.dx, screen.dy + 10)
-   149	      ..lineTo(screen.dx + 5, screen.dy + 5);
-   150	    canvas.drawPath(path, linePaint);
-   151	  }
+    84	  Offset imageToScreen(Offset imagePoint) {
+    85	    final center = Offset(viewportSize.width / 2, viewportSize.height / 2);
+    86	    final local = imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+    87	    final scaled = local * transformState.scale;
+    88	    final angle = transformState.rotationRadians;
+    89	    final cos = math.cos(angle);
+    90	    final sin = math.sin(angle);
+    91	    final rotated = Offset(
+    92	      scaled.dx * cos - scaled.dy * sin,
+    93	      scaled.dx * sin + scaled.dy * cos,
+    94	    );
+    95	    return center + transformState.translation + rotated;
+    96	  }
+    97	
+    98	  // ---------------------------------------------------------
+    99	  // Отрисовка якоря
+   100	  // ---------------------------------------------------------
+   101	
+   102	  void _drawAnchor(Canvas canvas, Offset screen) {
+   103	    final paint = Paint()
+   104	      ..color = Colors.purple
+   105	      ..style = PaintingStyle.fill;
+   106	
+   107	    final borderPaint = Paint()
+   108	      ..color = Colors.white
+   109	      ..style = PaintingStyle.stroke
+   110	      ..strokeWidth = 2.0;
+   111	
+   112	    canvas.drawCircle(screen, 10, borderPaint);
+   113	    canvas.drawCircle(
+   114	      screen,
+   115	      10,
+   116	      paint
+   117	        ..style = PaintingStyle.stroke
+   118	        ..strokeWidth = 2.0,
+   119	    );
+   120	
+   121	    final linePaint = Paint()
+   122	      ..color = Colors.purple
+   123	      ..strokeWidth = 2.0
+   124	      ..style = PaintingStyle.stroke;
+   125	
+   126	    canvas.drawLine(screen + const Offset(-5, 0), screen + const Offset(5, 0), linePaint);
+   127	    canvas.drawLine(screen + const Offset(0, -8), screen + const Offset(0, 5), linePaint);
+   128	
+   129	    final path = Path()
+   130	      ..moveTo(screen.dx - 5, screen.dy + 5)
+   131	      ..lineTo(screen.dx, screen.dy + 10)
+   132	      ..lineTo(screen.dx + 5, screen.dy + 5);
+   133	    canvas.drawPath(path, linePaint);
+   134	  }
+   135	
+   136	  // ---------------------------------------------------------
+   137	  // Отрисовка текущей позиции (контурный шеврон)
+   138	  // ---------------------------------------------------------
+   139	
+   140	  void _drawCurrentPosition(Canvas canvas, Offset screen) {
+   141	    final outlinePaint = Paint()
+   142	      ..color = Colors.blue.shade500
+   143	      ..strokeWidth = 3.5
+   144	      ..style = PaintingStyle.stroke
+   145	      ..strokeJoin = StrokeJoin.round; // Плавные соединения
+   146	
+   147	    final innerShadowPaint = Paint()
+   148	      ..color = Colors.black.withAlpha(128)
+   149	      ..strokeWidth = 1.5
+   150	      ..style = PaintingStyle.stroke
+   151	      ..strokeJoin = StrokeJoin.round;
    152	
-   153	  // ---------------------------------------------------------
-   154	  // Отрисовка текущей позиции
-   155	  // ---------------------------------------------------------
-   156	
-   157	  void _drawCurrentPosition(Canvas canvas, Offset screen) {
-   158	    // Внешний круг
-   159	    final outerPaint = Paint()
-   160	      ..color = Colors.blue.withAlpha(60)
-   161	      ..style = PaintingStyle.fill;
-   162	    canvas.drawCircle(screen, 20, outerPaint);
+   153	    // Форма стрелки-шеврона
+   154	    final path = Path()
+   155	      ..moveTo(0, -14) // Вершина чуть выше
+   156	      ..lineTo(10, 10) // Правый нижний угол
+   157	      ..lineTo(0, 5)   // Центр-низ
+   158	      ..lineTo(-10, 10) // Левый нижний угол
+   159	      ..close();
+   160	
+   161	    canvas.save();
+   162	    canvas.translate(screen.dx, screen.dy);
    163	
-   164	    // Внутренний круг
-   165	    final innerPaint = Paint()
-   166	      ..color = Colors.blue
-   167	      ..style = PaintingStyle.fill;
-   168	    canvas.drawCircle(screen, 7, innerPaint);
-   169	
-   170	    // Белая граница
-   171	    final borderPaint = Paint()
-   172	      ..color = Colors.white
-   173	      ..style = PaintingStyle.stroke
-   174	      ..strokeWidth = 2.5;
-   175	    canvas.drawCircle(screen, 7, borderPaint);
-   176	  }
+   164	    // Поворачиваем канву
+   165	    final headingRadians = (heading ?? 0) * (math.pi / 180);
+   166	    final totalRotation = headingRadians + transformState.rotationRadians;
+   167	    canvas.rotate(totalRotation);
+   168	
+   169	    // Рисуем тень/внутреннюю обводку для контраста
+   170	    canvas.drawPath(path, innerShadowPaint);
+   171	    // Рисуем основную яркую обводку
+   172	    canvas.drawPath(path, outlinePaint);
+   173	
+   174	    canvas.restore();
+   175	  }
+   176	
    177	
    178	  // ---------------------------------------------------------
    179	  // Отрисовка цели
@@ -5795,130 +5920,117 @@
    186	      MapTargetStatus.passed => Colors.green,
    187	    };
    188	
-   189	    // Флажок: вертикальная палка + треугольник
-   190	    final staffPaint = Paint()
-   191	      ..color = Colors.black87
-   192	      ..strokeWidth = 2.0
-   193	      ..style = PaintingStyle.stroke;
-   194	
-   195	    final flagPaint = Paint()
-   196	      ..color = color
-   197	      ..style = PaintingStyle.fill;
-   198	
-   199	    final flagBorder = Paint()
-   200	      ..color = Colors.black54
-   201	      ..strokeWidth = 1.0
-   202	      ..style = PaintingStyle.stroke;
-   203	
-   204	    // Палка
-   205	    canvas.drawLine(screen, screen + const Offset(0, -28), staffPaint);
-   206	
-   207	    // Флаг (треугольник)
-   208	    final flag = Path()
-   209	      ..moveTo(screen.dx, screen.dy - 28)
-   210	      ..lineTo(screen.dx + 14, screen.dy - 22)
-   211	      ..lineTo(screen.dx, screen.dy - 16)
-   212	      ..close();
-   213	
-   214	    canvas.drawPath(flag, flagPaint);
-   215	    canvas.drawPath(flag, flagBorder);
-   216	  }
-   217	
-   218	  // ---------------------------------------------------------
-   219	  // Линия от текущей позиции до цели
-   220	  // ---------------------------------------------------------
-   221	
-   222	  void _drawLine(Canvas canvas, Offset from, Offset to) {
-   223	    final paint = Paint()
-   224	      ..color = Colors.red.withAlpha(180)
-   225	      ..strokeWidth = 2.0
-   226	      ..style = PaintingStyle.stroke
-   227	      ..strokeCap = StrokeCap.round;
+   189	    final staffPaint = Paint()
+   190	      ..color = Colors.black87
+   191	      ..strokeWidth = 2.0
+   192	      ..style = PaintingStyle.stroke;
+   193	
+   194	    final flagPaint = Paint()
+   195	      ..color = color
+   196	      ..style = PaintingStyle.fill;
+   197	
+   198	    final flagBorder = Paint()
+   199	      ..color = Colors.black54
+   200	      ..strokeWidth = 1.0
+   201	      ..style = PaintingStyle.stroke;
+   202	
+   203	    canvas.drawLine(screen, screen + const Offset(0, -28), staffPaint);
+   204	
+   205	    final flag = Path()
+   206	      ..moveTo(screen.dx, screen.dy - 28)
+   207	      ..lineTo(screen.dx + 14, screen.dy - 22)
+   208	      ..lineTo(screen.dx, screen.dy - 16)
+   209	      ..close();
+   210	
+   211	    canvas.drawPath(flag, flagPaint);
+   212	    canvas.drawPath(flag, flagBorder);
+   213	  }
+   214	
+   215	  // ---------------------------------------------------------
+   216	  // Линия от текущей позиции до цели
+   217	  // ---------------------------------------------------------
+   218	
+   219	  void _drawLine(Canvas canvas, Offset from, Offset to) {
+   220	    final paint = Paint()
+   221	      ..color = Colors.red.withAlpha(180)
+   222	      ..strokeWidth = 2.0
+   223	      ..style = PaintingStyle.stroke
+   224	      ..strokeCap = StrokeCap.round;
+   225	
+   226	    _drawDashedLine(canvas, from, to, paint);
+   227	  }
    228	
-   229	    // Пунктирная линия
-   230	    _drawDashedLine(canvas, from, to, paint);
-   231	  }
-   232	
-   233	  void _drawDashedLine(Canvas canvas, Offset from, Offset to, Paint paint) {
-   234	    const dashLength = 10.0;
-   235	    const gapLength = 6.0;
-   236	
-   237	    final totalLength = (to - from).distance;
-   238	    if (totalLength < 1) return;
-   239	
-   240	    final direction = (to - from) / totalLength;
-   241	    double drawn = 0;
-   242	    bool drawing = true;
-   243	
-   244	    while (drawn < totalLength) {
-   245	      final segLen = drawing ? dashLength : gapLength;
-   246	      final end = math.min(drawn + segLen, totalLength);
-   247	
-   248	      if (drawing) {
-   249	        canvas.drawLine(
-   250	          from + direction * drawn,
-   251	          from + direction * end,
-   252	          paint,
-   253	        );
-   254	      }
-   255	
-   256	      drawn = end;
-   257	      drawing = !drawing;
-   258	    }
-   259	  }
-   260	
-   261	  // ---------------------------------------------------------
-   262	  // Подписи дистанции и азимута
-   263	  // ---------------------------------------------------------
-   264	
-   265	  void _drawLabels(
-   266	    Canvas canvas,
-   267	    Offset from,
-   268	    Offset to,
-   269	    double distanceMeters,
-   270	    double bearingDegrees,
-   271	  ) {
-   272	    final mid = (from + to) / 2;
-   273	
-   274	    final distText = distanceMeters >= 1000
-   275	        ? '${(distanceMeters / 1000).toStringAsFixed(2)} km'
-   276	        : '${distanceMeters.round()} m';
-   277	
-   278	    final bearText = '${bearingDegrees.round()}°';
-   279	
-   280	    _drawLabel(canvas, distText, mid + const Offset(0, -12), Colors.red);
-   281	    _drawLabel(canvas, bearText, mid + const Offset(0, 8), Colors.red);
-   282	  }
-   283	
-   284	  void _drawLabel(Canvas canvas, String text, Offset position, Color color) {
-   285	    final tp = TextPainter(
-   286	      text: TextSpan(
-   287	        text: text,
-   288	        style: TextStyle(
-   289	          color: color,
-   290	          fontSize: 12,
-   291	          fontWeight: FontWeight.bold,
-   292	          shadows: const [
-   293	            Shadow(color: Colors.white, offset: Offset(1, 1), blurRadius: 2),
-   294	          ],
-   295	        ),
-   296	      ),
-   297	      textDirection: TextDirection.ltr,
-   298	    )..layout();
-   299	
-   300	    tp.paint(canvas, position - Offset(tp.width / 2, tp.height / 2));
-   301	  }
-   302	
-   303	  @override
-   304	  bool shouldRepaint(covariant MapOverlayPainter oldDelegate) {
-   305	    return oldDelegate.transformState != transformState ||
-   306	        oldDelegate.anchors.length != anchors.length ||
-   307	        oldDelegate.targets.length != targets.length ||
-   308	        oldDelegate.currentUserImagePoint != currentUserImagePoint ||
-   309	        oldDelegate.activeTargetImagePoint != activeTargetImagePoint ||
-   310	        oldDelegate.previewDistanceMeters != previewDistanceMeters;
-   311	  }
-   312	}
+   229	  void _drawDashedLine(Canvas canvas, Offset from, Offset to, Paint paint) {
+   230	    const dashLength = 10.0;
+   231	    const gapLength = 6.0;
+   232	    final totalLength = (to - from).distance;
+   233	    if (totalLength < 1) return;
+   234	
+   235	    final direction = (to - from) / totalLength;
+   236	    double drawn = 0;
+   237	    bool drawing = true;
+   238	
+   239	    while (drawn < totalLength) {
+   240	      final segLen = drawing ? dashLength : gapLength;
+   241	      final end = math.min(drawn + segLen, totalLength);
+   242	      if (drawing) {
+   243	        canvas.drawLine(from + direction * drawn, from + direction * end, paint);
+   244	      }
+   245	      drawn = end;
+   246	      drawing = !drawing;
+   247	    }
+   248	  }
+   249	
+   250	  // ---------------------------------------------------------
+   251	  // Подписи дистанции и азимута
+   252	  // ---------------------------------------------------------
+   253	
+   254	  void _drawLabels(
+   255	    Canvas canvas,
+   256	    Offset from,
+   257	    Offset to,
+   258	    double distanceMeters,
+   259	    double bearingDegrees,
+   260	  ) {
+   261	    final mid = (from + to) / 2;
+   262	    final distText = distanceMeters >= 1000
+   263	        ? '${(distanceMeters / 1000).toStringAsFixed(2)} km'
+   264	        : '${distanceMeters.round()} m';
+   265	    final bearText = '${bearingDegrees.round()}°';
+   266	
+   267	    _drawLabel(canvas, distText, mid + const Offset(0, -12), Colors.red);
+   268	    _drawLabel(canvas, bearText, mid + const Offset(0, 8), Colors.red);
+   269	  }
+   270	
+   271	  void _drawLabel(Canvas canvas, String text, Offset position, Color color) {
+   272	    final tp = TextPainter(
+   273	      text: TextSpan(
+   274	        text: text,
+   275	        style: TextStyle(
+   276	          color: color,
+   277	          fontSize: 16,
+   278	          fontWeight: FontWeight.bold,
+   279	          shadows: const [
+   280	            Shadow(color: Colors.white, offset: Offset(1, 1), blurRadius: 2),
+   281	          ],
+   282	        ),
+   283	      ),
+   284	      textDirection: TextDirection.ltr,
+   285	    )..layout();
+   286	    tp.paint(canvas, position - Offset(tp.width / 2, tp.height / 2));
+   287	  }
+   288	
+   289	  @override
+   290	  bool shouldRepaint(covariant MapOverlayPainter oldDelegate) {
+   291	    return oldDelegate.transformState != transformState ||
+   292	        oldDelegate.anchors.length != anchors.length ||
+   293	        oldDelegate.targets.length != targets.length ||
+   294	        oldDelegate.currentUserImagePoint != currentUserImagePoint ||
+   295	        oldDelegate.activeTargetImagePoint != activeTargetImagePoint ||
+   296	        oldDelegate.previewDistanceMeters != previewDistanceMeters ||
+   297	        oldDelegate.heading != heading;
+   298	  }
+   299	}
 
 === lib/widgets/map_toolbar.dart ===
      1	import 'package:flutter/material.dart';

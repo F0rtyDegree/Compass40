@@ -145,7 +145,7 @@ class MapOverlayPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round; // Плавные соединения
 
     final innerShadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.5)
+      ..color = Colors.black.withAlpha(128)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
