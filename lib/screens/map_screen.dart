@@ -11,12 +11,10 @@ import '../widgets/map_toolbar.dart';
 import '../widgets/map_zoom_buttons.dart';
 
 class MapScreen extends StatefulWidget {
-  final void Function(Map<String, double> targetGeo)? onTargetActivated;
   final double magneticDeclination;
 
   const MapScreen({
     super.key,
-    this.onTargetActivated,
     this.magneticDeclination = 0.0,
   });
 
@@ -242,9 +240,6 @@ class _MapScreenState extends State<MapScreen> {
                           ? _logic.placePlannedTargetAtCrosshair
                           : () => _logic.activatePlannedTarget(
                               magneticDeclination: widget.magneticDeclination,
-                              onActivate: (geo) {
-                                widget.onTargetActivated?.call(geo);
-                              },
                             ))
                     : null,
                 targetEnabled: _state.canPlaceTarget,

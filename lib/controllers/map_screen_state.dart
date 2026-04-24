@@ -33,6 +33,9 @@ class MapScreenState {
   Offset? crosshairScreenPoint;
   Offset? crosshairImagePoint;
 
+  // Обратная связь при копировании
+  final ValueNotifier<bool> crosshairFeedback = ValueNotifier<bool>(false);
+
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;
   Offset? currentUserScreenPoint;

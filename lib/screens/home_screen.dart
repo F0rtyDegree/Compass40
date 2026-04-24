@@ -111,9 +111,6 @@ class _MyHomePageState extends State<MyHomePage> {
                   MaterialPageRoute(
                     builder: (_) => MapScreen(
                       magneticDeclination: _state.magneticDeclination,
-                      onTargetActivated: (geo) {
-                        _logic.setTarget(geo);
-                      },
                     ),
                   ),
                 );

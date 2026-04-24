@@ -54,6 +54,7 @@ class MapScreenLogic {
   void dispose() {
     state.followRestoreTimer?.cancel();
     _gpsSub?.cancel();
+    state.crosshairFeedback.dispose();
     state.isDisposed = true;
   }
 
@@ -247,6 +248,29 @@ class MapScreenLogic {
       state.crosshairInCenter = !state.crosshairInCenter;
     });
     _recalculateCrosshairImagePoint();
+  }
+
+  Future<void> copyCrosshairCoordinatesToClipboard() async {
+    if (state.workingPair == null || state.crosshairImagePoint == null) return;
+
+    final geo = calibration.imagePointToGeo(
+      imagePoint: state.crosshairImagePoint!,
+      pair: state.workingPair!,
+    );
+
+    if (geo != null) {
+      final lat = geo.latitude.toStringAsFixed(6);
+      final lon = geo.longitude.toStringAsFixed(6);
+      await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
+
+      // Обратная связь
+      state.crosshairFeedback.value = true;
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (!state.isDisposed) {
+          state.crosshairFeedback.value = false;
+        }
+      });
+    }
   }
 
   Offset _getCrosshairScreenPoint() {
@@ -455,7 +479,6 @@ class MapScreenLogic {
 
   Future<void> activatePlannedTarget({
     required double magneticDeclination,
-    required void Function(Map<String, double> targetGeo) onActivate,
   }) async {
     final planned = state.plannedTarget;
     if (planned == null) return;
@@ -507,12 +530,6 @@ class MapScreenLogic {
 
     // Пересчёт preview
     _recalculatePreview();
-
-    // ✅ Запускаем ведение через callback
-    onActivate({
-      'latitude': planned.latitude!,
-      'longitude': planned.longitude!,
-    });
   }
 
   void markActiveTargetAsPassed() async {
