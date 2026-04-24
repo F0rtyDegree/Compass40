@@ -138,42 +138,35 @@ class MapOverlayPainter extends CustomPainter {
   // ---------------------------------------------------------
 
   void _drawCurrentPosition(Canvas canvas, Offset screen) {
-    final outlinePaint = Paint()
-      ..color = Colors.blue.shade500
-      ..strokeWidth = 3.5
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round; // Плавные соединения
+  final outlinePaint = Paint()
+    ..color = Colors.blue.shade500
+    ..strokeWidth = 2.0
+    ..style = PaintingStyle.stroke
+    ..strokeJoin = StrokeJoin.round;
 
-    final innerShadowPaint = Paint()
-      ..color = Colors.black.withAlpha(128)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round;
+  final innerShadowPaint = Paint()
+    ..color = Colors.black.withAlpha(128)
+    ..strokeWidth = 0.75
+    ..style = PaintingStyle.stroke
+    ..strokeJoin = StrokeJoin.round;
 
-    // Форма стрелки-шеврона
-    final path = Path()
-      ..moveTo(0, -14) // Вершина чуть выше
-      ..lineTo(10, 10) // Правый нижний угол
-      ..lineTo(0, 5)   // Центр-низ
-      ..lineTo(-10, 10) // Левый нижний угол
-      ..close();
+  // Форма стрелки-шеврона 
+  final path = Path()
+    ..moveTo(0, -30)
+    ..lineTo(15, 15)
+    ..lineTo(0, 10)
+    ..lineTo(-15, 15)
+    ..close();
 
-    canvas.save();
-    canvas.translate(screen.dx, screen.dy);
-
-    // Поворачиваем канву
-    final headingRadians = (heading ?? 0) * (math.pi / 180);
-    final totalRotation = headingRadians + transformState.rotationRadians;
-    canvas.rotate(totalRotation);
-
-    // Рисуем тень/внутреннюю обводку для контраста
-    canvas.drawPath(path, innerShadowPaint);
-    // Рисуем основную яркую обводку
-    canvas.drawPath(path, outlinePaint);
-
-    canvas.restore();
-  }
-
+  canvas.save();
+  canvas.translate(screen.dx, screen.dy);
+  final headingRadians = (heading ?? 0) * (math.pi / 180);
+  final totalRotation = headingRadians + transformState.rotationRadians;
+  canvas.rotate(totalRotation);
+  canvas.drawPath(path, innerShadowPaint);
+  canvas.drawPath(path, outlinePaint);
+  canvas.restore();
+}
 
   // ---------------------------------------------------------
   // Отрисовка цели

@@ -2,11 +2,29 @@ import 'package:flutter/material.dart';
 
 class MapCrosshair extends StatelessWidget {
   final bool inCenter;
+  final ValueNotifier<bool>? feedback;
 
-  const MapCrosshair({super.key, this.inCenter = true});
+  const MapCrosshair({
+    super.key,
+    this.inCenter = true,
+    this.feedback,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (feedback == null) {
+      return _buildCrosshair();
+    }
+    
+    return ValueListenableBuilder<bool>(
+      valueListenable: feedback!,
+      builder: (context, isActive, child) {
+        return _buildCrosshair(copied: isActive);
+      },
+    );
+  }
+  
+  Widget _buildCrosshair({bool copied = false}) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final vp = Size(constraints.maxWidth, constraints.maxHeight);
@@ -18,11 +36,21 @@ class MapCrosshair extends StatelessWidget {
         return IgnorePointer(
           child: Stack(
             children: [
+              // Анимированный круг (рисуем первым, под прицелом)
+              if (copied)
+                Positioned(
+                  left: position.dx - 100,
+                  top: position.dy - 100,
+                  width: 200,
+                  height: 200,
+                  child: const _RippleAnimation(),
+                ),
+              // Прицел
               Positioned(
                 left: position.dx - 24,
                 top: position.dy - 24,
-                child: CustomPaint(
-                  size: const Size(48, 48),
+                child: const CustomPaint(
+                  size: Size(48, 48),
                   painter: _CrosshairPainter(),
                 ),
               ),
@@ -34,7 +62,62 @@ class MapCrosshair extends StatelessWidget {
   }
 }
 
+class _RippleAnimation extends StatefulWidget {
+  const _RippleAnimation();
+
+  @override
+  State<_RippleAnimation> createState() => _RippleAnimationState();
+}
+
+class _RippleAnimationState extends State<_RippleAnimation>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 600), // Медленнее: 600 мс
+      vsync: this,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final progress = _controller.value;
+        // Круг расширяется от 30 до 100 радиуса (диаметр 60->200)
+        final radius = 30 + (70 * progress);
+        // Прозрачность уменьшается, но стартуем с более насыщенного
+        final opacity = (1.0 - progress * 0.8).clamp(0.0, 1.0);
+        
+        return Center(
+          child: Container(
+            width: radius * 2,
+            height: radius * 2,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.green.withAlpha((opacity * 200).toInt()),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _CrosshairPainter extends CustomPainter {
+  const _CrosshairPainter();
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
@@ -43,12 +126,12 @@ class _CrosshairPainter extends CustomPainter {
 
     final paint = Paint()
       ..color = Colors.red
-      ..strokeWidth = 1.5
+      ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
     final shadowPaint = Paint()
       ..color = Colors.white.withAlpha(180)
-      ..strokeWidth = 3.0
+      ..strokeWidth = 4.0
       ..style = PaintingStyle.stroke;
 
     // Тени (для видимости на любом фоне)
@@ -59,10 +142,20 @@ class _CrosshairPainter extends CustomPainter {
     // Центральная точка
     canvas.drawCircle(
       center,
-      2.0,
+      3.0,
       Paint()
         ..color = Colors.red
         ..style = PaintingStyle.fill,
+    );
+    
+    // Белая окантовка центральной точки
+    canvas.drawCircle(
+      center,
+      3.0,
+      Paint()
+        ..color = Colors.white.withAlpha(200)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
     );
   }
 
@@ -100,5 +193,5 @@ class _CrosshairPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _CrosshairPainter oldDelegate) => false;
 }

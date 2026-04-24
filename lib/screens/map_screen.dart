@@ -92,8 +92,8 @@ class _MapScreenState extends State<MapScreen> {
                   final confirm = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: const Text('Закрыть карту?'),
-                      content: const Text('Привязки и цели будут сброшены.'),
+                      title: const Text('Удалить карту?'),
+                      content: const Text('Привязки и цели будут удалены.'),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, false),
@@ -102,7 +102,7 @@ class _MapScreenState extends State<MapScreen> {
                         TextButton(
                           onPressed: () => Navigator.pop(ctx, true),
                           child: const Text(
-                            'Закрыть',
+                            'Удалить',
                             style: TextStyle(color: Colors.red),
                           ),
                         ),
@@ -203,29 +203,33 @@ class _MapScreenState extends State<MapScreen> {
 
               // Слой 3: прицел с зоной двойного тапа
               Builder(
-                builder: (context) {
-                  final vp = _state.viewportSize;
-                  if (vp == null) return const SizedBox.shrink();
+              builder: (context) {
+                final vp = _state.viewportSize;
+                if (vp == null) return const SizedBox.shrink();
 
-                  final crosshairPosition = _logic.getCrosshairScreenPoint();
+                final crosshairPosition = _logic.getCrosshairScreenPoint();
 
-                  return Stack(
-                    children: [
-                      Positioned(
-                        left: crosshairPosition.dx - 40,
-                        top: crosshairPosition.dy - 40,
-                        width: 80,
-                        height: 80,
-                        child: GestureDetector(
-                          onDoubleTap: _logic.toggleCrosshairPosition,
-                          child: Container(color: Colors.transparent),
-                        ),
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: crosshairPosition.dx - 40,
+                      top: crosshairPosition.dy - 40,
+                      width: 80,
+                      height: 80,
+                      child: GestureDetector(
+                        onDoubleTap: _logic.toggleCrosshairPosition,
+                        onLongPress: () => _logic.copyCrosshairCoordinatesToClipboard(),
+                        child: Container(color: Colors.transparent),
                       ),
-                      MapCrosshair(inCenter: _state.crosshairInCenter),
-                    ],
-                  );
-                },
-              ),
+                    ),
+                    MapCrosshair(
+                      inCenter: _state.crosshairInCenter,
+                      feedback: _state.crosshairFeedback,
+                    ),
+                  ],
+                );
+              },
+            ),
 
               // Слой 4: бейдж привязок
               if (_state.project != null && _state.project!.anchors.isNotEmpty)
