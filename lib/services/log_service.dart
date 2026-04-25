@@ -9,6 +9,32 @@ import '../log_entry.dart';
 import '../utils/geo_utils.dart';
 
 class LogService {
+  Future<List<LogItem>> addMapAnchorLogEntry({
+  required List<LogItem> currentLogItems,
+  required double latitude,
+  required double longitude,
+  required double? distanceFromPrevious,
+  required String timeStr,
+}) async {
+  final logItems = await loadLogEntries();
+  
+  // Генерируем новый id
+  final allEntries = logItems.whereType<MapAnchorLogEntry>();
+  final newId = allEntries.isEmpty ? 1 : allEntries.map((e) => e.id).reduce((a, b) => a > b ? a : b) + 1;
+  
+  final entry = MapAnchorLogEntry(
+    id: newId,
+    latitude: latitude,
+    longitude: longitude,
+    distanceFromPrevious: distanceFromPrevious,
+    timeStr: timeStr,
+  );
+  
+  logItems.add(entry);
+  await saveLogEntries(logItems);
+  return logItems;
+}
+
   Future<List<LogItem>> loadLogEntries() async {
     final prefs = await SharedPreferences.getInstance();
     final String? logJson = prefs.getString('log_items');

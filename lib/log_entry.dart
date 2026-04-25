@@ -54,6 +54,45 @@ class TargetCreationLogEntry extends LogItem {
   }
 }
 
+// Добавляю после класса TargetCreationLogEntry
+
+class MapAnchorLogEntry extends LogItem {
+  final int id;  // ✅ добавляем id
+  final double latitude;
+  final double longitude;
+  final double? distanceFromPrevious;
+  final String timeStr;
+
+  MapAnchorLogEntry({
+    required this.id,
+    required this.latitude,
+    required this.longitude,
+    this.distanceFromPrevious,
+    required this.timeStr,
+  }) : super(type: 'map_anchor');
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': type,
+    'timestamp': timestamp.toIso8601String(),
+    'id': id,
+    'latitude': latitude,
+    'longitude': longitude,
+    'distanceFromPrevious': distanceFromPrevious,
+    'timeStr': timeStr,
+  };
+
+  factory MapAnchorLogEntry.fromJson(Map<String, dynamic> json) {
+    return MapAnchorLogEntry(
+      id: json['id'],
+      latitude: json['latitude'],
+      longitude: json['longitude'],
+      distanceFromPrevious: json['distanceFromPrevious'],
+      timeStr: json['timeStr'],
+    );
+  }
+}
+
 // Существующий класс для точек маршрута
 class LogEntry extends LogItem {
   final int id;
@@ -97,6 +136,8 @@ LogItem logItemFromJson(Map<String, dynamic> json) {
       return TargetCreationLogEntry.fromJson(json);
     case 'track':
       return LogEntry.fromJson(json);
+    case 'map_anchor': // новый тип
+      return MapAnchorLogEntry.fromJson(json);
     default:
       throw ArgumentError('Unknown log item type: ${json['type']}');
   }

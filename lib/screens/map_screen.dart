@@ -10,12 +10,14 @@ import '../widgets/map_overlay_painter.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/map_zoom_buttons.dart';
 
-class MapScreen extends StatefulWidget {
+class MapScreen extends StatefulWidget  {
   final double magneticDeclination;
+  final Function(double lat, double lon, double? distance, String timeStr)? onAnchorAdded; // новый параметр
 
   const MapScreen({
     super.key,
     this.magneticDeclination = 0.0,
+    this.onAnchorAdded,
   });
 
   @override
@@ -47,6 +49,7 @@ class _MapScreenState extends State<MapScreen> {
       state: _state,
       hostState: this,
       storageService: _storageService,
+      onAnchorAdded: widget.onAnchorAdded,
     );
     _logic.init();
   }

@@ -11,6 +11,7 @@ class LogScreen extends StatefulWidget {
 
   @override
   State<LogScreen> createState() => _LogScreenState();
+  
 }
 
 class _LogScreenState extends State<LogScreen> {
@@ -43,7 +44,12 @@ class _LogScreenState extends State<LogScreen> {
             final targetText =
                 'ЦЕЛЬ: ${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
             return '$startText\n$targetText';
-          }
+          } else if (entry is MapAnchorLogEntry) {
+  final distanceText = entry.distanceFromPrevious != null
+      ? ' ${entry.distanceFromPrevious!.round()}m'
+      : ' ---';
+  return 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText ${entry.timeStr}';
+}
           return '';
         })
         .join('\n');
@@ -77,6 +83,10 @@ class _LogScreenState extends State<LogScreen> {
       }
       entryId = entry.id;
       entryType = 'target';
+    } else if (entry is MapAnchorLogEntry) {
+      textToCopy = '${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}';
+      entryId = entry.id;  // ✅ сохраняем id
+      entryType = 'anchor';
     }
 
     if (textToCopy.isNotEmpty) {
@@ -204,7 +214,30 @@ class _LogScreenState extends State<LogScreen> {
           ],
         ),
       );
-    }
+      } else if (entry is MapAnchorLogEntry) {
+        final isCopied = _copiedEntryId == entry.id && _copiedEntryType == 'anchor';  // ✅ проверяем по id
+        final distanceText = entry.distanceFromPrevious != null
+            ? ' ${entry.distanceFromPrevious!.round()}m'
+            : ' ---';
+        final text = 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText ${entry.timeStr}';
+        
+        return InkWell(
+          onTap: () => _handleTap(entry),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            color: isCopied ? originalTextColor : Colors.transparent,
+            child: Text(
+              text,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 16,
+                color: isCopied ? invertedTextColor : originalTextColor,
+              ),
+            ),
+          ),
+        );
+      }
     return const SizedBox.shrink();
   }
 

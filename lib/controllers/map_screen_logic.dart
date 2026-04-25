@@ -20,6 +20,7 @@ class MapScreenLogic {
   final MapStorageService storageService;
   final MapCalibrationService calibration = MapCalibrationService();
   final SensorService sensorService = SensorService();
+  final Function(double lat, double lon, double? distance, String timeStr)? onAnchorAdded;
 
   StreamSubscription<GpsData>? _gpsSub;
   GpsData? _previousGpsData;
@@ -30,6 +31,7 @@ class MapScreenLogic {
     required this.state,
     required this.hostState,
     required this.storageService,
+    this.onAnchorAdded,
   });
 
   bool get mounted => hostState.mounted;
@@ -410,39 +412,60 @@ class MapScreenLogic {
   }
 
   Future<void> _addAnchor({
-    required Offset imagePoint,
-    required double latitude,
-    required double longitude,
-  }) async {
-    final project = state.project;
-    if (project == null) return;
+  required Offset imagePoint,
+  required double latitude,
+  required double longitude,
+}) async {
+  final project = state.project;
+  if (project == null) return;
 
-    final anchor = MapAnchor(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+  // Вычисляем дистанцию до предыдущей привязки (если есть)
+  double? distanceFromPrevious;
+  if (project.anchors.isNotEmpty) {
+    final lastAnchor = project.anchors.last;
+    distanceFromPrevious = calibration.distanceBetweenAnchorsMeters(lastAnchor, MapAnchor(
+      id: '',
       imageX: imagePoint.dx,
       imageY: imagePoint.dy,
       latitude: latitude,
       longitude: longitude,
       createdAt: DateTime.now(),
-    );
-
-    final updatedAnchors = [...project.anchors, anchor];
-    final updatedProject = project.copyWith(anchors: updatedAnchors);
-
-    await storageService.saveProject(updatedProject);
-
-    setState(() {
-      state.project = updatedProject;
-    });
-
-    _recalculateWorkingPair();
-    _recalculateCanPlaceTarget();
-    _recalculateUserImagePoint();
-    recalculateTargetsAfterNewAnchor();
-
-    _showSnackBar('Привязка добавлена. Всего: ${updatedAnchors.length}');
+    ));
   }
 
+  final anchor = MapAnchor(
+    id: DateTime.now().millisecondsSinceEpoch.toString(),
+    imageX: imagePoint.dx,
+    imageY: imagePoint.dy,
+    latitude: latitude,
+    longitude: longitude,
+    createdAt: DateTime.now(),
+  );
+
+  final updatedAnchors = [...project.anchors, anchor];
+  final updatedProject = project.copyWith(anchors: updatedAnchors);
+
+  await storageService.saveProject(updatedProject);
+
+  setState(() {
+    state.project = updatedProject;
+  });
+
+  _recalculateWorkingPair();
+  _recalculateCanPlaceTarget();
+  _recalculateUserImagePoint();
+  recalculateTargetsAfterNewAnchor();
+
+  // Записываем в журнал
+  if (onAnchorAdded != null) {
+    final now = DateTime.now();
+    final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+    await onAnchorAdded!(latitude, longitude, distanceFromPrevious, timeStr);
+  }
+
+  final anchorNum = updatedAnchors.length;
+  _showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
+}
   // ---------------------------------------------------------
   // Цели
   // ---------------------------------------------------------
