@@ -44,8 +44,8 @@ class MapToolbar extends StatelessWidget {
             color: targetEnabled
                 ? (targetText == 'ГОУ' ? Colors.red : Colors.amber[700]!)
                 : Colors.grey,
-            onTap: targetEnabled ? onTargetPressed : null,
-            enabled: targetEnabled,
+            onTap: onTargetPressed,
+            enabled: targetEnabled && !followModeEnabled,
           ),
         ],
       ),
