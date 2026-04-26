@@ -219,7 +219,7 @@ class MapScreenLogic {
     });
 
     if (state.followMode && !_isAutoRotating) {
-      _disableFollowModeTemporarily();
+      disableFollowMode();
     }
 
     _recalculateCrosshairImagePoint();
@@ -669,16 +669,16 @@ class MapScreenLogic {
     _applyHeadingRotation();
   }
 
-  void _disableFollowModeTemporarily() {
+  void disableFollowMode() {
     state.followRestoreTimer?.cancel();
     setState(() => state.followMode = false);
 
-    state.followRestoreTimer = Timer(const Duration(seconds: 60), () {
-      if (!state.isDisposed && mounted) {
-        setState(() => state.followMode = true);
-        _centerMapOnUser();
-      }
-    });
+    // state.followRestoreTimer = Timer(const Duration(seconds: 60), () {
+    //   if (!state.isDisposed && mounted) {
+    //     setState(() => state.followMode = true);
+    //     _centerMapOnUser();
+    //   }
+    // });
   }
 
   void _centerMapOnUser() {

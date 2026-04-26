@@ -6,6 +6,7 @@ class MapToolbar extends StatelessWidget {
   final VoidCallback? onTargetPressed;
   final bool targetEnabled;
   final String targetText;
+  final bool followModeEnabled;
 
   const MapToolbar({
     super.key,
@@ -14,6 +15,7 @@ class MapToolbar extends StatelessWidget {
     this.onTargetPressed,
     this.targetEnabled = false,
     this.targetText = 'ЦЕЛЬ',
+    required this.followModeEnabled,
   });
 
   @override
@@ -32,6 +34,7 @@ class MapToolbar extends StatelessWidget {
             color: Theme.of(context).colorScheme.primary,
             onTap: onHereNowPressed,
             onLongPress: onHereFromClipboard,
+            enabled: !followModeEnabled,
           ),
           const SizedBox(width: 20),
           _buildButton(
@@ -61,8 +64,8 @@ class MapToolbar extends StatelessWidget {
     return Opacity(
       opacity: enabled ? 1.0 : 0.45,
       child: GestureDetector(
-        onTap: onTap,
-        onLongPress: onLongPress,
+        onTap: enabled ? onTap : null,
+        onLongPress: enabled ? onLongPress : null,
         child: Container(
           width: 80,
           height: 80,

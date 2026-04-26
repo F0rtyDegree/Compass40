@@ -84,39 +84,46 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 onPressed: () {
                   if (_state.followMode) {
-                    setState(() => _state.followMode = false);
+                    // Allow manual disabling of follow mode
+                    _logic.disableFollowMode();
                   } else {
                     _logic.enableFollowMode();
                   }
                 },
                 tooltip: 'Следовать',
               ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Удалить карту?'),
-                      content: const Text('Привязки и цели будут удалены.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Отмена'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text(
-                            'Удалить',
-                            style: TextStyle(color: Colors.red),
+              Tooltip(
+                message: 'Удалить карту (долгое нажатие)',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onLongPress: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Удалить карту?'),
+                        content: const Text('Привязки и цели будут удалены.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Отмена'),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true) await _logic.closeMap();
-                },
-                tooltip: 'Закрыть карту',
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text(
+                              'Удалить',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) await _logic.closeMap();
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: Icon(Icons.close),
+                  ),
+                ),
               ),
             ],
           ],
@@ -255,6 +262,7 @@ class _MapScreenState extends State<MapScreen> {
                     : null,
                 targetEnabled: _state.canPlaceTarget,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
+                followModeEnabled: _state.followMode,
               ),
 
               // Слой 6: кнопки масштаба и поворота
