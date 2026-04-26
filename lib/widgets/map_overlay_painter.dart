@@ -4,12 +4,6 @@ import '../models/map_anchor.dart';
 import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
 
-/// Рисует поверх карты:
-/// - якоря (точки привязки)
-/// - текущую позицию пользователя
-/// - цели (planned, active, passed)
-/// - линию до активной цели или до прицела
-/// - подписи дистанции и азимута
 class MapOverlayPainter extends CustomPainter {
   final Size imageSize;
   final MapTransformState transformState;
@@ -24,6 +18,8 @@ class MapOverlayPainter extends CustomPainter {
   final double? previewDistanceMeters;
   final double? previewBearingDegrees;
   final double? heading;
+  final double mapRotation;
+  final double magneticDeclination;
 
   const MapOverlayPainter({
     required this.imageSize,
@@ -35,30 +31,26 @@ class MapOverlayPainter extends CustomPainter {
     this.activeTargetImagePoint,
     this.previewDistanceMeters,
     this.previewBearingDegrees,
-    this.heading,
+    this.heading, // This is MAGNETIC heading
+    this.mapRotation = 0.0,
+    this.magneticDeclination = 0.0,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Рисуем все элементы в экранных координатах
-
-    // Якоря
     for (final anchor in anchors) {
       final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
       _drawAnchor(canvas, screen);
     }
 
-    // Цели
     for (final target in targets) {
       final screen = imageToScreen(Offset(target.imageX, target.imageY));
       _drawTarget(canvas, screen, target.status);
     }
 
-    // Текущая позиция и линия до цели (рисуем последними, чтобы были поверх)
     if (currentUserImagePoint != null) {
       final screen = imageToScreen(currentUserImagePoint!);
 
-      // Линия до активной цели
       if (activeTargetImagePoint != null) {
         final targetScreen = imageToScreen(activeTargetImagePoint!);
         _drawLine(canvas, screen, targetScreen);
@@ -72,14 +64,9 @@ class MapOverlayPainter extends CustomPainter {
           );
         }
       }
-      // Рисуем сам курсор поверх линии
       _drawCurrentPosition(canvas, screen);
     }
   }
-
-  // ---------------------------------------------------------
-  // Преобразование image -> screen
-  // ---------------------------------------------------------
 
   Offset imageToScreen(Offset imagePoint) {
     final center = Offset(viewportSize.width / 2, viewportSize.height / 2);
@@ -94,10 +81,6 @@ class MapOverlayPainter extends CustomPainter {
     );
     return center + transformState.translation + rotated;
   }
-
-  // ---------------------------------------------------------
-  // Отрисовка якоря
-  // ---------------------------------------------------------
 
   void _drawAnchor(Canvas canvas, Offset screen) {
     final paint = Paint()
@@ -133,44 +116,42 @@ class MapOverlayPainter extends CustomPainter {
     canvas.drawPath(path, linePaint);
   }
 
-  // ---------------------------------------------------------
-  // Отрисовка текущей позиции (контурный шеврон)
-  // ---------------------------------------------------------
-
   void _drawCurrentPosition(Canvas canvas, Offset screen) {
-  final outlinePaint = Paint()
-    ..color = Colors.blue.shade500
-    ..strokeWidth = 2.0
-    ..style = PaintingStyle.stroke
-    ..strokeJoin = StrokeJoin.round;
+    final outlinePaint = Paint()
+      ..color = Colors.blue.shade500
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
 
-  final innerShadowPaint = Paint()
-    ..color = Colors.black.withAlpha(128)
-    ..strokeWidth = 0.75
-    ..style = PaintingStyle.stroke
-    ..strokeJoin = StrokeJoin.round;
+    final innerShadowPaint = Paint()
+      ..color = Colors.black.withAlpha(128)
+      ..strokeWidth = 0.75
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round;
 
-  // Форма стрелки-шеврона 
-  final path = Path()
-    ..moveTo(0, -30)
-    ..lineTo(15, 15)
-    ..lineTo(0, 10)
-    ..lineTo(-15, 15)
-    ..close();
+    final path = Path()
+      ..moveTo(0, -30)
+      ..lineTo(15, 15)
+      ..lineTo(0, 10)
+      ..lineTo(-15, 15)
+      ..close();
 
-  canvas.save();
-  canvas.translate(screen.dx, screen.dy);
-  final headingRadians = (heading ?? 0) * (math.pi / 180);
-  final totalRotation = headingRadians + transformState.rotationRadians;
-  canvas.rotate(totalRotation);
-  canvas.drawPath(path, innerShadowPaint);
-  canvas.drawPath(path, outlinePaint);
-  canvas.restore();
-}
+    canvas.save();
+    canvas.translate(screen.dx, screen.dy);
 
-  // ---------------------------------------------------------
-  // Отрисовка цели
-  // ---------------------------------------------------------
+    // True North = Magnetic North + Declination
+    final magneticHeadingRad = (heading ?? 0) * (math.pi / 180);
+    final declinationRad = magneticDeclination * (math.pi / 180);
+    final trueHeadingRad = magneticHeadingRad + declinationRad;
+
+    final totalRotation =
+        trueHeadingRad + transformState.rotationRadians - mapRotation;
+
+    canvas.rotate(totalRotation);
+    canvas.drawPath(path, innerShadowPaint);
+    canvas.drawPath(path, outlinePaint);
+    canvas.restore();
+  }
 
   void _drawTarget(Canvas canvas, Offset screen, MapTargetStatus status) {
     final color = switch (status) {
@@ -205,10 +186,6 @@ class MapOverlayPainter extends CustomPainter {
     canvas.drawPath(flag, flagBorder);
   }
 
-  // ---------------------------------------------------------
-  // Линия от текущей позиции до цели
-  // ---------------------------------------------------------
-
   void _drawLine(Canvas canvas, Offset from, Offset to) {
     final paint = Paint()
       ..color = Colors.red.withAlpha(180)
@@ -239,10 +216,6 @@ class MapOverlayPainter extends CustomPainter {
       drawing = !drawing;
     }
   }
-
-  // ---------------------------------------------------------
-  // Подписи дистанции и азимута
-  // ---------------------------------------------------------
 
   void _drawLabels(
     Canvas canvas,
@@ -287,6 +260,8 @@ class MapOverlayPainter extends CustomPainter {
         oldDelegate.currentUserImagePoint != currentUserImagePoint ||
         oldDelegate.activeTargetImagePoint != activeTargetImagePoint ||
         oldDelegate.previewDistanceMeters != previewDistanceMeters ||
-        oldDelegate.heading != heading;
+        oldDelegate.heading != heading ||
+        oldDelegate.mapRotation != mapRotation ||
+        oldDelegate.magneticDeclination != magneticDeclination;
   }
 }

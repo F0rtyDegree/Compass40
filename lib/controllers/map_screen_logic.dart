@@ -18,9 +18,11 @@ class MapScreenLogic {
   final MapScreenState state;
   final State hostState;
   final MapStorageService storageService;
+  final double magneticDeclination;
   final MapCalibrationService calibration = MapCalibrationService();
   final SensorService sensorService = SensorService();
   final Function(double lat, double lon, double? distance, String timeStr)? onAnchorAdded;
+  bool _isAutoRotating = false;
 
   StreamSubscription<GpsData>? _gpsSub;
   GpsData? _previousGpsData;
@@ -31,6 +33,7 @@ class MapScreenLogic {
     required this.state,
     required this.hostState,
     required this.storageService,
+    required this.magneticDeclination,
     this.onAnchorAdded,
   });
 
@@ -71,7 +74,6 @@ class MapScreenLogic {
     final project = await storageService.loadProject(projectId);
     if (project == null || !mounted) return;
 
-    // Восстанавливаем сохранённый transform
     final savedTransform = await storageService.loadTransform(projectId);
 
     setState(() {
@@ -80,14 +82,15 @@ class MapScreenLogic {
       if (savedTransform != null) {
         state.transformState = savedTransform;
       }
-      // Восстанавливаем активную цель
-      state.activeTarget = project.targets
-          .where((t) => t.status == MapTargetStatus.active)
-          .firstOrNull;
+      try {
+        state.activeTarget = project.targets.firstWhere((t) => t.status == MapTargetStatus.active);
+      } catch(e) {
+        state.activeTarget = null;
+      }
     });
 
     await _loadImageSize();
-    _recalculateWorkingPair();
+    _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
   }
 
@@ -108,7 +111,6 @@ class MapScreenLogic {
       state.imageSize = Size(imgW, imgH);
     });
 
-    // Если transform не был восстановлен — подбираем fit
     if (state.transformState.scale == 1.0 &&
         state.transformState.translation == Offset.zero) {
       _waitForViewportAndFit(imgW, imgH);
@@ -216,14 +218,13 @@ class MapScreenLogic {
       state.transformState = newTransform;
     });
 
-    if (state.followMode) {
+    if (state.followMode && !_isAutoRotating) {
       _disableFollowModeTemporarily();
     }
 
     _recalculateCrosshairImagePoint();
     _recalculateUserScreenPoint();
 
-    // Сохраняем transform асинхронно
     if (state.project != null) {
       storageService.saveTransform(state.project!.id, newTransform);
     }
@@ -242,7 +243,6 @@ class MapScreenLogic {
   // Прицел
   // ---------------------------------------------------------
 
-  /// Публичный метод — используется в map_screen.dart для жестов
   Offset getCrosshairScreenPoint() => _getCrosshairScreenPoint();
 
   void toggleCrosshairPosition() {
@@ -265,7 +265,6 @@ class MapScreenLogic {
       final lon = geo.longitude.toStringAsFixed(6);
       await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
 
-      // Обратная связь
       state.crosshairFeedback.value = true;
       Future.delayed(const Duration(milliseconds: 200), () {
         if (!state.isDisposed) {
@@ -419,7 +418,6 @@ class MapScreenLogic {
   final project = state.project;
   if (project == null) return;
 
-  // Вычисляем дистанцию до предыдущей привязки (если есть)
   double? distanceFromPrevious;
   if (project.anchors.isNotEmpty) {
     final lastAnchor = project.anchors.last;
@@ -451,12 +449,11 @@ class MapScreenLogic {
     state.project = updatedProject;
   });
 
-  _recalculateWorkingPair();
+  _recalculateWorkingPairAndRotation();
   _recalculateCanPlaceTarget();
   _recalculateUserImagePoint();
   recalculateTargetsAfterNewAnchor();
 
-  // Записываем в журнал
   if (onAnchorAdded != null) {
     final now = DateTime.now();
     final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
@@ -500,9 +497,7 @@ class MapScreenLogic {
     });
   }
 
-  Future<void> activatePlannedTarget({
-    required double magneticDeclination,
-  }) async {
+  Future<void> activatePlannedTarget() async {
     final planned = state.plannedTarget;
     if (planned == null) return;
 
@@ -514,31 +509,14 @@ class MapScreenLogic {
       return;
     }
 
-    // Старую активную → passed
     final updatedTargets = project.targets.map((t) {
       if (t.status == MapTargetStatus.active) {
-        return MapTarget(
-          id: t.id,
-          imageX: t.imageX,
-          imageY: t.imageY,
-          latitude: t.latitude,
-          longitude: t.longitude,
-          status: MapTargetStatus.passed,
-          createdAt: t.createdAt,
-        );
+        return t.copyWith(status: MapTargetStatus.passed);
       }
       return t;
     }).toList();
 
-    final activeTarget = MapTarget(
-      id: planned.id,
-      imageX: planned.imageX,
-      imageY: planned.imageY,
-      latitude: planned.latitude,
-      longitude: planned.longitude,
-      status: MapTargetStatus.active,
-      createdAt: planned.createdAt,
-    );
+    final activeTarget = planned.copyWith(status: MapTargetStatus.active);
 
     updatedTargets.add(activeTarget);
 
@@ -551,7 +529,6 @@ class MapScreenLogic {
       state.plannedTarget = null;
     });
 
-    // Пересчёт preview
     _recalculatePreview();
   }
 
@@ -563,16 +540,8 @@ class MapScreenLogic {
     if (project == null) return;
 
     final updatedTargets = project.targets.map((t) {
-      if (t.status == MapTargetStatus.active) {
-        return MapTarget(
-          id: t.id,
-          imageX: t.imageX,
-          imageY: t.imageY,
-          latitude: t.latitude,
-          longitude: t.longitude,
-          status: MapTargetStatus.passed,
-          createdAt: t.createdAt,
-        );
+      if (t.id == active.id) {
+        return t.copyWith(status: MapTargetStatus.passed);
       }
       return t;
     }).toList();
@@ -590,10 +559,17 @@ class MapScreenLogic {
   // Пересчёты
   // ---------------------------------------------------------
 
-  void _recalculateWorkingPair() {
+  void _recalculateWorkingPairAndRotation() {
     final anchors = state.project?.anchors ?? [];
+    final newPair = calibration.selectWorkingPair(anchors);
+
     setState(() {
-      state.workingPair = calibration.selectWorkingPair(anchors);
+      state.workingPair = newPair;
+      if (newPair != null) {
+        state.mapRotation = calibration.getMapRotation(newPair) ?? 0.0;
+      } else {
+        state.mapRotation = 0.0;
+      }
     });
   }
 
@@ -630,7 +606,6 @@ class MapScreenLogic {
     });
   }
 
-  /// Пересчёт preview: дистанция и азимут от пользователя до активной цели
   void _recalculatePreview() {
     final gps = _lastGpsData;
     final active = state.activeTarget;
@@ -648,7 +623,7 @@ class MapScreenLogic {
       fromLon: gps.longitude!,
       toLat: active!.latitude!,
       toLon: active.longitude!,
-      magneticDeclination: 0, // передаётся через onActivate
+      magneticDeclination: magneticDeclination,
     );
 
     setState(() {
@@ -668,15 +643,7 @@ class MapScreenLogic {
         pair: pair,
       );
       if (geo == null) return t;
-      return MapTarget(
-        id: t.id,
-        imageX: t.imageX,
-        imageY: t.imageY,
-        latitude: geo.latitude,
-        longitude: geo.longitude,
-        status: t.status,
-        createdAt: t.createdAt,
-      );
+      return t.copyWith(latitude: geo.latitude, longitude: geo.longitude);
     }).toList();
 
     final updatedProject = project.copyWith(targets: updatedTargets);
@@ -684,9 +651,11 @@ class MapScreenLogic {
 
     setState(() {
       state.project = updatedProject;
-      state.activeTarget = updatedTargets
-          .where((t) => t.status == MapTargetStatus.active)
-          .firstOrNull;
+       try {
+        state.activeTarget = updatedTargets.firstWhere((t) => t.status == MapTargetStatus.active);
+      } catch(e) {
+        state.activeTarget = null;
+      }
     });
   }
 
@@ -697,13 +666,14 @@ class MapScreenLogic {
   void enableFollowMode() {
     state.followRestoreTimer?.cancel();
     setState(() => state.followMode = true);
+    _applyHeadingRotation();
   }
 
   void _disableFollowModeTemporarily() {
     state.followRestoreTimer?.cancel();
     setState(() => state.followMode = false);
 
-    state.followRestoreTimer = Timer(const Duration(seconds: 15), () {
+    state.followRestoreTimer = Timer(const Duration(seconds: 60), () {
       if (!state.isDisposed && mounted) {
         setState(() => state.followMode = true);
         _centerMapOnUser();
@@ -739,11 +709,7 @@ class MapScreenLogic {
     final newTranslation = targetTranslation - rotated;
 
     setState(() {
-      state.transformState = MapTransformState(
-        scale: t.scale,
-        rotationRadians: t.rotationRadians,
-        translation: newTranslation,
-      );
+      state.transformState = t.copyWith(translation: newTranslation);
     });
 
     _recalculateUserScreenPoint();
@@ -760,26 +726,24 @@ class MapScreenLogic {
         _lastGpsData = gpsData;
         if (!mounted) return;
 
-        // Вычисляем азимут, если есть предыдущая точка
-        if (_previousGpsData != null) {
-          final speedKmh = (gpsData.speed ?? 0) * 3.6;
-          if (speedKmh > _sensorSettings.autoSwitchSpeedKmh) {
-            final bd = calibration.bearingAndDistance(
-              fromLat: _previousGpsData!.latitude!,
-              fromLon: _previousGpsData!.longitude!,
-              toLat: gpsData.latitude!,
-              toLon: gpsData.longitude!,
-              magneticDeclination: 0, // Не используется для направления
-            );
-            setState(() {
-              state.heading = bd.magneticBearing;
-            });
+        if (_previousGpsData?.latitude != null && (gpsData.speed ?? 0) * 3.6 > _sensorSettings.autoSwitchSpeedKmh) {
+          final bd = calibration.bearingAndDistance(
+            fromLat: _previousGpsData!.latitude!,
+            fromLon: _previousGpsData!.longitude!,
+            toLat: gpsData.latitude!,
+            toLon: gpsData.longitude!,
+            magneticDeclination: magneticDeclination,
+          );
+          setState(() {
+            state.heading = bd.magneticBearing;
+          });
+
+          if (state.followMode) {
+            _applyHeadingRotation();
           }
         }
-        _previousGpsData = gpsData; 
+        _previousGpsData = gpsData;
 
-
-        // Обновление позиции
         if (state.followMode) {
           _recalculateUserImagePoint();
           _centerMapOnUser();
@@ -790,7 +754,6 @@ class MapScreenLogic {
     );
   }
 
-
   // ---------------------------------------------------------
   // Вспомогательные
   // ---------------------------------------------------------
@@ -800,5 +763,39 @@ class MapScreenLogic {
     ScaffoldMessenger.of(hostState.context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
     );
+  }
+
+  void _applyHeadingRotation() {
+    if (!state.followMode || state.heading == null) return;
+
+    _isAutoRotating = true;
+
+    // True North = Magnetic North + Declination
+    final magneticHeadingRad = (state.heading!) * (math.pi / 180);
+    final declinationRad = magneticDeclination * (math.pi / 180);
+    final trueHeadingRad = magneticHeadingRad + declinationRad;
+
+    final targetRotation = -trueHeadingRad + state.mapRotation;
+
+    final current = state.transformState;
+    final pivotImage = screenToImage(_getCrosshairScreenPoint());
+
+    final tempTransform = current.copyWith(rotationRadians: targetRotation);
+    final oldTransform = state.transformState;
+    state.transformState = tempTransform;
+    final pivotScreenAfterRotate = imageToScreen(pivotImage);
+    state.transformState = oldTransform;
+
+    final delta = _getCrosshairScreenPoint() - pivotScreenAfterRotate;
+    final newTranslation = current.translation + delta;
+
+    updateTransform(
+      current.copyWith(
+        rotationRadians: targetRotation,
+        translation: newTranslation,
+      ),
+    );
+
+    _isAutoRotating = false;
   }
 }

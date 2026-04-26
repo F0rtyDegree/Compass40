@@ -10,9 +10,10 @@ import '../widgets/map_overlay_painter.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/map_zoom_buttons.dart';
 
-class MapScreen extends StatefulWidget  {
+class MapScreen extends StatefulWidget {
   final double magneticDeclination;
-  final Function(double lat, double lon, double? distance, String timeStr)? onAnchorAdded; // новый параметр
+  final Function(double lat, double lon, double? distance, String timeStr)?
+      onAnchorAdded;
 
   const MapScreen({
     super.key,
@@ -49,6 +50,7 @@ class _MapScreenState extends State<MapScreen> {
       state: _state,
       hostState: this,
       storageService: _storageService,
+      magneticDeclination: widget.magneticDeclination, // Pass it here
       onAnchorAdded: widget.onAnchorAdded,
     );
     _logic.init();
@@ -183,56 +185,60 @@ class _MapScreenState extends State<MapScreen> {
               CustomPaint(
                 size: viewportSize,
                 painter: MapOverlayPainter(
-                  imageSize: imageSize,
-                  transformState: _state.transformState,
-                  viewportSize: viewportSize,
-                  anchors: _state.project?.anchors ?? [],
-                  targets: [
-                    ..._state.project?.targets ?? [],
-                    if (_state.plannedTarget != null) _state.plannedTarget!,
-                  ],
-                  currentUserImagePoint: _state.currentUserImagePoint,
-                  activeTargetImagePoint: _state.activeTarget != null
-                      ? Offset(
-                          _state.activeTarget!.imageX,
-                          _state.activeTarget!.imageY,
-                        )
-                      : null,
-                  previewDistanceMeters: _state.previewDistanceMeters,
-                  previewBearingDegrees: _state.previewBearingDegrees,
-                  heading: _state.heading,
-                ),
+                    imageSize: imageSize,
+                    transformState: _state.transformState,
+                    viewportSize: viewportSize,
+                    anchors: _state.project?.anchors ?? [],
+                    targets: [
+                      ..._state.project?.targets ?? [],
+                      if (_state.plannedTarget != null) _state.plannedTarget!,
+                    ],
+                    currentUserImagePoint: _state.currentUserImagePoint,
+                    activeTargetImagePoint: _state.activeTarget != null
+                        ? Offset(
+                            _state.activeTarget!.imageX,
+                            _state.activeTarget!.imageY,
+                          )
+                        : null,
+                    previewDistanceMeters: _state.previewDistanceMeters,
+                    previewBearingDegrees: _state.previewBearingDegrees,
+                    heading: _state.heading,
+                    mapRotation: _state.mapRotation,
+                    magneticDeclination:
+                        widget.magneticDeclination, // Pass declination
+                    ),
               ),
 
               // Слой 3: прицел с зоной двойного тапа
               Builder(
-              builder: (context) {
-                final vp = _state.viewportSize;
-                if (vp == null) return const SizedBox.shrink();
+                builder: (context) {
+                  final vp = _state.viewportSize;
+                  if (vp == null) return const SizedBox.shrink();
 
-                final crosshairPosition = _logic.getCrosshairScreenPoint();
+                  final crosshairPosition = _logic.getCrosshairScreenPoint();
 
-                return Stack(
-                  children: [
-                    Positioned(
-                      left: crosshairPosition.dx - 40,
-                      top: crosshairPosition.dy - 40,
-                      width: 80,
-                      height: 80,
-                      child: GestureDetector(
-                        onDoubleTap: _logic.toggleCrosshairPosition,
-                        onLongPress: () => _logic.copyCrosshairCoordinatesToClipboard(),
-                        child: Container(color: Colors.transparent),
+                  return Stack(
+                    children: [
+                      Positioned(
+                        left: crosshairPosition.dx - 40,
+                        top: crosshairPosition.dy - 40,
+                        width: 80,
+                        height: 80,
+                        child: GestureDetector(
+                          onDoubleTap: _logic.toggleCrosshairPosition,
+                          onLongPress: () =>
+                              _logic.copyCrosshairCoordinatesToClipboard(),
+                          child: Container(color: Colors.transparent),
+                        ),
                       ),
-                    ),
-                    MapCrosshair(
-                      inCenter: _state.crosshairInCenter,
-                      feedback: _state.crosshairFeedback,
-                    ),
-                  ],
-                );
-              },
-            ),
+                      MapCrosshair(
+                        inCenter: _state.crosshairInCenter,
+                        feedback: _state.crosshairFeedback,
+                      ),
+                    ],
+                  );
+                },
+              ),
 
               // Слой 4: бейдж привязок
               if (_state.project != null && _state.project!.anchors.isNotEmpty)
@@ -244,10 +250,8 @@ class _MapScreenState extends State<MapScreen> {
                 onHereFromClipboard: _logic.addAnchorFromClipboard,
                 onTargetPressed: _state.canPlaceTarget
                     ? (_state.plannedTarget == null
-                          ? _logic.placePlannedTargetAtCrosshair
-                          : () => _logic.activatePlannedTarget(
-                              magneticDeclination: widget.magneticDeclination,
-                            ))
+                        ? _logic.placePlannedTargetAtCrosshair
+                        : _logic.activatePlannedTarget)
                     : null,
                 targetEnabled: _state.canPlaceTarget,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
@@ -420,7 +424,8 @@ class _MapScreenState extends State<MapScreen> {
         _lastAngle = currentAngle;
 
         const sensitivity = 0.8;
-        final newRotation = _gestureStartRotation + _accumulatedRotation * sensitivity;
+        final newRotation =
+            _gestureStartRotation + _accumulatedRotation * sensitivity;
 
         if (_gestureStartPivotImage != null) {
           final tempTransform = MapTransformState(
@@ -432,7 +437,8 @@ class _MapScreenState extends State<MapScreen> {
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
 
-          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterRotate =
+              _logic.imageToScreen(_gestureStartPivotImage!);
 
           _state.transformState = oldTransform;
 
@@ -495,7 +501,8 @@ class _MapScreenState extends State<MapScreen> {
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
 
-          final pivotScreenAfterScale = _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterScale =
+              _logic.imageToScreen(_gestureStartPivotImage!);
 
           _state.transformState = oldTransform;
 
@@ -535,7 +542,8 @@ class _MapScreenState extends State<MapScreen> {
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
 
-          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterRotate =
+              _logic.imageToScreen(_gestureStartPivotImage!);
 
           _state.transformState = oldTransform;
 
@@ -592,7 +600,8 @@ class _MapScreenState extends State<MapScreen> {
         final oldTransform = _state.transformState;
         _state.transformState = tempTransform;
 
-        final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+        final pivotScreenAfterRotate =
+            _logic.imageToScreen(_gestureStartPivotImage!);
 
         _state.transformState = oldTransform;
 

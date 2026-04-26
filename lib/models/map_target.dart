@@ -21,6 +21,26 @@ class MapTarget extends Equatable {
     required this.createdAt,
   });
 
+  MapTarget copyWith({
+    String? id,
+    double? imageX,
+    double? imageY,
+    double? latitude,
+    double? longitude,
+    MapTargetStatus? status,
+    DateTime? createdAt,
+  }) {
+    return MapTarget(
+      id: id ?? this.id,
+      imageX: imageX ?? this.imageX,
+      imageY: imageY ?? this.imageY,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
   @override
   List<Object?> get props => [
     id,

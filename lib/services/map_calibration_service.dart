@@ -26,9 +26,6 @@ class MapCalibrationService {
   // Выбор рабочей пары
   // ---------------------------------------------------------
 
-  /// Выбирает рабочую пару по правилу:
-  /// latest = последняя по времени создания точка
-  /// reference = ближайшая предыдущая, расстояние до которой >= 50 м
   MapWorkingPair? selectWorkingPair(
     List<MapAnchor> anchors, {
     double minDistanceMeters = 50.0,
@@ -40,7 +37,6 @@ class MapCalibrationService {
 
     final latest = sorted.last;
 
-    // Идём от предпоследней точки назад
     for (int i = sorted.length - 2; i >= 0; i--) {
       final candidate = sorted[i];
       final dist = distanceBetweenAnchorsMeters(latest, candidate);
@@ -50,6 +46,11 @@ class MapCalibrationService {
     }
 
     return null;
+  }
+
+  double? getMapRotation(MapWorkingPair pair) {
+    final transform = _buildTransform(pair);
+    return transform?.angleRadians;
   }
 
   // ---------------------------------------------------------
@@ -86,8 +87,6 @@ class MapCalibrationService {
   // Перевод GPS → LocalPoint (метры East/North)
   // ---------------------------------------------------------
 
-  /// Переводит GPS-точку в локальные метры
-  /// относительно опорной точки (origin)
   LocalPoint geoToLocal({
     required double latitude,
     required double longitude,
@@ -104,7 +103,6 @@ class MapCalibrationService {
     return LocalPoint(east: east, north: north);
   }
 
-  /// Переводит локальные метры (East/North) обратно в GPS
   GeoPoint localToGeo({
     required LocalPoint local,
     required double originLat,
@@ -125,23 +123,18 @@ class MapCalibrationService {
   // Построение локального 2-точечного преобразования
   // ---------------------------------------------------------
 
-  /// Вычисляет параметры similarity transform по двум точкам привязки.
-  /// Это ядро для image ↔ geo.
   _SimilarityTransform? _buildTransform(MapWorkingPair pair) {
-    // Вектор в image-координатах
     final imgVec = Offset(
       pair.latest.imageX - pair.reference.imageX,
       pair.latest.imageY - pair.reference.imageY,
     );
 
     final imgLen = imgVec.distance;
-    if (imgLen < 1e-9) return null; // Две точки совпали по пикселям
+    if (imgLen < 1e-9) return null;
 
-    // Опорная точка — reference.geo
     final originLat = pair.reference.latitude;
     final originLon = pair.reference.longitude;
 
-    // Вектор в локальных метрах
     final latestLocal = geoToLocal(
       latitude: pair.latest.latitude,
       longitude: pair.latest.longitude,
@@ -150,15 +143,11 @@ class MapCalibrationService {
     );
 
     final geoVec = Offset(latestLocal.east, -latestLocal.north);
-    // Минус north потому что ось Y экрана направлена вниз, north — вверх
-
     final geoLen = geoVec.distance;
-    if (geoLen < 1e-9) return null; // Две точки совпали по GPS
+    if (geoLen < 1e-9) return null;
 
-    // Масштаб: метры на пиксель
     final scale = geoLen / imgLen;
 
-    // Угол поворота: image -> geo
     final angle =
         math.atan2(geoVec.dy, geoVec.dx) - math.atan2(imgVec.dy, imgVec.dx);
 
@@ -173,11 +162,9 @@ class MapCalibrationService {
   }
 
   // ---------------------------------------------------------
-  // image → GPS
+  // image ↔ GPS
   // ---------------------------------------------------------
 
-  /// Переводит пиксель изображения в GPS-координаты.
-  /// Требует рабочую пару.
   GeoPoint? imagePointToGeo({
     required Offset imagePoint,
     required MapWorkingPair pair,
@@ -185,21 +172,17 @@ class MapCalibrationService {
     final t = _buildTransform(pair);
     if (t == null) return null;
 
-    // Вектор относительно reference в image-пространстве
     final dx = imagePoint.dx - t.referenceImageX;
     final dy = imagePoint.dy - t.referenceImageY;
 
-    // Масштаб
     final scaledDx = dx * t.scale;
     final scaledDy = dy * t.scale;
 
-    // Поворот
     final cos = math.cos(t.angleRadians);
     final sin = math.sin(t.angleRadians);
     final localEast = scaledDx * cos - scaledDy * sin;
     final localNorthNeg = scaledDx * sin + scaledDy * cos;
 
-    // Обратно north (была инвертирована ось Y)
     final localNorth = -localNorthNeg;
 
     return localToGeo(
@@ -209,12 +192,6 @@ class MapCalibrationService {
     );
   }
 
-  // ---------------------------------------------------------
-  // GPS → image
-  // ---------------------------------------------------------
-
-  /// Переводит GPS-координаты в пиксель изображения.
-  /// Требует рабочую пару.
   Offset? geoToImagePoint({
     required double latitude,
     required double longitude,
@@ -223,7 +200,6 @@ class MapCalibrationService {
     final t = _buildTransform(pair);
     if (t == null) return null;
 
-    // Локальные метры относительно reference
     final local = geoToLocal(
       latitude: latitude,
       longitude: longitude,
@@ -231,17 +207,14 @@ class MapCalibrationService {
       originLon: t.originLon,
     );
 
-    // Инвертируем north → ось Y экрана
     final geoX = local.east;
     final geoY = -local.north;
 
-    // Обратный поворот
     final cos = math.cos(-t.angleRadians);
     final sin = math.sin(-t.angleRadians);
     final rotX = geoX * cos - geoY * sin;
     final rotY = geoX * sin + geoY * cos;
 
-    // Обратный масштаб
     final dx = rotX / t.scale;
     final dy = rotY / t.scale;
 
@@ -252,12 +225,10 @@ class MapCalibrationService {
   // Вспомогательные проверки
   // ---------------------------------------------------------
 
-  /// Есть ли достаточная пара для привязки
   bool canBuildTransform(List<MapAnchor> anchors) {
     return selectWorkingPair(anchors) != null;
   }
 
-  /// Расстояние и азимут от одной GPS-точки до другой
   BearingAndDistance bearingAndDistance({
     required double fromLat,
     required double fromLon,
@@ -272,31 +243,29 @@ class MapCalibrationService {
     final dLambda = (toLon - fromLon) * math.pi / 180;
 
     final y = math.sin(dLambda) * math.cos(phi2);
-    final x =
+    final x = 
         math.cos(phi1) * math.sin(phi2) -
         math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
 
     final trueBearing = (math.atan2(y, x) * 180 / math.pi + 360) % 360;
+    // Convention: East declination is positive. True North = Magnetic North + Declination.
     final magneticBearing = (trueBearing - magneticDeclination + 360) % 360;
 
     return BearingAndDistance(
       distanceMeters: dist,
+      trueBearing: trueBearing,
       magneticBearing: magneticBearing,
     );
   }
 }
-
-// ---------------------------------------------------------
-// Вспомогательные внутренние модели
-// ---------------------------------------------------------
 
 class _SimilarityTransform {
   final double originLat;
   final double originLon;
   final double referenceImageX;
   final double referenceImageY;
-  final double scale; // метры / пиксель
-  final double angleRadians; // image → geo
+  final double scale;
+  final double angleRadians;
 
   const _SimilarityTransform({
     required this.originLat,
@@ -310,10 +279,12 @@ class _SimilarityTransform {
 
 class BearingAndDistance {
   final double distanceMeters;
+  final double trueBearing;
   final double magneticBearing;
 
   const BearingAndDistance({
     required this.distanceMeters,
+    required this.trueBearing,
     required this.magneticBearing,
   });
 }
