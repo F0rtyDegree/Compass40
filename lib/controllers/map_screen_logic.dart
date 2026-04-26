@@ -681,6 +681,14 @@ class MapScreenLogic {
     // });
   }
 
+  void toggleFollowMode() {
+    if (state.followMode) {
+      disableFollowMode();
+    } else {
+      enableFollowMode();
+    }
+  }
+
   void _centerMapOnUser() {
     final imagePoint = state.currentUserImagePoint;
     if (imagePoint == null || state.viewportSize == null) return;

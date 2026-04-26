@@ -77,21 +77,6 @@ class _MapScreenState extends State<MapScreen> {
           centerTitle: true,
           actions: [
             if (_state.imagePath != null) ...[
-              IconButton(
-                icon: Icon(
-                  _state.followMode ? Icons.gps_fixed : Icons.gps_not_fixed,
-                  color: _state.followMode ? Colors.blue : null,
-                ),
-                onPressed: () {
-                  if (_state.followMode) {
-                    // Allow manual disabling of follow mode
-                    _logic.disableFollowMode();
-                  } else {
-                    _logic.enableFollowMode();
-                  }
-                },
-                tooltip: 'Следовать',
-              ),
               Tooltip(
                 message: 'Удалить карту (долгое нажатие)',
                 child: InkWell(
@@ -232,6 +217,7 @@ class _MapScreenState extends State<MapScreen> {
                         width: 80,
                         height: 80,
                         child: GestureDetector(
+                          onTap: _logic.toggleFollowMode,
                           onDoubleTap: _logic.toggleCrosshairPosition,
                           onLongPress: () =>
                               _logic.copyCrosshairCoordinatesToClipboard(),
