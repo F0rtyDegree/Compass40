@@ -35,6 +35,19 @@ class LogService {
   return logItems;
 }
 
+  Future<void> removeLastMapAnchorLog() async {
+    final logItems = await loadLogEntries();
+    
+    // Ищем индекс последней записи типа MapAnchorLogEntry, начиная с конца списка
+    final int indexToRemove = logItems.lastIndexWhere((item) => item is MapAnchorLogEntry);
+
+    // Если такая запись найдена, удаляем ее
+    if (indexToRemove != -1) {
+      logItems.removeAt(indexToRemove);
+      await saveLogEntries(logItems);
+    }
+  }
+
   Future<List<LogItem>> loadLogEntries() async {
     final prefs = await SharedPreferences.getInstance();
     final String? logJson = prefs.getString('log_items');

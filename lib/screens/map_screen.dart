@@ -246,7 +246,7 @@ class _MapScreenState extends State<MapScreen> {
                         ? _logic.placePlannedTargetAtCrosshair
                         : _logic.activatePlannedTarget)
                     : null,
-                targetEnabled: _state.canPlaceTarget,
+                targetEnabled: _state.canPlaceTarget && !_state.followMode,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
                 followModeEnabled: _state.followMode,
               ),
@@ -624,24 +624,66 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildAnchorBadge() {
     final count = _state.project!.anchors.length;
+    if (count == 0) return const SizedBox.shrink();
+
     final hasWorkingPair = _state.workingPair != null;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: hasWorkingPair
-            ? Colors.green.withAlpha(200)
-            : Colors.orange.withAlpha(200),
-        borderRadius: BorderRadius.circular(20),
+    // Используем уникальный ключ, который меняется при изменении состояния, которое должно сбросить Dismissible
+    // В данном случае, count - хороший кандидат.
+    return Dismissible(
+      key: ValueKey(count),
+      direction: DismissDirection.endToStart, // Свайп справа налево
+      confirmDismiss: (direction) async {
+        if (_state.project!.anchors.length <= 2) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Нельзя удалить. Для привязки необходимо минимум 2 точки.'),
+              backgroundColor: Colors.orangeAccent,
+            ),
+          );
+          return false; // Запретить удаление
+        }
+        return true; // Разрешить удаление
+      },
+      onDismissed: (direction) {
+        _logic.undoLastAnchor();
+        // Этот SnackBar показывается после успешного удаления
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Последняя привязка удалена'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      },
+      background: Container(
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete, color: Colors.white),
       ),
-      child: Text(
-        hasWorkingPair
-            ? 'Карта привязана ($count)'
-            : 'Привязок: $count (нужно ≥2, расстояние ≥50м)',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
+      child: Tooltip(
+        message: 'Смахни влево чтобы удалить последнюю точку',
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: hasWorkingPair
+                ? Colors.green.withAlpha(200)
+                : Colors.orange.withAlpha(200),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            hasWorkingPair
+                ? 'Карта привязана ($count)'
+                : 'Привязок: $count (нужно ≥2, расстояние ≥50м)',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       ),
     );

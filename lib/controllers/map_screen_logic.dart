@@ -9,6 +9,7 @@ import '../models/map_anchor.dart';
 import '../models/map_project.dart';
 import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
+import '../services/log_service.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import 'map_screen_state.dart';
@@ -21,6 +22,7 @@ class MapScreenLogic {
   final double magneticDeclination;
   final MapCalibrationService calibration = MapCalibrationService();
   final SensorService sensorService = SensorService();
+  final LogService logService = LogService();
   final Function(double lat, double lon, double? distance, String timeStr)? onAnchorAdded;
   bool _isAutoRotating = false;
 
@@ -411,58 +413,86 @@ class MapScreenLogic {
   }
 
   Future<void> _addAnchor({
-  required Offset imagePoint,
-  required double latitude,
-  required double longitude,
-}) async {
-  final project = state.project;
-  if (project == null) return;
+    required Offset imagePoint,
+    required double latitude,
+    required double longitude,
+  }) async {
+    final project = state.project;
+    if (project == null) return;
 
-  double? distanceFromPrevious;
-  if (project.anchors.isNotEmpty) {
-    final lastAnchor = project.anchors.last;
-    distanceFromPrevious = calibration.distanceBetweenAnchorsMeters(lastAnchor, MapAnchor(
-      id: '',
+    double? distanceFromPrevious;
+    if (project.anchors.isNotEmpty) {
+      final lastAnchor = project.anchors.last;
+      distanceFromPrevious = calibration.distanceBetweenAnchorsMeters(lastAnchor, MapAnchor(
+        id: '',
+        imageX: imagePoint.dx,
+        imageY: imagePoint.dy,
+        latitude: latitude,
+        longitude: longitude,
+        createdAt: DateTime.now(),
+      ));
+    }
+
+    final anchor = MapAnchor(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       imageX: imagePoint.dx,
       imageY: imagePoint.dy,
       latitude: latitude,
       longitude: longitude,
       createdAt: DateTime.now(),
-    ));
+    );
+
+    final updatedAnchors = [...project.anchors, anchor];
+    final updatedProject = project.copyWith(anchors: updatedAnchors);
+
+    await storageService.saveProject(updatedProject);
+
+    setState(() {
+      state.project = updatedProject;
+    });
+
+    _recalculateWorkingPairAndRotation();
+    _recalculateCanPlaceTarget();
+    _recalculateUserImagePoint();
+    recalculateTargetsAfterNewAnchor();
+
+    if (onAnchorAdded != null) {
+      final now = DateTime.now();
+      final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+      await onAnchorAdded!(latitude, longitude, distanceFromPrevious, timeStr);
+    }
+
+    final anchorNum = updatedAnchors.length;
+    _showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
-  final anchor = MapAnchor(
-    id: DateTime.now().millisecondsSinceEpoch.toString(),
-    imageX: imagePoint.dx,
-    imageY: imagePoint.dy,
-    latitude: latitude,
-    longitude: longitude,
-    createdAt: DateTime.now(),
-  );
+  Future<void> undoLastAnchor() async {
+    final project = state.project;
+    if (project == null || project.anchors.length <= 2) {
+      // Защита от удаления, если точек 2 или меньше.
+      // SnackBar показывается в confirmDismiss виджета.
+      return;
+    }
 
-  final updatedAnchors = [...project.anchors, anchor];
-  final updatedProject = project.copyWith(anchors: updatedAnchors);
+    final updatedAnchors = project.anchors.sublist(0, project.anchors.length - 1);
+    final updatedProject = project.copyWith(anchors: updatedAnchors);
 
-  await storageService.saveProject(updatedProject);
+    await storageService.saveProject(updatedProject);
+    // Вызываем исправленный метод в сервисе
+    await logService.removeLastMapAnchorLog();
 
-  setState(() {
-    state.project = updatedProject;
-  });
+    setState(() {
+      state.project = updatedProject;
+    });
 
-  _recalculateWorkingPairAndRotation();
-  _recalculateCanPlaceTarget();
-  _recalculateUserImagePoint();
-  recalculateTargetsAfterNewAnchor();
-
-  if (onAnchorAdded != null) {
-    final now = DateTime.now();
-    final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-    await onAnchorAdded!(latitude, longitude, distanceFromPrevious, timeStr);
+    // Пересчитываем все, что зависит от привязок
+    _recalculateWorkingPairAndRotation();
+    _recalculateCanPlaceTarget();
+    _recalculateUserImagePoint();
+    recalculateTargetsAfterNewAnchor();
   }
 
-  final anchorNum = updatedAnchors.length;
-  _showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
-}
+
   // ---------------------------------------------------------
   // Цели
   // ---------------------------------------------------------
