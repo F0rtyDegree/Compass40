@@ -454,7 +454,7 @@ class MapScreenLogic {
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
     _recalculateUserImagePoint();
-    recalculateTargetsAfterNewAnchor();
+    await recalculateTargetsAfterNewAnchor();
 
     if (onAnchorAdded != null) {
       final now = DateTime.now();
@@ -489,7 +489,7 @@ class MapScreenLogic {
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
     _recalculateUserImagePoint();
-    recalculateTargetsAfterNewAnchor();
+    await recalculateTargetsAfterNewAnchor();
   }
 
 
@@ -538,6 +538,11 @@ class MapScreenLogic {
       _showSnackBar('Координаты цели не определены — добавьте привязку');
       return;
     }
+
+    final lat = planned.latitude!.toStringAsFixed(6);
+    final lon = planned.longitude!.toStringAsFixed(6);
+    await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
+    _showSnackBar('Координаты цели скопированы в буфер обмена');
 
     final updatedTargets = project.targets.map((t) {
       if (t.status == MapTargetStatus.active) {
@@ -662,7 +667,7 @@ class MapScreenLogic {
     });
   }
 
-  void recalculateTargetsAfterNewAnchor() {
+  Future<void> recalculateTargetsAfterNewAnchor() async {
     final project = state.project;
     final pair = state.workingPair;
     if (project == null || pair == null) return;
@@ -677,16 +682,26 @@ class MapScreenLogic {
     }).toList();
 
     final updatedProject = project.copyWith(targets: updatedTargets);
-    storageService.saveProject(updatedProject);
+    await storageService.saveProject(updatedProject);
+
+    MapTarget? newActiveTarget;
+    try {
+      newActiveTarget = updatedTargets.firstWhere((t) => t.status == MapTargetStatus.active);
+    } catch(e) {
+      newActiveTarget = null;
+    }
 
     setState(() {
       state.project = updatedProject;
-       try {
-        state.activeTarget = updatedTargets.firstWhere((t) => t.status == MapTargetStatus.active);
-      } catch(e) {
-        state.activeTarget = null;
-      }
+      state.activeTarget = newActiveTarget;
     });
+
+    if (newActiveTarget != null && newActiveTarget.latitude != null && newActiveTarget.longitude != null) {
+      final lat = newActiveTarget.latitude!.toStringAsFixed(6);
+      final lon = newActiveTarget.longitude!.toStringAsFixed(6);
+      await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
+      _showSnackBar('Координаты цели обновлены и скопированы');
+    }
   }
 
   // ---------------------------------------------------------
