@@ -106,7 +106,7 @@ class _MapScreenState extends State<MapScreen> {
                   },
                   child: const Padding(
                     padding: EdgeInsets.all(12.0),
-                    child: Icon(Icons.close),
+                    child: Icon(Icons.delete_forever),
                   ),
                 ),
               ),
