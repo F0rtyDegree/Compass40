@@ -194,6 +194,7 @@ class _MapScreenState extends State<MapScreen> {
                       if (_state.plannedTarget != null) _state.plannedTarget!,
                     ],
                     userPath: _state.project?.userPath ?? [],
+                    pathJumpIndices: _state.project?.pathJumpIndices ?? [],
                     currentUserImagePoint: _state.currentUserImagePoint,
                     activeTargetImagePoint: _state.activeTarget != null
                         ? Offset(

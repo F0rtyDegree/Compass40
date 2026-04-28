@@ -12,6 +12,7 @@ class MapOverlayPainter extends CustomPainter {
   final List<MapAnchor> anchors;
   final List<MapTarget> targets;
   final List<Offset> userPath;
+  final List<int> pathJumpIndices;
 
   final Offset? currentUserImagePoint;
   final Offset? activeTargetImagePoint;
@@ -29,6 +30,7 @@ class MapOverlayPainter extends CustomPainter {
     required this.anchors,
     required this.targets,
     this.userPath = const [],
+    this.pathJumpIndices = const [],
     this.currentUserImagePoint,
     this.activeTargetImagePoint,
     this.previewDistanceMeters,
@@ -40,25 +42,7 @@ class MapOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Draw the user path
-    if (userPath.length > 1) {
-      final pathPaint = Paint()
-        ..color = Colors.blue.withAlpha(204) // Replaced withOpacity
-        ..strokeWidth = 3.0
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round
-        ..strokeCap = StrokeCap.round;
-
-      final path = Path();
-      final startPoint = imageToScreen(userPath.first);
-      path.moveTo(startPoint.dx, startPoint.dy);
-
-      for (int i = 1; i < userPath.length; i++) {
-        final point = imageToScreen(userPath[i]);
-        path.lineTo(point.dx, point.dy);
-      }
-      canvas.drawPath(path, pathPaint);
-    }
+    _drawUserPath(canvas);
 
     for (final anchor in anchors) {
       final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
@@ -87,6 +71,36 @@ class MapOverlayPainter extends CustomPainter {
         }
       }
       _drawCurrentPosition(canvas, screen);
+    }
+  }
+  
+  void _drawUserPath(Canvas canvas) {
+    if (userPath.length < 2) return;
+
+    final solidPathPaint = Paint()
+      ..color = Colors.blue.withAlpha(204)
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+
+    final dashedPathPaint = Paint()
+      ..color = Colors.blue.withAlpha(150)
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+      
+    final jumpIndicesSet = pathJumpIndices.toSet();
+
+    for (int i = 1; i < userPath.length; i++) {
+      final p1 = imageToScreen(userPath[i - 1]);
+      final p2 = imageToScreen(userPath[i]);
+
+      if (jumpIndicesSet.contains(i)) {
+        _drawDashedLine(canvas, p1, p2, dashedPathPaint);
+      } else {
+        canvas.drawLine(p1, p2, solidPathPaint);
+      }
     }
   }
 
@@ -280,6 +294,7 @@ class MapOverlayPainter extends CustomPainter {
         oldDelegate.anchors.length != anchors.length ||
         oldDelegate.targets.length != targets.length ||
         oldDelegate.userPath != userPath ||
+        oldDelegate.pathJumpIndices != pathJumpIndices ||
         oldDelegate.currentUserImagePoint != currentUserImagePoint ||
         oldDelegate.activeTargetImagePoint != activeTargetImagePoint ||
         oldDelegate.previewDistanceMeters != previewDistanceMeters ||

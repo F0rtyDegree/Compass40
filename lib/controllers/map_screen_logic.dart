@@ -176,6 +176,7 @@ class MapScreenLogic {
         anchors: [],
         targets: [],
         userPath: [], // Очищаем путь для новой карты
+        pathJumpIndices: [],
       );
 
       await storageService.saveProject(project);
@@ -432,6 +433,11 @@ class MapScreenLogic {
     final project = state.project;
     if (project == null) return;
 
+    final newPathJumpIndices = [...project.pathJumpIndices];
+    if (project.userPath.isNotEmpty) {
+      newPathJumpIndices.add(project.userPath.length);
+    }
+
     double? distanceFromPrevious;
     if (project.anchors.isNotEmpty) {
       final lastAnchor = project.anchors.last;
@@ -455,7 +461,10 @@ class MapScreenLogic {
     );
 
     final updatedAnchors = [...project.anchors, anchor];
-    final updatedProject = project.copyWith(anchors: updatedAnchors);
+    final updatedProject = project.copyWith(
+      anchors: updatedAnchors,
+      pathJumpIndices: newPathJumpIndices,
+    );
 
     await storageService.saveProject(updatedProject);
 
@@ -485,7 +494,21 @@ class MapScreenLogic {
     }
 
     final updatedAnchors = project.anchors.sublist(0, project.anchors.length - 1);
-    final updatedProject = project.copyWith(anchors: updatedAnchors);
+    List<int> updatedPathJumpIndices = [...project.pathJumpIndices];
+    List<Offset> updatedUserPath = [...project.userPath];
+
+    if (updatedPathJumpIndices.isNotEmpty) {
+      final lastJumpIndex = updatedPathJumpIndices.removeLast();
+      if (updatedUserPath.length >= lastJumpIndex) {
+        updatedUserPath = updatedUserPath.sublist(0, lastJumpIndex);
+      }
+    }
+
+    final updatedProject = project.copyWith(
+      anchors: updatedAnchors,
+      userPath: updatedUserPath,
+      pathJumpIndices: updatedPathJumpIndices,
+    );
 
     await storageService.saveProject(updatedProject);
     await logService.removeLastMapAnchorLog();

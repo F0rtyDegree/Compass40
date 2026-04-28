@@ -9,6 +9,7 @@ class MapProject extends Equatable {
   final List<MapAnchor> anchors;
   final List<MapTarget> targets;
   final List<Offset> userPath; // Путь пользователя
+  final List<int> pathJumpIndices; // Индексы, где были "скачки" пути
 
   const MapProject({
     required this.id,
@@ -16,6 +17,7 @@ class MapProject extends Equatable {
     required this.anchors,
     required this.targets,
     this.userPath = const [],
+    this.pathJumpIndices = const [],
   });
 
   MapProject copyWith({
@@ -24,6 +26,7 @@ class MapProject extends Equatable {
     List<MapAnchor>? anchors,
     List<MapTarget>? targets,
     List<Offset>? userPath,
+    List<int>? pathJumpIndices,
   }) {
     return MapProject(
       id: id ?? this.id,
@@ -31,6 +34,7 @@ class MapProject extends Equatable {
       anchors: anchors ?? this.anchors,
       targets: targets ?? this.targets,
       userPath: userPath ?? this.userPath,
+      pathJumpIndices: pathJumpIndices ?? this.pathJumpIndices,
     );
   }
 
@@ -49,6 +53,7 @@ class MapProject extends Equatable {
       userPath: ((json['userPath'] as List?) ?? [])
           .map((p) => Offset(p['dx'] as double, p['dy'] as double))
           .toList(),
+      pathJumpIndices: ((json['pathJumpIndices'] as List?) ?? []).cast<int>().toList(),
     );
   }
 
@@ -59,10 +64,11 @@ class MapProject extends Equatable {
       'anchors': anchors.map((a) => a.toJson()).toList(),
       'targets': targets.map((t) => t.toJson()).toList(),
       'userPath': userPath.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
+      'pathJumpIndices': pathJumpIndices,
     };
   }
 
 
   @override
-  List<Object?> get props => [id, imagePath, anchors, targets, userPath];
+  List<Object?> get props => [id, imagePath, anchors, targets, userPath, pathJumpIndices];
 }
