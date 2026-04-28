@@ -53,14 +53,21 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _logic = MapScreenLogic(
-      state: _state,
-      hostState: this,
-      storageService: _storageService,
-      magneticDeclination: widget.magneticDeclination, // Pass it here
-      onAnchorAdded: widget.onAnchorAdded,
-      onStartNavigation: widget.onStartNavigation,
-      onCancelNavigation: widget.onCancelNavigation,
-    );
+        state: _state,
+        setState: (fn) { if (mounted) setState(fn); },
+        showSnackBar: (msg) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+            );
+          }
+        },
+        storageService: _storageService,
+        magneticDeclination: widget.magneticDeclination,
+        onAnchorAdded: widget.onAnchorAdded,
+        onStartNavigation: widget.onStartNavigation,
+        onCancelNavigation: widget.onCancelNavigation,
+      );
     _logic.init();
   }
 

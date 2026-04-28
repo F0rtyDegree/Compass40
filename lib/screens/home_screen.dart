@@ -35,7 +35,7 @@ class _MyHomePageState extends State<MyHomePage> {
     _sensorService = SensorService();
     _logic = HomeLogic(
       state: _state,
-      hostState: this,
+      setState: (fn) { if (mounted) setState(fn); },
       logService: _logService,
       sensorService: _sensorService,
     );

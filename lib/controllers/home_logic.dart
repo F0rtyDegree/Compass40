@@ -10,25 +10,16 @@ import 'home_state.dart';
 
 class HomeLogic {
   final HomeState state;
-  final State hostState;
+  final void Function(VoidCallback fn) setState;
   final LogService logService;
   final SensorService sensorService;
 
   HomeLogic({
     required this.state,
-    required this.hostState,
+    required this.setState,
     required this.logService,
     required this.sensorService,
   });
-
-  bool get mounted => hostState.mounted;
-
-  void setState(VoidCallback fn) {
-    if (mounted) {
-      // ignore: invalid_use_of_protected_member
-      hostState.setState(fn);
-    }
-  }
 
   Future<void> init() async {
     await _loadAllSettings();
@@ -49,8 +40,6 @@ class HomeLogic {
 
   Future<void> _loadAllSettings() async {
     final settings = await sensorService.loadSettings();
-    if (!mounted) return;
-
     setState(() {
       state.useManualDeclination = settings.useManualDeclination;
       state.magneticDeclination = settings.magneticDeclination;
@@ -60,7 +49,6 @@ class HomeLogic {
       state.compassMode = settings.compassMode;
       state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
     });
-
     startUiUpdateTimer();
   }
 
@@ -97,9 +85,8 @@ class HomeLogic {
     final settings = await sensorService.loadSettings();
 
     state.gpsDataSubscription = sensorService.subscribeToGps(
-  intervalSeconds: settings.gpsInterval,
-  onData: (gpsData) {
-        if (!mounted) return;
+      intervalSeconds: settings.gpsInterval,
+      onData: (gpsData) {
         state.gpsDataNotifier.value = gpsData;
 
         final speedKmh = (gpsData.speed ?? 0) * 3.6;
@@ -126,7 +113,7 @@ class HomeLogic {
   void _subscribeToCompassStream() {
     state.compassSubscription = sensorService.subscribeToCompass(
       onData: (data) {
-        if (!mounted || data.isEmpty) return;
+        if (data.isEmpty) return;
 
         final heading = data[0];
         final accuracy = data.length > 1 ? data[1] : 0.0;
@@ -160,11 +147,9 @@ class HomeLogic {
     state.uiUpdateTimer = Timer.periodic(
       Duration(milliseconds: state.uiUpdatePeriod),
       (timer) {
-        if (mounted) {
-          _updateHeading();
-          _calculateWaypointData();
-          _calculateTargetData();
-        }
+        _updateHeading();
+        _calculateWaypointData();
+        _calculateTargetData();
       },
     );
   }
@@ -242,27 +227,22 @@ class HomeLogic {
     double newHeading;
 
     if (useGps) {
-      // GPS-компас
       state.gpsBearingSamples.removeWhere(
         (s) => now - s.$2 > state.averagingPeriod,
       );
       if (state.gpsBearingSamples.isEmpty) return;
       final bearings = state.gpsBearingSamples.map((s) => s.$1).toList();
       final medianTrueBearing = _calculateCircularMedian(bearings);
-      // Преобразуем истинный курс в магнитный
       newHeading = (medianTrueBearing - state.magneticDeclination + 360) % 360;
     } else {
-      // Магнитный компас
       state.headingSamples.removeWhere(
         (s) => now - s.$2 > state.averagingPeriod,
       );
       if (state.headingSamples.isEmpty) return;
       final headings = state.headingSamples.map((s) => s.$1).toList();
-      // Данные с сенсора уже магнитные
       newHeading = _calculateCircularMedian(headings);
     }
 
-    // Сглаживание
     double diff = newHeading - state.filteredHeading;
     if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
 
@@ -277,7 +257,6 @@ class HomeLogic {
   // ----------------------------------------------------------------------
 
   void _calculateWaypointData() {
-    // ✅ Добавлены проверки на null
     if (state.waypoint == null ||
         state.waypoint!.latitude == null ||
         state.waypoint!.longitude == null) {
@@ -286,7 +265,7 @@ class HomeLogic {
 
     final nowData = state.gpsDataNotifier.value;
     if (nowData.latitude == null || nowData.longitude == null) {
-      return; // Нет GPS — не считаем
+      return;
     }
 
     state.distanceToWaypoint.value = calculateDistance(
@@ -312,7 +291,7 @@ class HomeLogic {
 
     final nowData = state.gpsDataNotifier.value;
     if (nowData.latitude == null || nowData.longitude == null) {
-      return; // Нет GPS — не считаем
+      return;
     }
 
     state.distanceToTarget.value = calculateDistance(
@@ -339,7 +318,6 @@ class HomeLogic {
 
   Future<void> loadLogEntries() async {
     final items = await logService.loadLogEntries();
-    if (!mounted) return;
     setState(() => state.logItems = items);
   }
 
@@ -349,7 +327,7 @@ class HomeLogic {
       currentGpsData: state.gpsDataNotifier.value,
       magneticDeclination: state.magneticDeclination,
     );
-    if (result == null || !mounted) return;
+    if (result == null) return;
     setState(() {
       state.logItems = result.logItems;
       state.waypoint = result.waypoint;
@@ -362,7 +340,6 @@ class HomeLogic {
       currentGpsData: state.gpsDataNotifier.value,
       magneticDeclination: state.magneticDeclination,
     );
-    if (!mounted) return;
     setState(() {
       state.logItems = result.logItems;
       state.waypoint = result.waypoint;
@@ -396,7 +373,6 @@ class HomeLogic {
       targetLatitude: targetLatitude,
       targetLongitude: targetLongitude,
     );
-    if (!mounted) return;
     setState(() => state.logItems = items);
   }
 
@@ -407,15 +383,13 @@ class HomeLogic {
   void setTargetCalculationStartPoint(GpsData gpsData) {
     state.targetCalculationStartPoint = gpsData;
   }
-  // --- External Navigation Control ---
 
   Future<void> startNavigationFromExternal(
-      double latitude,
-      double longitude,
-      ) async {
+    double latitude,
+    double longitude,
+  ) async {
     final currentGps = state.gpsDataNotifier.value;
     if (currentGps.latitude == null || currentGps.longitude == null) {
-      // Cannot calculate distance/azimuth without current location
       return;
     }
 
@@ -424,13 +398,11 @@ class HomeLogic {
     final azimuth = calculateTrueBearing(
         currentGps.latitude!, currentGps.longitude!, latitude, longitude);
 
-    // Set the target for navigation
     setTarget({
       'latitude': latitude,
       'longitude': longitude,
     });
 
-    // Add a log entry for this action
     await addTargetCreationLogEntry(
       baseLatitude: currentGps.latitude!,
       baseLongitude: currentGps.longitude!,
@@ -442,11 +414,8 @@ class HomeLogic {
   }
 
   void cancelExternalNavigation() {
-    // Simply clear the current target
     clearTarget();
-    // Optionally, add a log entry for cancellation if needed
   }
-
 
   // ----------------------------------------------------------------------
   // Вспомогательные методы для UI

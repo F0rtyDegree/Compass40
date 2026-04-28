@@ -18,7 +18,8 @@ import '../services/sensor_service.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
-  final State hostState;
+  final void Function(VoidCallback fn) setState;
+  final void Function(String message) showSnackBar;
   final MapStorageService storageService;
   final double magneticDeclination;
   final MapCalibrationService calibration = MapCalibrationService();
@@ -36,26 +37,14 @@ class MapScreenLogic {
 
   MapScreenLogic({
     required this.state,
-    required this.hostState,
+    required this.setState,
+    required this.showSnackBar,
     required this.storageService,
     required this.magneticDeclination,
     this.onAnchorAdded,
     this.onStartNavigation,
     this.onCancelNavigation,
   });
-
-  bool get mounted => hostState.mounted;
-
-  void setState(VoidCallback fn) {
-    if (mounted) {
-      // ignore: invalid_use_of_protected_member
-      hostState.setState(fn);
-    }
-  }
-
-  // ---------------------------------------------------------
-  // Инициализация
-  // ---------------------------------------------------------
 
   Future<void> init() async {
     _sensorSettings = await sensorService.loadSettings();
@@ -82,7 +71,7 @@ class MapScreenLogic {
     if (projectId == null) return;
 
     final project = await storageService.loadProject(projectId);
-    if (project == null || !mounted) return;
+    if (project == null) return;
 
     final savedTransform = await storageService.loadTransform(projectId);
 
@@ -111,8 +100,6 @@ class MapScreenLogic {
 
     final bytes = await file.readAsBytes();
     final decoded = await decodeImageFromList(bytes);
-
-    if (!mounted) return;
 
     final imgW = decoded.width.toDouble();
     final imgH = decoded.height.toDouble();
@@ -145,8 +132,6 @@ class MapScreenLogic {
 
     final fitScale = math.min(vp.width / imgW, vp.height / imgH) * 0.92;
 
-    if (!mounted) return;
-
     setState(() {
       state.transformState = MapTransformState(
         scale: fitScale,
@@ -166,7 +151,7 @@ class MapScreenLogic {
     try {
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      if (image == null || !mounted) return;
+      if (image == null) return;
 
       final savedPath = await storageService.saveImageToAppStorage(image.path);
       final projectId = DateTime.now().millisecondsSinceEpoch.toString();
@@ -175,7 +160,7 @@ class MapScreenLogic {
         imagePath: savedPath,
         anchors: [],
         targets: [],
-        userPath: [], // Очищаем путь для новой карты
+        userPath: [],
         pathJumpIndices: [],
       );
 
@@ -208,7 +193,6 @@ class MapScreenLogic {
       await storageService.saveProject(state.project!);
     }
     await storageService.setCurrentProjectId(null);
-    if (!mounted) return;
 
     setState(() {
       state.project = null;
@@ -349,8 +333,7 @@ class MapScreenLogic {
     final imageSize = state.imageSize!;
 
     final center = Offset(vp.width / 2, vp.height / 2);
-    final local =
-        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+    final local = imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
     final scaled = local * t.scale;
 
     final angle = t.rotationRadians;
@@ -371,11 +354,11 @@ class MapScreenLogic {
   Future<void> addAnchorFromCurrentGps() async {
     final gpsData = _lastGpsData;
     if (gpsData?.latitude == null || gpsData?.longitude == null) {
-      _showSnackBar('Нет сигнала GPS');
+      showSnackBar('Нет сигнала GPS');
       return;
     }
     if (state.crosshairImagePoint == null) {
-      _showSnackBar('Прицел не определён');
+      showSnackBar('Прицел не определён');
       return;
     }
     await _addAnchor(
@@ -390,18 +373,18 @@ class MapScreenLogic {
     try {
       clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
     } catch (_) {
-      _showSnackBar('Ошибка чтения буфера обмена');
+      showSnackBar('Ошибка чтения буфера обмена');
       return;
     }
 
     if (clipboardData?.text == null) {
-      _showSnackBar('Буфер обмена пуст');
+      showSnackBar('Буфер обмена пуст');
       return;
     }
 
     final parts = clipboardData!.text!.split(',');
     if (parts.length != 2) {
-      _showSnackBar('Неверный формат. Ожидается: широта,долгота');
+      showSnackBar('Неверный формат. Ожидается: широта,долгота');
       return;
     }
 
@@ -409,12 +392,12 @@ class MapScreenLogic {
     final lon = double.tryParse(parts[1].trim());
 
     if (lat == null || lon == null) {
-      _showSnackBar('Не удалось распознать координаты');
+      showSnackBar('Не удалось распознать координаты');
       return;
     }
 
     if (state.crosshairImagePoint == null) {
-      _showSnackBar('Прицел не определён');
+      showSnackBar('Прицел не определён');
       return;
     }
 
@@ -484,7 +467,7 @@ class MapScreenLogic {
     }
 
     final anchorNum = updatedAnchors.length;
-    _showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
+    showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
   Future<void> undoLastAnchor() async {
@@ -570,7 +553,7 @@ class MapScreenLogic {
 
     if (onStartNavigation != null) {
       await onStartNavigation!(planned.latitude!, planned.longitude!);
-      _showSnackBar('Ведение на цель в компасе запущено');
+      showSnackBar('Ведение на цель в компасе запущено');
     }
   }
 
@@ -582,7 +565,7 @@ class MapScreenLogic {
     if (project == null) return;
 
     if (planned.latitude == null || planned.longitude == null) {
-      _showSnackBar('Координаты цели не определены — добавьте привязку');
+      showSnackBar('Координаты цели не определены — добавьте привязку');
       return;
     }
 
@@ -590,7 +573,7 @@ class MapScreenLogic {
       final lat = planned.latitude!.toStringAsFixed(6);
       final lon = planned.longitude!.toStringAsFixed(6);
       await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
-      _showSnackBar('Координаты цели скопированы в буфер обмена');
+      showSnackBar('Координаты цели скопированы в буфер обмена');
     }
 
     final updatedTargets = project.targets.map((t) {
@@ -673,7 +656,6 @@ class MapScreenLogic {
     );
     if (imagePoint == null) return;
 
-    // Добавляем точку в путь
     final updatedPath = [...state.project!.userPath, imagePoint];
 
     setState(() {
@@ -750,7 +732,7 @@ class MapScreenLogic {
 
     if (restartNavigation && onStartNavigation != null && newActiveTarget?.latitude != null) {
       await onStartNavigation!(newActiveTarget!.latitude!, newActiveTarget.longitude!);
-      _showSnackBar('Навигация перезапущена с новыми координатами цели');
+      showSnackBar('Навигация перезапущена с новыми координатами цели');
     }
   }
 
@@ -767,7 +749,7 @@ class MapScreenLogic {
   void disableFollowMode() {
     state.followRestoreTimer?.cancel();
     setState(() => state.followMode = false);
-    }
+  }
 
   void toggleFollowMode() {
     if (state.followMode) {
@@ -790,8 +772,7 @@ class MapScreenLogic {
     final imageSize = state.imageSize;
     if (imageSize == null) return;
 
-    final local =
-        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+    final local = imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
     final scaled = local * t.scale;
 
     final angle = t.rotationRadians;
@@ -820,7 +801,6 @@ class MapScreenLogic {
       intervalSeconds: 1,
       onData: (gpsData) {
         _lastGpsData = gpsData;
-        if (!mounted) return;
 
         if (_previousGpsData?.latitude != null && (gpsData.speed ?? 0) * 3.6 > _sensorSettings.autoSwitchSpeedKmh) {
           final bd = calibration.bearingAndDistance(
@@ -854,19 +834,11 @@ class MapScreenLogic {
   // Вспомогательные
   // ---------------------------------------------------------
 
-  void _showSnackBar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(hostState.context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-    );
-  }
-
   void _applyHeadingRotation() {
     if (!state.followMode || state.heading == null) return;
 
     _isAutoRotating = true;
 
-    // True North = Magnetic North + Declination
     final magneticHeadingRad = (state.heading!) * (math.pi / 180);
     final declinationRad = magneticDeclination * (math.pi / 180);
     final trueHeadingRad = magneticHeadingRad + declinationRad;
