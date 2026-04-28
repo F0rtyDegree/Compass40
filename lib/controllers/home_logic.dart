@@ -407,6 +407,46 @@ class HomeLogic {
   void setTargetCalculationStartPoint(GpsData gpsData) {
     state.targetCalculationStartPoint = gpsData;
   }
+  // --- External Navigation Control ---
+
+  Future<void> startNavigationFromExternal(
+      double latitude,
+      double longitude,
+      ) async {
+    final currentGps = state.gpsDataNotifier.value;
+    if (currentGps.latitude == null || currentGps.longitude == null) {
+      // Cannot calculate distance/azimuth without current location
+      return;
+    }
+
+    final distance = calculateDistance(
+        currentGps.latitude!, currentGps.longitude!, latitude, longitude);
+    final azimuth = calculateTrueBearing(
+        currentGps.latitude!, currentGps.longitude!, latitude, longitude);
+
+    // Set the target for navigation
+    setTarget({
+      'latitude': latitude,
+      'longitude': longitude,
+    });
+
+    // Add a log entry for this action
+    await addTargetCreationLogEntry(
+      baseLatitude: currentGps.latitude!,
+      baseLongitude: currentGps.longitude!,
+      azimuth: azimuth,
+      distance: distance,
+      targetLatitude: latitude,
+      targetLongitude: longitude,
+    );
+  }
+
+  void cancelExternalNavigation() {
+    // Simply clear the current target
+    clearTarget();
+    // Optionally, add a log entry for cancellation if needed
+  }
+
 
   // ----------------------------------------------------------------------
   // Вспомогательные методы для UI

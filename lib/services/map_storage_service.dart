@@ -4,8 +4,6 @@ import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/map_project.dart';
-import '../models/map_anchor.dart';
-import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
 
 class MapStorageService {
@@ -36,35 +34,8 @@ class MapStorageService {
     final projectsJson = prefs.getString(_projectsKey) ?? '{}';
     final Map<String, dynamic> projects = jsonDecode(projectsJson);
 
-    projects[project.id] = {
-      'id': project.id,
-      'imagePath': project.imagePath,
-      'anchors': project.anchors
-          .map(
-            (a) => {
-              'id': a.id,
-              'imageX': a.imageX,
-              'imageY': a.imageY,
-              'latitude': a.latitude,
-              'longitude': a.longitude,
-              'createdAt': a.createdAt.toIso8601String(),
-            },
-          )
-          .toList(),
-      'targets': project.targets
-          .map(
-            (t) => {
-              'id': t.id,
-              'imageX': t.imageX,
-              'imageY': t.imageY,
-              'latitude': t.latitude,
-              'longitude': t.longitude,
-              'status': t.status.index,
-              'createdAt': t.createdAt.toIso8601String(),
-            },
-          )
-          .toList(),
-    };
+    // Используем toJson для сериализации
+    projects[project.id] = project.toJson();
 
     await prefs.setString(_projectsKey, jsonEncode(projects));
   }
@@ -78,36 +49,10 @@ class MapStorageService {
     final projectData = projects[id];
     if (projectData == null) return null;
 
-    return MapProject(
-      id: projectData['id'],
-      imagePath: projectData['imagePath'],
-      anchors: (projectData['anchors'] as List)
-          .map(
-            (a) => MapAnchor(
-              id: a['id'],
-              imageX: a['imageX'],
-              imageY: a['imageY'],
-              latitude: a['latitude'],
-              longitude: a['longitude'],
-              createdAt: DateTime.parse(a['createdAt']),
-            ),
-          )
-          .toList(),
-      targets: (projectData['targets'] as List)
-          .map(
-            (t) => MapTarget(
-              id: t['id'],
-              imageX: t['imageX'],
-              imageY: t['imageY'],
-              latitude: t['latitude'],
-              longitude: t['longitude'],
-              status: MapTargetStatus.values[t['status']],
-              createdAt: DateTime.parse(t['createdAt']),
-            ),
-          )
-          .toList(),
-    );
+    // Используем fromJson для десериализации
+    return MapProject.fromJson(projectData as Map<String, dynamic>);
   }
+
 
   /// Сохранить transform для проекта
   Future<void> saveTransform(String projectId, MapTransformState t) async {

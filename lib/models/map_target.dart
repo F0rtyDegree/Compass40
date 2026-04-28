@@ -41,6 +41,30 @@ class MapTarget extends Equatable {
     );
   }
 
+  factory MapTarget.fromJson(Map<String, dynamic> json) {
+    return MapTarget(
+      id: json['id'] as String,
+      imageX: (json['imageX'] as num).toDouble(),
+      imageY: (json['imageY'] as num).toDouble(),
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
+      status: MapTargetStatus.values[json['status'] as int],
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'imageX': imageX,
+      'imageY': imageY,
+      'latitude': latitude,
+      'longitude': longitude,
+      'status': status.index,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
   @override
   List<Object?> get props => [
     id,

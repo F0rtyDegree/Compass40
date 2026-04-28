@@ -10,15 +10,21 @@ import '../widgets/map_overlay_painter.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/map_zoom_buttons.dart';
 
+typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
+
 class MapScreen extends StatefulWidget {
   final double magneticDeclination;
   final Function(double lat, double lon, double? distance, String timeStr)?
       onAnchorAdded;
+  final StartNavigationCallback? onStartNavigation;
+  final VoidCallback? onCancelNavigation;
 
   const MapScreen({
     super.key,
     this.magneticDeclination = 0.0,
     this.onAnchorAdded,
+    this.onStartNavigation,
+    this.onCancelNavigation,
   });
 
   @override
@@ -52,6 +58,8 @@ class _MapScreenState extends State<MapScreen> {
       storageService: _storageService,
       magneticDeclination: widget.magneticDeclination, // Pass it here
       onAnchorAdded: widget.onAnchorAdded,
+      onStartNavigation: widget.onStartNavigation,
+      onCancelNavigation: widget.onCancelNavigation,
     );
     _logic.init();
   }
@@ -185,6 +193,7 @@ class _MapScreenState extends State<MapScreen> {
                       ..._state.project?.targets ?? [],
                       if (_state.plannedTarget != null) _state.plannedTarget!,
                     ],
+                    userPath: _state.project?.userPath ?? [],
                     currentUserImagePoint: _state.currentUserImagePoint,
                     activeTargetImagePoint: _state.activeTarget != null
                         ? Offset(
@@ -245,6 +254,9 @@ class _MapScreenState extends State<MapScreen> {
                     ? (_state.plannedTarget == null
                         ? _logic.placePlannedTargetAtCrosshair
                         : _logic.activatePlannedTarget)
+                    : null,
+                onTargetLongPressed: _state.canPlaceTarget && _state.plannedTarget != null
+                    ? _logic.setTargetAndStartNavigation
                     : null,
                 targetEnabled: _state.canPlaceTarget && !_state.followMode,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',

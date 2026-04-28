@@ -11,6 +11,7 @@ class MapOverlayPainter extends CustomPainter {
 
   final List<MapAnchor> anchors;
   final List<MapTarget> targets;
+  final List<Offset> userPath;
 
   final Offset? currentUserImagePoint;
   final Offset? activeTargetImagePoint;
@@ -27,6 +28,7 @@ class MapOverlayPainter extends CustomPainter {
     required this.viewportSize,
     required this.anchors,
     required this.targets,
+    this.userPath = const [],
     this.currentUserImagePoint,
     this.activeTargetImagePoint,
     this.previewDistanceMeters,
@@ -38,6 +40,26 @@ class MapOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Draw the user path
+    if (userPath.length > 1) {
+      final pathPaint = Paint()
+        ..color = Colors.blue.withAlpha(204) // Replaced withOpacity
+        ..strokeWidth = 3.0
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round;
+
+      final path = Path();
+      final startPoint = imageToScreen(userPath.first);
+      path.moveTo(startPoint.dx, startPoint.dy);
+
+      for (int i = 1; i < userPath.length; i++) {
+        final point = imageToScreen(userPath[i]);
+        path.lineTo(point.dx, point.dy);
+      }
+      canvas.drawPath(path, pathPaint);
+    }
+
     for (final anchor in anchors) {
       final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
       _drawAnchor(canvas, screen);
@@ -257,6 +279,7 @@ class MapOverlayPainter extends CustomPainter {
     return oldDelegate.transformState != transformState ||
         oldDelegate.anchors.length != anchors.length ||
         oldDelegate.targets.length != targets.length ||
+        oldDelegate.userPath != userPath ||
         oldDelegate.currentUserImagePoint != currentUserImagePoint ||
         oldDelegate.activeTargetImagePoint != activeTargetImagePoint ||
         oldDelegate.previewDistanceMeters != previewDistanceMeters ||

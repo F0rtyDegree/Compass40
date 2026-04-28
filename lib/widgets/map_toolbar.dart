@@ -4,6 +4,7 @@ class MapToolbar extends StatelessWidget {
   final VoidCallback onHereNowPressed;
   final VoidCallback onHereFromClipboard;
   final VoidCallback? onTargetPressed;
+  final VoidCallback? onTargetLongPressed; // Added
   final bool targetEnabled;
   final String targetText;
   final bool followModeEnabled;
@@ -13,6 +14,7 @@ class MapToolbar extends StatelessWidget {
     required this.onHereNowPressed,
     required this.onHereFromClipboard,
     this.onTargetPressed,
+    this.onTargetLongPressed, // Added
     this.targetEnabled = false,
     this.targetText = 'ЦЕЛЬ',
     required this.followModeEnabled,
@@ -45,6 +47,7 @@ class MapToolbar extends StatelessWidget {
                 ? (targetText == 'ГОУ' ? Colors.red : Colors.amber[700]!)
                 : Colors.grey,
             onTap: onTargetPressed,
+            onLongPress: onTargetLongPressed, // Added
             enabled: targetEnabled && !followModeEnabled,
           ),
         ],

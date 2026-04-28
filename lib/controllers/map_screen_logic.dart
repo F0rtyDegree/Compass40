@@ -9,6 +9,7 @@ import '../models/map_anchor.dart';
 import '../models/map_project.dart';
 import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
+import '../screens/map_screen.dart';
 import '../services/log_service.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
@@ -24,6 +25,8 @@ class MapScreenLogic {
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
   final Function(double lat, double lon, double? distance, String timeStr)? onAnchorAdded;
+  final StartNavigationCallback? onStartNavigation;
+  final VoidCallback? onCancelNavigation;
   bool _isAutoRotating = false;
 
   StreamSubscription<GpsData>? _gpsSub;
@@ -37,6 +40,8 @@ class MapScreenLogic {
     required this.storageService,
     required this.magneticDeclination,
     this.onAnchorAdded,
+    this.onStartNavigation,
+    this.onCancelNavigation,
   });
 
   bool get mounted => hostState.mounted;
@@ -59,6 +64,9 @@ class MapScreenLogic {
   }
 
   void dispose() {
+    if (state.project != null) {
+      storageService.saveProject(state.project!);
+    }
     state.followRestoreTimer?.cancel();
     _gpsSub?.cancel();
     state.crosshairFeedback.dispose();
@@ -167,6 +175,7 @@ class MapScreenLogic {
         imagePath: savedPath,
         anchors: [],
         targets: [],
+        userPath: [], // Очищаем путь для новой карты
       );
 
       await storageService.saveProject(project);
@@ -194,6 +203,9 @@ class MapScreenLogic {
   // ---------------------------------------------------------
 
   Future<void> closeMap() async {
+    if (state.project != null) {
+      await storageService.saveProject(state.project!);
+    }
     await storageService.setCurrentProjectId(null);
     if (!mounted) return;
 
@@ -454,7 +466,7 @@ class MapScreenLogic {
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
     _recalculateUserImagePoint();
-    await recalculateTargetsAfterNewAnchor();
+    await recalculateTargetsAfterNewAnchor(restartNavigation: true);
 
     if (onAnchorAdded != null) {
       final now = DateTime.now();
@@ -469,8 +481,6 @@ class MapScreenLogic {
   Future<void> undoLastAnchor() async {
     final project = state.project;
     if (project == null || project.anchors.length <= 2) {
-      // Защита от удаления, если точек 2 или меньше.
-      // SnackBar показывается в confirmDismiss виджета.
       return;
     }
 
@@ -478,20 +488,17 @@ class MapScreenLogic {
     final updatedProject = project.copyWith(anchors: updatedAnchors);
 
     await storageService.saveProject(updatedProject);
-    // Вызываем исправленный метод в сервисе
     await logService.removeLastMapAnchorLog();
 
     setState(() {
       state.project = updatedProject;
     });
 
-    // Пересчитываем все, что зависит от привязок
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
     _recalculateUserImagePoint();
-    await recalculateTargetsAfterNewAnchor();
+    await recalculateTargetsAfterNewAnchor(restartNavigation: true);
   }
-
 
   // ---------------------------------------------------------
   // Цели
@@ -528,6 +535,23 @@ class MapScreenLogic {
   }
 
   Future<void> activatePlannedTarget() async {
+    await _persistAndSetActiveTarget(copyCoords: true);
+  }
+
+  Future<void> setTargetAndStartNavigation() async {
+    final planned = state.plannedTarget;
+    if (planned == null || planned.latitude == null || planned.longitude == null) {
+      return;
+    }
+    await _persistAndSetActiveTarget(copyCoords: false);
+
+    if (onStartNavigation != null) {
+      await onStartNavigation!(planned.latitude!, planned.longitude!);
+      _showSnackBar('Ведение на цель в компасе запущено');
+    }
+  }
+
+  Future<void> _persistAndSetActiveTarget({required bool copyCoords}) async {
     final planned = state.plannedTarget;
     if (planned == null) return;
 
@@ -539,10 +563,12 @@ class MapScreenLogic {
       return;
     }
 
-    final lat = planned.latitude!.toStringAsFixed(6);
-    final lon = planned.longitude!.toStringAsFixed(6);
-    await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
-    _showSnackBar('Координаты цели скопированы в буфер обмена');
+    if (copyCoords) {
+      final lat = planned.latitude!.toStringAsFixed(6);
+      final lon = planned.longitude!.toStringAsFixed(6);
+      await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
+      _showSnackBar('Координаты цели скопированы в буфер обмена');
+    }
 
     final updatedTargets = project.targets.map((t) {
       if (t.status == MapTargetStatus.active) {
@@ -552,7 +578,6 @@ class MapScreenLogic {
     }).toList();
 
     final activeTarget = planned.copyWith(status: MapTargetStatus.active);
-
     updatedTargets.add(activeTarget);
 
     final updatedProject = project.copyWith(targets: updatedTargets);
@@ -616,7 +641,7 @@ class MapScreenLogic {
 
   void _recalculateUserImagePoint() {
     final gps = _lastGpsData;
-    if (gps?.latitude == null || state.workingPair == null) return;
+    if (gps?.latitude == null || state.workingPair == null || state.project == null) return;
 
     final imagePoint = calibration.geoToImagePoint(
       latitude: gps!.latitude!,
@@ -625,8 +650,12 @@ class MapScreenLogic {
     );
     if (imagePoint == null) return;
 
+    // Добавляем точку в путь
+    final updatedPath = [...state.project!.userPath, imagePoint];
+
     setState(() {
       state.currentUserImagePoint = imagePoint;
+      state.project = state.project!.copyWith(userPath: updatedPath);
     });
     _recalculateUserScreenPoint();
     _recalculatePreview();
@@ -667,7 +696,7 @@ class MapScreenLogic {
     });
   }
 
-  Future<void> recalculateTargetsAfterNewAnchor() async {
+  Future<void> recalculateTargetsAfterNewAnchor({bool restartNavigation = false}) async {
     final project = state.project;
     final pair = state.workingPair;
     if (project == null || pair == null) return;
@@ -696,11 +725,9 @@ class MapScreenLogic {
       state.activeTarget = newActiveTarget;
     });
 
-    if (newActiveTarget != null && newActiveTarget.latitude != null && newActiveTarget.longitude != null) {
-      final lat = newActiveTarget.latitude!.toStringAsFixed(6);
-      final lon = newActiveTarget.longitude!.toStringAsFixed(6);
-      await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
-      _showSnackBar('Координаты цели обновлены и скопированы');
+    if (restartNavigation && onStartNavigation != null && newActiveTarget?.latitude != null) {
+      await onStartNavigation!(newActiveTarget!.latitude!, newActiveTarget.longitude!);
+      _showSnackBar('Навигация перезапущена с новыми координатами цели');
     }
   }
 
@@ -717,14 +744,7 @@ class MapScreenLogic {
   void disableFollowMode() {
     state.followRestoreTimer?.cancel();
     setState(() => state.followMode = false);
-
-    // state.followRestoreTimer = Timer(const Duration(seconds: 60), () {
-    //   if (!state.isDisposed && mounted) {
-    //     setState(() => state.followMode = true);
-    //     _centerMapOnUser();
-    //   }
-    // });
-  }
+    }
 
   void toggleFollowMode() {
     if (state.followMode) {

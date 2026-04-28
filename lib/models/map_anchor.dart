@@ -17,6 +17,28 @@ class MapAnchor extends Equatable {
     required this.createdAt,
   });
 
+  factory MapAnchor.fromJson(Map<String, dynamic> json) {
+    return MapAnchor(
+      id: json['id'] as String,
+      imageX: (json['imageX'] as num).toDouble(),
+      imageY: (json['imageY'] as num).toDouble(),
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'imageX': imageX,
+      'imageY': imageY,
+      'latitude': latitude,
+      'longitude': longitude,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
   @override
   List<Object?> get props => [
     id,

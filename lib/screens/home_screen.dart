@@ -106,29 +106,31 @@ class _MyHomePageState extends State<MyHomePage> {
               getAccuracyStatusColor: _logic.getAccuracyStatusColor,
               getAccuracyText: _logic.getAccuracyText,
               onSwipeToOpenMap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MapScreen(
-                    magneticDeclination: _state.magneticDeclination,
-                    onAnchorAdded: (lat, lon, distance, timeStr) async {
-                      final items = await _logService.addMapAnchorLogEntry(
-                        currentLogItems: _state.logItems,
-                        latitude: lat,
-                        longitude: lon,
-                        distanceFromPrevious: distance,
-                        timeStr: timeStr,
-                      );
-                      if (mounted) {
-                        setState(() {
-                          _state.logItems = items;
-                        });
-                      }
-                    },
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => MapScreen(
+                      magneticDeclination: _state.magneticDeclination,
+                      onAnchorAdded: (lat, lon, distance, timeStr) async {
+                        final items = await _logService.addMapAnchorLogEntry(
+                          currentLogItems: _state.logItems,
+                          latitude: lat,
+                          longitude: lon,
+                          distanceFromPrevious: distance,
+                          timeStr: timeStr,
+                        );
+                        if (mounted) {
+                          setState(() {
+                            _state.logItems = items;
+                          });
+                        }
+                      },
+                      onStartNavigation: _logic.startNavigationFromExternal,
+                      onCancelNavigation: _logic.cancelExternalNavigation,
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
             ),
             GpsSection(
               gpsDataNotifier: _state.gpsDataNotifier,
