@@ -13,12 +13,14 @@ class SensorService {
   factory SensorService() => _instance;
   SensorService._internal();
 
-  // Broadcast стримы
-  Stream<GpsData>? _gpsBroadcastStream;
-  Stream<List<double>>? _compassBroadcastStream;
-  int? _gpsIntervalMs;
-
+  // GPS
   final GpsInfo _gpsInfo = GpsInfo();
+  Stream<GpsData>? _currentGpsStream;
+  StreamSubscription<GpsData>? _gpsSubscription;
+  int? _currentGpsIntervalMs;
+
+  // Компас
+  Stream<List<double>>? _compassBroadcastStream;
 
   Future<SensorSettings> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -64,28 +66,40 @@ class SensorService {
   Stream<GpsData> _getOrCreateGpsStream(int intervalSeconds) {
     final intervalMs = intervalSeconds * 1000;
     
-    if (_gpsBroadcastStream == null || _gpsIntervalMs != intervalMs) {
-      _gpsIntervalMs = intervalMs;
-      _gpsBroadcastStream = _gpsInfo
-          .getGpsDataStream(intervalMs)
-          .handleError((error, stack) {
-            developer.log(
-              'Error in GPS stream',
-              name: 'by.fortydegree.compass40',
-              error: error,
-              stackTrace: stack,
-            );
-          })
-          .asBroadcastStream();
+    if (_currentGpsStream != null && _currentGpsIntervalMs == intervalMs) {
+      return _currentGpsStream!;
     }
-    return _gpsBroadcastStream!;
+    
+    // Закрываем старый стрим
+    _gpsSubscription?.cancel();
+    _currentGpsStream = null;
+    
+    _currentGpsIntervalMs = intervalMs;
+    _currentGpsStream = _gpsInfo
+        .getGpsDataStream(intervalMs)
+        .handleError((error, stack) {
+          developer.log(
+            'Error in GPS stream',
+            name: 'by.fortydegree.compass40',
+            error: error,
+            stackTrace: stack,
+          );
+        })
+        .asBroadcastStream();
+    
+    return _currentGpsStream!;
   }
 
   StreamSubscription<GpsData> subscribeToGps({
     required int intervalSeconds,
     required void Function(GpsData gpsData) onData,
   }) {
-    return _getOrCreateGpsStream(intervalSeconds).listen(onData);
+    // Отменяем предыдущую подписку
+    _gpsSubscription?.cancel();
+    
+    final stream = _getOrCreateGpsStream(intervalSeconds);
+    _gpsSubscription = stream.listen(onData);
+    return _gpsSubscription!;
   }
 
   // ------------------------------------------------------------
@@ -113,6 +127,7 @@ class SensorService {
   }
 }
 
+// Класс настроек (должен быть после SensorService или до – не важно, главное чтобы был)
 class SensorSettings {
   final bool useManualDeclination;
   final double magneticDeclination;

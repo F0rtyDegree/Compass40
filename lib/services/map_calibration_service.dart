@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import '../models/map_anchor.dart';
 import '../models/map_working_pair.dart';
+import '../utils/geo_utils.dart';
 
 // Простая модель GPS-точки
 class GeoPoint {
@@ -58,29 +59,7 @@ class MapCalibrationService {
   // ---------------------------------------------------------
 
   double distanceBetweenAnchorsMeters(MapAnchor a, MapAnchor b) {
-    return _haversineDistance(a.latitude, a.longitude, b.latitude, b.longitude);
-  }
-
-  double _haversineDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    final phi1 = lat1 * math.pi / 180;
-    final phi2 = lat2 * math.pi / 180;
-    final dPhi = (lat2 - lat1) * math.pi / 180;
-    final dLambda = (lon2 - lon1) * math.pi / 180;
-
-    final a =
-        math.sin(dPhi / 2) * math.sin(dPhi / 2) +
-        math.cos(phi1) *
-            math.cos(phi2) *
-            math.sin(dLambda / 2) *
-            math.sin(dLambda / 2);
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-
-    return _earthRadius * c;
+    return calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
   }
 
   // ---------------------------------------------------------
@@ -236,7 +215,7 @@ class MapCalibrationService {
     required double toLon,
     required double magneticDeclination,
   }) {
-    final dist = _haversineDistance(fromLat, fromLon, toLat, toLon);
+    final dist = calculateDistance(fromLat, fromLon, toLat, toLon);
 
     final phi1 = fromLat * math.pi / 180;
     final phi2 = toLat * math.pi / 180;
@@ -248,7 +227,6 @@ class MapCalibrationService {
         math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
 
     final trueBearing = (math.atan2(y, x) * 180 / math.pi + 360) % 360;
-    // Convention: East declination is positive. True North = Magnetic North + Declination.
     final magneticBearing = (trueBearing - magneticDeclination + 360) % 360;
 
     return BearingAndDistance(

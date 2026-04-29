@@ -35,7 +35,7 @@ class MapOverlayPainter extends CustomPainter {
     this.activeTargetImagePoint,
     this.previewDistanceMeters,
     this.previewBearingDegrees,
-    this.heading, // This is MAGNETIC heading
+    this.heading,
     this.mapRotation = 0.0,
     this.magneticDeclination = 0.0,
   });
@@ -175,7 +175,6 @@ class MapOverlayPainter extends CustomPainter {
     canvas.save();
     canvas.translate(screen.dx, screen.dy);
 
-    // True North = Magnetic North + Declination
     final magneticHeadingRad = (heading ?? 0) * (math.pi / 180);
     final declinationRad = magneticDeclination * (math.pi / 180);
     final trueHeadingRad = magneticHeadingRad + declinationRad;
@@ -290,16 +289,44 @@ class MapOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant MapOverlayPainter oldDelegate) {
-    return oldDelegate.transformState != transformState ||
-        oldDelegate.anchors.length != anchors.length ||
-        oldDelegate.targets.length != targets.length ||
-        oldDelegate.userPath != userPath ||
-        oldDelegate.pathJumpIndices != pathJumpIndices ||
-        oldDelegate.currentUserImagePoint != currentUserImagePoint ||
-        oldDelegate.activeTargetImagePoint != activeTargetImagePoint ||
-        oldDelegate.previewDistanceMeters != previewDistanceMeters ||
+    // Быстрые проверки простых полей
+    if (oldDelegate.transformState != transformState ||
         oldDelegate.heading != heading ||
         oldDelegate.mapRotation != mapRotation ||
-        oldDelegate.magneticDeclination != magneticDeclination;
+        oldDelegate.magneticDeclination != magneticDeclination ||
+        oldDelegate.previewDistanceMeters != previewDistanceMeters ||
+        oldDelegate.previewBearingDegrees != previewBearingDegrees ||
+        oldDelegate.currentUserImagePoint != currentUserImagePoint ||
+        oldDelegate.activeTargetImagePoint != activeTargetImagePoint) {
+      return true;
+    }
+
+    // Проверка списков: размер и последний элемент для userPath
+    if (oldDelegate.anchors.length != anchors.length) return true;
+    if (oldDelegate.targets.length != targets.length) return true;
+    if (oldDelegate.userPath.length != userPath.length) return true;
+    if (oldDelegate.pathJumpIndices.length != pathJumpIndices.length) return true;
+
+    // Если добавилась новая точка пути – перерисовать
+    if (userPath.isNotEmpty && oldDelegate.userPath.isNotEmpty) {
+      if (userPath.last != oldDelegate.userPath.last) return true;
+    } else if (userPath.isNotEmpty != oldDelegate.userPath.isNotEmpty) {
+      return true;
+    }
+
+    // Для якорей и целей – сравнение последних ID (обычно добавляются в конец)
+    if (anchors.isNotEmpty && oldDelegate.anchors.isNotEmpty) {
+      if (anchors.last.id != oldDelegate.anchors.last.id) return true;
+    } else if (anchors.isNotEmpty != oldDelegate.anchors.isNotEmpty) {
+      return true;
+    }
+
+    if (targets.isNotEmpty && oldDelegate.targets.isNotEmpty) {
+      if (targets.last.id != oldDelegate.targets.last.id) return true;
+    } else if (targets.isNotEmpty != oldDelegate.targets.isNotEmpty) {
+      return true;
+    }
+
+    return false;
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -9,43 +10,65 @@ import '../log_entry.dart';
 import '../utils/geo_utils.dart';
 
 class LogService {
+  // Мьютекс для синхронизации операций чтения/записи логов
+  Future<void>? _saveLock;
+
+  Future<T> _synchronized<T>(Future<T> Function() action) async {
+    // Ждём, пока не освободится замок
+    while (_saveLock != null) {
+      await _saveLock;
+    }
+    final completer = Completer<void>();
+    _saveLock = completer.future;
+    try {
+      return await action();
+    } finally {
+      _saveLock = null;
+      completer.complete();
+    }
+  }
+
   Future<List<LogItem>> addMapAnchorLogEntry({
-  required List<LogItem> currentLogItems,
-  required double latitude,
-  required double longitude,
-  required double? distanceFromPrevious,
-  required String timeStr,
-}) async {
-  final logItems = await loadLogEntries();
-  
-  // Генерируем новый id
-  final allEntries = logItems.whereType<MapAnchorLogEntry>();
-  final newId = allEntries.isEmpty ? 1 : allEntries.map((e) => e.id).reduce((a, b) => a > b ? a : b) + 1;
-  
-  final entry = MapAnchorLogEntry(
-    id: newId,
-    latitude: latitude,
-    longitude: longitude,
-    distanceFromPrevious: distanceFromPrevious,
-    timeStr: timeStr,
-  );
-  
-  logItems.add(entry);
-  await saveLogEntries(logItems);
-  return logItems;
-}
+    required List<LogItem> currentLogItems,
+    required double latitude,
+    required double longitude,
+    required double? distanceFromPrevious,
+    required String timeStr,
+  }) async {
+    return _synchronized(() async {
+      final logItems = await loadLogEntries();
+
+      final allEntries = logItems.whereType<MapAnchorLogEntry>();
+      final newId = allEntries.isEmpty
+          ? 1
+          : allEntries.map((e) => e.id).reduce((a, b) => a > b ? a : b) + 1;
+
+      final entry = MapAnchorLogEntry(
+        id: newId,
+        latitude: latitude,
+        longitude: longitude,
+        distanceFromPrevious: distanceFromPrevious,
+        timeStr: timeStr,
+      );
+
+      logItems.add(entry);
+      await saveLogEntries(logItems);
+      return logItems;
+    });
+  }
 
   Future<void> removeLastMapAnchorLog() async {
-    final logItems = await loadLogEntries();
-    
-    // Ищем индекс последней записи типа MapAnchorLogEntry, начиная с конца списка
-    final int indexToRemove = logItems.lastIndexWhere((item) => item is MapAnchorLogEntry);
+    await _synchronized(() async {
+      final logItems = await loadLogEntries();
 
-    // Если такая запись найдена, удаляем ее
-    if (indexToRemove != -1) {
-      logItems.removeAt(indexToRemove);
-      await saveLogEntries(logItems);
-    }
+      final int indexToRemove =
+          logItems.lastIndexWhere((item) => item is MapAnchorLogEntry);
+
+      if (indexToRemove != -1) {
+        logItems.removeAt(indexToRemove);
+        await saveLogEntries(logItems);
+      }
+    });
   }
 
   Future<List<LogItem>> loadLogEntries() async {
@@ -77,19 +100,82 @@ class LogService {
     required GpsData currentGpsData,
     required double magneticDeclination,
   }) async {
-    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
-      return null;
-    }
+    return _synchronized(() async {
+      if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
+        return null;
+      }
 
-    final logItems = await loadLogEntries();
+      final logItems = await loadLogEntries();
 
-    final lastIncompleteEntry =
-        logItems.lastWhereOrNull(
-              (item) => item is LogEntry && item.distance == null,
-            )
-            as LogEntry?;
+      final lastIncompleteEntry = logItems
+              .lastWhereOrNull((item) => item is LogEntry && item.distance == null)
+          as LogEntry?;
 
-    if (lastIncompleteEntry != null) {
+      if (lastIncompleteEntry != null) {
+        final distance = calculateDistance(
+          lastIncompleteEntry.latitude,
+          lastIncompleteEntry.longitude,
+          currentGpsData.latitude!,
+          currentGpsData.longitude!,
+        );
+
+        final bearing = calculateTrueBearing(
+          lastIncompleteEntry.latitude,
+          lastIncompleteEntry.longitude,
+          currentGpsData.latitude!,
+          currentGpsData.longitude!,
+        );
+
+        lastIncompleteEntry.distance = distance;
+        lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
+      }
+
+      final existingTrackEntries = logItems.whereType<LogEntry>();
+      final newId = existingTrackEntries.isEmpty
+          ? 1
+          : existingTrackEntries.map((e) => e.id).reduce(math.max) + 1;
+
+      final newEntry = LogEntry(
+        id: newId,
+        latitude: currentGpsData.latitude!,
+        longitude: currentGpsData.longitude!,
+      );
+
+      logItems.add(newEntry);
+      await saveLogEntries(logItems);
+
+      return SetWaypointResult(logItems: logItems, waypoint: currentGpsData);
+    });
+  }
+
+  Future<ClearWaypointResult> clearWaypoint({
+    required List<LogItem> currentLogItems,
+    required GpsData currentGpsData,
+    required double magneticDeclination,
+  }) async {
+    return _synchronized(() async {
+      final logItems = await loadLogEntries();
+
+      final lastIncompleteEntry = logItems
+              .lastWhereOrNull((item) => item is LogEntry && item.distance == null)
+          as LogEntry?;
+
+      if (lastIncompleteEntry == null) {
+        return ClearWaypointResult(
+          logItems: logItems,
+          waypoint: null,
+          clearedOnly: true,
+        );
+      }
+
+      if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
+        return ClearWaypointResult(
+          logItems: currentLogItems,
+          waypoint: null,
+          clearedOnly: true,
+        );
+      }
+
       final distance = calculateDistance(
         lastIncompleteEntry.latitude,
         lastIncompleteEntry.longitude,
@@ -106,78 +192,15 @@ class LogService {
 
       lastIncompleteEntry.distance = distance;
       lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
-    }
 
-    final existingTrackEntries = logItems.whereType<LogEntry>();
-    final newId = existingTrackEntries.isEmpty
-        ? 1
-        : existingTrackEntries.map((e) => e.id).reduce(math.max) + 1;
+      await saveLogEntries(logItems);
 
-    final newEntry = LogEntry(
-      id: newId,
-      latitude: currentGpsData.latitude!,
-      longitude: currentGpsData.longitude!,
-    );
-
-    logItems.add(newEntry);
-    await saveLogEntries(logItems);
-
-    return SetWaypointResult(logItems: logItems, waypoint: currentGpsData);
-  }
-
-  Future<ClearWaypointResult> clearWaypoint({
-    required List<LogItem> currentLogItems,
-    required GpsData currentGpsData,
-    required double magneticDeclination,
-  }) async {
-    final logItems = await loadLogEntries();
-
-    final lastIncompleteEntry =
-        logItems.lastWhereOrNull(
-              (item) => item is LogEntry && item.distance == null,
-            )
-            as LogEntry?;
-
-    if (lastIncompleteEntry == null) {
       return ClearWaypointResult(
         logItems: logItems,
         waypoint: null,
         clearedOnly: true,
       );
-    }
-
-    if (currentGpsData.latitude == null || currentGpsData.longitude == null) {
-      return ClearWaypointResult(
-        logItems: currentLogItems,
-        waypoint: null,
-        clearedOnly: true,
-      );
-    }
-
-    final distance = calculateDistance(
-      lastIncompleteEntry.latitude,
-      lastIncompleteEntry.longitude,
-      currentGpsData.latitude!,
-      currentGpsData.longitude!,
-    );
-
-    final bearing = calculateTrueBearing(
-      lastIncompleteEntry.latitude,
-      lastIncompleteEntry.longitude,
-      currentGpsData.latitude!,
-      currentGpsData.longitude!,
-    );
-
-    lastIncompleteEntry.distance = distance;
-    lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
-
-    await saveLogEntries(logItems);
-
-    return ClearWaypointResult(
-      logItems: logItems,
-      waypoint: null,
-      clearedOnly: true,
-    );
+    });
   }
 
   Future<List<LogItem>> addTargetCreationLogEntry({
@@ -189,29 +212,31 @@ class LogService {
     required double targetLatitude,
     required double targetLongitude,
   }) async {
-    final logItems = await loadLogEntries();
+    return _synchronized(() async {
+      final logItems = await loadLogEntries();
 
-    final newId = logItems.whereType<TargetCreationLogEntry>().isNotEmpty
-        ? logItems
+      final newId = logItems.whereType<TargetCreationLogEntry>().isNotEmpty
+          ? logItems
                   .whereType<TargetCreationLogEntry>()
                   .map((e) => e.id)
                   .reduce(math.max) +
               1
-        : 1;
+          : 1;
 
-    final entry = TargetCreationLogEntry(
-      id: newId,
-      baseLatitude: baseLatitude,
-      baseLongitude: baseLongitude,
-      azimuth: azimuth,
-      distance: distance,
-      targetLatitude: targetLatitude,
-      targetLongitude: targetLongitude,
-    );
+      final entry = TargetCreationLogEntry(
+        id: newId,
+        baseLatitude: baseLatitude,
+        baseLongitude: baseLongitude,
+        azimuth: azimuth,
+        distance: distance,
+        targetLatitude: targetLatitude,
+        targetLongitude: targetLongitude,
+      );
 
-    logItems.add(entry);
-    await saveLogEntries(logItems);
-    return logItems;
+      logItems.add(entry);
+      await saveLogEntries(logItems);
+      return logItems;
+    });
   }
 }
 
