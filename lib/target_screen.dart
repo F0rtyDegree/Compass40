@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'screens/help_viewer_screen.dart';
+
 class TargetScreen extends StatefulWidget {
   const TargetScreen({super.key});
 
@@ -82,7 +84,24 @@ class _TargetScreenState extends State<TargetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Установить цель')),
+      appBar: AppBar(
+        title: const Text('Установить цель'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.help_outline),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HelpViewerScreen(
+                    helpFilePath: 'assets/help/target_help.md',
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(

@@ -68,7 +68,7 @@ class _GpsSectionState extends State<GpsSection> {
                     : Colors.black87);
 
             final coordsWidget = GestureDetector(
-              onTap: () {
+              onLongPress: () {
                 if (gps.latitude != null && gps.longitude != null) {
                   Clipboard.setData(ClipboardData(text: coordsText));
                   if (!mounted) return;

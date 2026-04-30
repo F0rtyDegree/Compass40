@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'map_screen.dart';
+import 'help_viewer_screen.dart';
 import '../theme_provider.dart';
 import '../widgets/compass_section.dart';
 import '../widgets/gps_section.dart';
@@ -82,6 +83,19 @@ class _MyHomePageState extends State<MyHomePage> {
             IconButton(
               icon: const Icon(Icons.settings),
               onPressed: _actions.openSettings,
+            ),
+            IconButton(
+              icon: const Icon(Icons.help_outline),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const HelpViewerScreen(
+                      helpFilePath: 'assets/help/compass_help.md',
+                    ),
+                  ),
+                );
+              },
             ),
             IconButton(
               icon: const Icon(Icons.info_outline),

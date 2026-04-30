@@ -9,6 +9,7 @@ import '../widgets/map_image_painter.dart';
 import '../widgets/map_overlay_painter.dart';
 import '../widgets/map_toolbar.dart';
 import '../widgets/map_zoom_buttons.dart';
+import 'help_viewer_screen.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
@@ -88,6 +89,19 @@ class _MapScreenState extends State<MapScreen> {
           centerTitle: true,
           actions: [
             if (_state.imagePath != null) ...[
+              IconButton(
+                icon: const Icon(Icons.help_outline),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const HelpViewerScreen(
+                        helpFilePath: 'assets/help/map_help.md',
+                      ),
+                    ),
+                  );
+                },
+              ),
               Tooltip(
                 message: 'Удалить карту (долгое нажатие)',
                 child: InkWell(
