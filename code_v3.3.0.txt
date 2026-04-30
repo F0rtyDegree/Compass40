@@ -5807,6 +5807,261 @@
    195	  @override
    196	  bool shouldRepaint(covariant _CrosshairPainter oldDelegate) => false;
    197	}
+=== lib/widgets/map_gesture_handler.dart ===
+     1	import 'dart:math' as math;
+     2	import 'package:flutter/material.dart';
+     3	import '../models/map_transform_state.dart';
+     4	
+     5	/// Обработчик жестов для карты (панорамирование, масштабирование, поворот).
+     6	/// Не содержит UI, только математику преобразований.
+     7	class MapGestureHandler {
+     8	  // Состояния жеста
+     9	  Offset _gestureStartTranslation = Offset.zero;
+    10	  double _gestureStartScale = 1.0;
+    11	  double _gestureStartRotation = 0.0;
+    12	  Offset _gestureStartFocalPoint = Offset.zero;
+    13	  Offset? _gestureStartPivotImage; // точка изображения под прицелом
+    14	  double _accumulatedRotation = 0.0;
+    15	  double _lastAngle = 0.0;
+    16	
+    17	  // Размеры, которые должны обновляться извне
+    18	  Size? viewportSize;
+    19	  Size? imageSize;
+    20	
+    21	  // Зависимости, получаемые при создании
+    22	  final MapTransformState transformState;
+    23	  final void Function(MapTransformState) onUpdateTransform;
+    24	  final Offset Function() getCrosshairScreenPoint;
+    25	  final Offset Function(Offset) screenToImage;
+    26	  final Offset Function(Offset) imageToScreen;
+    27	  final bool Function() getRotateMode;
+    28	
+    29	  MapGestureHandler({
+    30	    required this.transformState,
+    31	    required this.onUpdateTransform,
+    32	    required this.getCrosshairScreenPoint,
+    33	    required this.screenToImage,
+    34	    required this.imageToScreen,
+    35	    required this.getRotateMode,
+    36	  });
+    37	
+    38	  void onScaleStart(ScaleStartDetails details) {
+    39	    _gestureStartTranslation = transformState.translation;
+    40	    _gestureStartScale = transformState.scale;
+    41	    _gestureStartRotation = transformState.rotationRadians;
+    42	    _gestureStartFocalPoint = details.focalPoint;
+    43	
+    44	    if (viewportSize != null && imageSize != null) {
+    45	      final pivotScreen = getCrosshairScreenPoint();
+    46	      _gestureStartPivotImage = screenToImage(pivotScreen);
+    47	    } else {
+    48	      _gestureStartPivotImage = null;
+    49	    }
+    50	
+    51	    _accumulatedRotation = 0.0;
+    52	    if (viewportSize != null && imageSize != null) {
+    53	      final pivotScreen = getCrosshairScreenPoint();
+    54	      final startVector = _gestureStartFocalPoint - pivotScreen;
+    55	      _lastAngle = math.atan2(startVector.dy, startVector.dx);
+    56	    } else {
+    57	      _lastAngle = 0.0;
+    58	    }
+    59	  }
+    60	
+    61	  void onScaleUpdate(ScaleUpdateDetails details) {
+    62	    if (viewportSize == null || imageSize == null) return;
+    63	
+    64	    final pointerCount = details.pointerCount;
+    65	
+    66	    if (pointerCount == 1) {
+    67	      _handleOneFinger(details);
+    68	    } else if (pointerCount == 2) {
+    69	      _handleTwoFingers(details);
+    70	    } else if (pointerCount >= 3) {
+    71	      _handleThreeFingers(details);
+    72	    }
+    73	  }
+    74	
+    75	  void _handleOneFinger(ScaleUpdateDetails details) {
+    76	    final rotateMode = getRotateMode();
+    77	    if (rotateMode) {
+    78	      _handleOneFingerRotate(details);
+    79	    } else {
+    80	      _handleOneFingerPan(details);
+    81	    }
+    82	  }
+    83	
+    84	  void _handleOneFingerPan(ScaleUpdateDetails details) {
+    85	    final delta = details.focalPoint - _gestureStartFocalPoint;
+    86	    final newTranslation = _gestureStartTranslation + delta;
+    87	    onUpdateTransform(MapTransformState(
+    88	      scale: transformState.scale,
+    89	      rotationRadians: transformState.rotationRadians,
+    90	      translation: newTranslation,
+    91	    ));
+    92	  }
+    93	
+    94	  void _handleOneFingerRotate(ScaleUpdateDetails details) {
+    95	    final pivotScreen = getCrosshairScreenPoint();
+    96	    final currentVector = details.focalPoint - pivotScreen;
+    97	    final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
+    98	    double deltaAngle = currentAngle - _lastAngle;
+    99	    if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
+   100	    if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
+   101	    _accumulatedRotation += deltaAngle;
+   102	    _lastAngle = currentAngle;
+   103	    const sensitivity = 0.8;
+   104	    final newRotation = _gestureStartRotation + _accumulatedRotation * sensitivity;
+   105	
+   106	    if (_gestureStartPivotImage != null) {
+   107	      final pivotScreenAfterRotate = imageToScreen(_gestureStartPivotImage!);
+   108	      final delta = pivotScreen - pivotScreenAfterRotate;
+   109	      final newTranslation = _gestureStartTranslation + delta;
+   110	      onUpdateTransform(MapTransformState(
+   111	        scale: transformState.scale,
+   112	        rotationRadians: newRotation,
+   113	        translation: newTranslation,
+   114	      ));
+   115	    } else {
+   116	      onUpdateTransform(MapTransformState(
+   117	        scale: transformState.scale,
+   118	        rotationRadians: newRotation,
+   119	        translation: transformState.translation,
+   120	      ));
+   121	    }
+   122	  }
+   123	
+   124	  void _handleTwoFingers(ScaleUpdateDetails details) {
+   125	    final scaleChange = (details.scale - 1.0).abs();
+   126	    final rotationChange = details.rotation.abs();
+   127	
+   128	    if (scaleChange > rotationChange) {
+   129	      _handleTwoFingerScale(details);
+   130	    } else {
+   131	      _handleTwoFingerRotate(details);
+   132	    }
+   133	  }
+   134	
+   135	  void _handleTwoFingerScale(ScaleUpdateDetails details) {
+   136	    final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
+   137	    if (_gestureStartPivotImage != null) {
+   138	      final pivotScreen = getCrosshairScreenPoint();
+   139	      final pivotScreenAfterScale = imageToScreen(_gestureStartPivotImage!);
+   140	      final delta = pivotScreen - pivotScreenAfterScale;
+   141	      final newTranslation = _gestureStartTranslation + delta;
+   142	      onUpdateTransform(MapTransformState(
+   143	        scale: newScale,
+   144	        rotationRadians: transformState.rotationRadians,
+   145	        translation: newTranslation,
+   146	      ));
+   147	    } else {
+   148	      onUpdateTransform(MapTransformState(
+   149	        scale: newScale,
+   150	        rotationRadians: transformState.rotationRadians,
+   151	        translation: _gestureStartTranslation,
+   152	      ));
+   153	    }
+   154	  }
+   155	
+   156	  void _handleTwoFingerRotate(ScaleUpdateDetails details) {
+   157	    final pivotScreen = getCrosshairScreenPoint();
+   158	    final currentRotation = _gestureStartRotation + details.rotation;
+   159	    if (_gestureStartPivotImage != null) {
+   160	      final pivotScreenAfterRotate = imageToScreen(_gestureStartPivotImage!);
+   161	      final delta = pivotScreen - pivotScreenAfterRotate;
+   162	      final newTranslation = _gestureStartTranslation + delta;
+   163	      onUpdateTransform(MapTransformState(
+   164	        scale: transformState.scale,
+   165	        rotationRadians: currentRotation,
+   166	        translation: newTranslation,
+   167	      ));
+   168	    } else {
+   169	      onUpdateTransform(MapTransformState(
+   170	        scale: transformState.scale,
+   171	        rotationRadians: currentRotation,
+   172	        translation: transformState.translation,
+   173	      ));
+   174	    }
+   175	  }
+   176	
+   177	  void _handleThreeFingers(ScaleUpdateDetails details) {
+   178	    final pivotScreen = getCrosshairScreenPoint();
+   179	    final startVector = _gestureStartFocalPoint - pivotScreen;
+   180	    final currentVector = details.focalPoint - pivotScreen;
+   181	    final startAngle = math.atan2(startVector.dy, startVector.dx);
+   182	    final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
+   183	    double deltaAngle = currentAngle - startAngle;
+   184	    if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
+   185	    if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
+   186	    const sensitivity = 0.8;
+   187	    final newRotation = _gestureStartRotation + deltaAngle * sensitivity;
+   188	
+   189	    if (_gestureStartPivotImage != null) {
+   190	      final pivotScreenAfterRotate = imageToScreen(_gestureStartPivotImage!);
+   191	      final delta = pivotScreen - pivotScreenAfterRotate;
+   192	      final newTranslation = _gestureStartTranslation + delta;
+   193	      onUpdateTransform(MapTransformState(
+   194	        scale: transformState.scale,
+   195	        rotationRadians: newRotation,
+   196	        translation: newTranslation,
+   197	      ));
+   198	    } else {
+   199	      onUpdateTransform(MapTransformState(
+   200	        scale: transformState.scale,
+   201	        rotationRadians: newRotation,
+   202	        translation: transformState.translation,
+   203	      ));
+   204	    }
+   205	  }
+   206	
+   207	  // Публичные методы для кнопок масштабирования и сброса поворота
+   208	  void zoomIn() {
+   209	    final newScale = (transformState.scale * 1.5).clamp(0.05, 20.0);
+   210	    _scaleAroundCrosshair(newScale);
+   211	  }
+   212	
+   213	  void zoomOut() {
+   214	    final newScale = (transformState.scale / 1.5).clamp(0.05, 20.0);
+   215	    _scaleAroundCrosshair(newScale);
+   216	  }
+   217	
+   218	  void resetRotation() {
+   219	    const newRotation = 0.0;
+   220	    if (viewportSize != null && imageSize != null) {
+   221	      final pivotScreen = getCrosshairScreenPoint();
+   222	      final pivotImage = screenToImage(pivotScreen);
+   223	      final pivotScreenAfterReset = imageToScreen(pivotImage);
+   224	      final delta = pivotScreen - pivotScreenAfterReset;
+   225	      final newTranslation = transformState.translation + delta;
+   226	      onUpdateTransform(MapTransformState(
+   227	        scale: transformState.scale,
+   228	        rotationRadians: newRotation,
+   229	        translation: newTranslation,
+   230	      ));
+   231	    } else {
+   232	      onUpdateTransform(MapTransformState(
+   233	        scale: transformState.scale,
+   234	        rotationRadians: newRotation,
+   235	        translation: transformState.translation,
+   236	      ));
+   237	    }
+   238	  }
+   239	
+   240	  void _scaleAroundCrosshair(double newScale) {
+   241	    if (viewportSize == null || imageSize == null) return;
+   242	    final pivotScreen = getCrosshairScreenPoint();
+   243	    final pivotImage = screenToImage(pivotScreen);
+   244	    final pivotScreenAfterScale = imageToScreen(pivotImage);
+   245	    final delta = pivotScreen - pivotScreenAfterScale;
+   246	    final newTranslation = transformState.translation + delta;
+   247	    onUpdateTransform(MapTransformState(
+   248	      scale: newScale,
+   249	      rotationRadians: transformState.rotationRadians,
+   250	      translation: newTranslation,
+   251	    ));
+   252	  }
+   253	}
+
 === lib/widgets/map_image_painter.dart ===
      1	import 'dart:ui' as ui;
      2	import 'dart:io';

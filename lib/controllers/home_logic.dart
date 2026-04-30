@@ -117,7 +117,27 @@ class HomeLogic {
 
         final heading = data[0];
         final accuracy = data.length > 1 ? data[1] : 0.0;
-        if (accuracy < 2) return;
+        // Принимаем все данные, даже с плохой точностью, но accuracy=0 игнорируем
+        if (accuracy == 0) {
+          state.accuracyNotifier.value = 0;
+          return;
+        }
+
+        // Фильтр одиночных выбросов: если угол отличается от последнего >30°, подставляем последнее значение
+        if (state.headingSamples.isNotEmpty) {
+          double lastHeading = state.headingSamples.last.$1;
+          double diff = (heading - lastHeading).abs();
+          if (diff > 180) diff = 360 - diff;
+          if (diff > 30) {
+            // Добавляем последнее валидное значение, чтобы сохранить поток данных
+            state.headingSamples.add((lastHeading, DateTime.now().millisecondsSinceEpoch));
+            if (state.headingSamples.length > HomeState.maxSamples) {
+              state.headingSamples.removeAt(0);
+            }
+            state.accuracyNotifier.value = accuracy;
+            return;
+          }
+        }
 
         state.headingSamples.add((
           heading,
@@ -227,8 +247,9 @@ class HomeLogic {
     double newHeading;
 
     if (useGps) {
+      final gpsWindow = state.averagingPeriod * 2; // для GPS окно шире
       state.gpsBearingSamples.removeWhere(
-        (s) => now - s.$2 > state.averagingPeriod,
+        (s) => now - s.$2 > gpsWindow,
       );
       if (state.gpsBearingSamples.isEmpty) return;
       final bearings = state.gpsBearingSamples.map((s) => s.$1).toList();
