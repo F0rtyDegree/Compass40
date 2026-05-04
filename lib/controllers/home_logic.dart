@@ -447,7 +447,7 @@ class HomeLogic {
       case 0:
         return 'Низкая (калибруйте)';
       case 1:
-        return 'Средняя';
+        return 'Средняя (калибруйте)';
       case 2:
         return 'Высокая';
       case 3:

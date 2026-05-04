@@ -18,8 +18,12 @@ class _TargetScreenState extends State<TargetScreen> {
   // Обычное нажатие: использует текущее местоположение как базу.
   void _setTarget() {
     if (_formKey.currentState!.validate()) {
-      final azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
+      double azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
       final distance = double.tryParse(_distanceController.text) ?? 0.0;
+
+      // Нормализация азимута к диапазону 0-360
+      azimuth = (azimuth % 360 + 360) % 360;
+
       Navigator.pop(context, {
         'azimuth': azimuth,
         'distance': distance,
@@ -47,8 +51,11 @@ class _TargetScreenState extends State<TargetScreen> {
 
       if (lat != null && lon != null) {
         // Берем азимут и дистанцию из полей, если пустые - то 0.
-        final azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
+        double azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
         final distance = double.tryParse(_distanceController.text) ?? 0.0;
+
+        // Нормализация азимута к диапазону 0-360
+        azimuth = (azimuth % 360 + 360) % 360;
 
         // Возвращаем все данные для расчета на главный экран
         Navigator.pop(context, {
@@ -136,10 +143,11 @@ class _TargetScreenState extends State<TargetScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Азимут (градусы)',
                   border: OutlineInputBorder(),
-                  hintText: '0-360 (0 по умолчанию)',
+                  hintText: 'Введите значение в градусах',
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
+                  signed: true, // Разрешаем отрицательные числа
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
@@ -148,9 +156,6 @@ class _TargetScreenState extends State<TargetScreen> {
                   final n = double.tryParse(value);
                   if (n == null) {
                     return 'Введите корректное число';
-                  }
-                  if (n < 0 || n > 360) {
-                    return 'Азимут должен быть в диапазоне 0-360';
                   }
                   return null;
                 },

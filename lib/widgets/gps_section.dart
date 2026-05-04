@@ -195,7 +195,7 @@ class _GpsSectionState extends State<GpsSection> {
                   child: Text(
                     text,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.blueAccent,
+                      color: Colors.green,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

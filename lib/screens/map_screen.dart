@@ -88,7 +88,7 @@ class _MapScreenState extends State<MapScreen> {
           title: const Text('Спорткарта'),
           centerTitle: true,
           actions: [
-            if (_state.imagePath != null) ...[
+            if (true) // Кнопка справки должна быть доступна всегда
               IconButton(
                 icon: const Icon(Icons.help_outline),
                 onPressed: () {
@@ -102,6 +102,7 @@ class _MapScreenState extends State<MapScreen> {
                   );
                 },
               ),
+            if (_state.imagePath != null)
               Tooltip(
                 message: 'Удалить карту (долгое нажатие)',
                 child: InkWell(
@@ -135,7 +136,6 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
               ),
-            ],
           ],
         ),
         body: _buildBody(),
