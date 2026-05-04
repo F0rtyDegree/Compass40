@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:my_compass/my_compass.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -14,10 +15,12 @@ class SensorService {
   SensorService._internal();
 
   // GPS
+  Stream<GpsData>? _sharedGpsStream;
+  StreamSubscription<GpsData>? _sharedGpsSubscription;
+  int? _sharedGpsIntervalMs;
+  final List<void Function(GpsData)> _gpsListeners = [];
+
   final GpsInfo _gpsInfo = GpsInfo();
-  Stream<GpsData>? _currentGpsStream;
-  StreamSubscription<GpsData>? _gpsSubscription;
-  int? _currentGpsIntervalMs;
 
   // Компас
   Stream<List<double>>? _compassBroadcastStream;
@@ -63,43 +66,64 @@ class SensorService {
   // ------------------------------------------------------------
   // GPS
   // ------------------------------------------------------------
-  Stream<GpsData> _getOrCreateGpsStream(int intervalSeconds) {
+  void _ensureSharedGpsStream(int intervalSeconds) {
     final intervalMs = intervalSeconds * 1000;
-    
-    if (_currentGpsStream != null && _currentGpsIntervalMs == intervalMs) {
-      return _currentGpsStream!;
-    }
-    
-    // Закрываем старый стрим
-    _gpsSubscription?.cancel();
-    _currentGpsStream = null;
-    
-    _currentGpsIntervalMs = intervalMs;
-    _currentGpsStream = _gpsInfo
+    if (_sharedGpsStream != null && _sharedGpsIntervalMs == intervalMs) return;
+
+    // Закрываем старый
+    _sharedGpsSubscription?.cancel();
+    _sharedGpsStream = null;
+
+    _sharedGpsIntervalMs = intervalMs;
+    _sharedGpsStream = _gpsInfo
         .getGpsDataStream(intervalMs)
         .handleError((error, stack) {
+      developer.log(
+        'Error in shared GPS stream',
+        name: 'by.fortydegree.compass40',
+        error: error,
+        stackTrace: stack,
+      );
+    }).asBroadcastStream();
+
+    _sharedGpsSubscription = _sharedGpsStream!.listen((data) {
+      // Create a copy of the list to iterate over, to avoid concurrent modification issues
+      final listeners = List<void Function(GpsData)>.from(_gpsListeners);
+      for (final listener in listeners) {
+        try {
+          listener(data);
+        } catch (e) {
           developer.log(
-            'Error in GPS stream',
+            'Error in GPS listener',
             name: 'by.fortydegree.compass40',
-            error: error,
-            stackTrace: stack,
+            error: e,
           );
-        })
-        .asBroadcastStream();
-    
-    return _currentGpsStream!;
+        }
+      }
+    });
   }
 
   StreamSubscription<GpsData> subscribeToGps({
     required int intervalSeconds,
     required void Function(GpsData gpsData) onData,
   }) {
-    // Отменяем предыдущую подписку
-    _gpsSubscription?.cancel();
-    
-    final stream = _getOrCreateGpsStream(intervalSeconds);
-    _gpsSubscription = stream.listen(onData);
-    return _gpsSubscription!;
+    _ensureSharedGpsStream(intervalSeconds);
+
+    _gpsListeners.add(onData);
+
+    return _GpsListenerSubscription(
+      onCancel: () {
+        _gpsListeners.remove(onData);
+        // Optional: Stop stream if no listeners are left
+        if (_gpsListeners.isEmpty) {
+          _sharedGpsSubscription?.cancel();
+          _sharedGpsSubscription = null;
+          _sharedGpsStream = null;
+          _sharedGpsIntervalMs = null;
+          developer.log('Shared GPS stream stopped.', name: 'by.fortydegree.compass40');
+        }
+      },
+    );
   }
 
   // ------------------------------------------------------------
@@ -126,6 +150,50 @@ class SensorService {
     );
   }
 }
+
+// Вспомогательный класс подписки
+class _GpsListenerSubscription implements StreamSubscription<GpsData> {
+  final VoidCallback _onCancel;
+  bool _isCanceled = false;
+
+  _GpsListenerSubscription({required VoidCallback onCancel}) : _onCancel = onCancel;
+
+  @override
+  Future<void> cancel() async {
+    if (!_isCanceled) {
+      _isCanceled = true;
+      _onCancel();
+    }
+  }
+
+  @override
+  void onData(void Function(GpsData)? handleData) {}
+
+  @override
+  void onError(Function? handleError) {}
+
+  @override
+  void onDone(void Function()? handleDone) {}
+
+  @override
+  bool get isPaused => false;
+
+  @override
+  void pause([Future<void>? resumeSignal]) {}
+
+  @override
+  void resume() {}
+
+  @override
+  Future<E> asFuture<E>([E? futureValue]) async {
+    // This is a simplified version. A real implementation might need a Completer.
+    if (futureValue != null) {
+      return futureValue;
+    }
+    return Completer<E>().future;
+  }
+}
+
 
 // Класс настроек (должен быть после SensorService или до – не важно, главное чтобы был)
 class SensorSettings {

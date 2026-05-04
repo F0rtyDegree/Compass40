@@ -143,7 +143,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       onCancelNavigation: _logic.cancelExternalNavigation,
                     ),
                   ),
-                );
+                ).then((_) => _logic.reloadSettings());
               },
             ),
             GpsSection(
