@@ -33,20 +33,20 @@ class MapCalibrationService {
   }) {
     if (anchors.length < 2) return null;
 
-    final sorted = List<MapAnchor>.from(anchors)
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-    final latest = sorted.last;
-
-    for (int i = sorted.length - 2; i >= 0; i--) {
-      final candidate = sorted[i];
+    final latest = anchors.last; // последняя добавленная точка
+    MapAnchor? farthest;
+    double maxDist = -1;
+    for (int i = 0; i < anchors.length - 1; i++) {
+      final candidate = anchors[i];
       final dist = distanceBetweenAnchorsMeters(latest, candidate);
-      if (dist >= minDistanceMeters) {
-        return MapWorkingPair(latest: latest, reference: candidate);
+      if (dist >= minDistanceMeters && dist > maxDist) {
+        maxDist = dist;
+        farthest = candidate;
       }
     }
 
-    return null;
+    if (farthest == null) return null;
+    return MapWorkingPair(latest: latest, reference: farthest);
   }
 
   double? getMapRotation(MapWorkingPair pair) {
