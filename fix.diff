@@ -1,211 +1,32 @@
-diff --git a/lib/controllers/map_screen_logic.dart b/lib/controllers/map_screen_logic.dart
-index abcdef1..1234567 100644
---- a/lib/controllers/map_screen_logic.dart
-+++ b/lib/controllers/map_screen_logic.dart
-@@ -472,6 +472,41 @@ class MapScreenLogic {
-     await recalculateTargetsAfterNewAnchor(restartNavigation: true);
-   }
- 
-+  Future<void> undoFirstAnchor() async {
-+    final project = state.project;
-+    if (project == null || project.anchors.length <= 2) {
-+      return;
-+    }
-+
-+    final updatedAnchors = project.anchors.sublist(1); // удаляем первую точку
-+    // Путь и индексы прыжков остаются валидными (координаты изображения не меняются)
-+    final updatedUserPath = project.userPath;
-+    final updatedPathJumpIndices = project.pathJumpIndices;
-+
-+    final updatedProject = project.copyWith(
-+      anchors: updatedAnchors,
-+      userPath: updatedUserPath,
-+      pathJumpIndices: updatedPathJumpIndices,
-+    );
-+
-+    await storageService.saveProject(updatedProject);
-+    await logService.removeFirstMapAnchorLog();
-+
-+    setState(() {
-+      state.project = updatedProject;
-+    });
-+
-+    _recalculateWorkingPairAndRotation();
-+    _recalculateCanPlaceTarget();
-+    _recalculateUserImagePoint();
-+    await recalculateTargetsAfterNewAnchor(restartNavigation: true);
-+  }
-+
-+  Future<void> undoLastAnchor() async {
-+    final project = state.project;
-+    if (project == null || project.anchors.length <= 2) {
-+      return;
-+    }
-+
-+    final updatedAnchors = project.anchors.sublist(0, project.anchors.length - 1);
-+    List<int> updatedPathJumpIndices = [...project.pathJumpIndices];
-+    List<Offset> updatedUserPath = [...project.userPath];
-+
-+    if (updatedPathJumpIndices.isNotEmpty) {
-+      final lastJumpIndex = updatedPathJumpIndices.removeLast();
-+      if (updatedUserPath.length >= lastJumpIndex) {
-+        updatedUserPath = updatedUserPath.sublist(0, lastJumpIndex);
-+      }
-+    }
-+
-+    final updatedProject = project.copyWith(
-+      anchors: updatedAnchors,
-+      userPath: updatedUserPath,
-+      pathJumpIndices: updatedPathJumpIndices,
-+    );
-+
-+    await storageService.saveProject(updatedProject);
-+    await logService.removeLastMapAnchorLog();
-+
-+    setState(() {
-+      state.project = updatedProject;
-+    });
-+
-+    _recalculateWorkingPairAndRotation();
-+    _recalculateCanPlaceTarget();
-+    _recalculateUserImagePoint();
-+    await recalculateTargetsAfterNewAnchor(restartNavigation: true);
-+  }
-+
-   Future<void> undoLastAnchor() async {
-     final project = state.project;
-     if (project == null || project.anchors.length <= 2) {
-diff --git a/lib/screens/map_screen.dart b/lib/screens/map_screen.dart
-index 7890abc..def1234 100644
 --- a/lib/screens/map_screen.dart
 +++ b/lib/screens/map_screen.dart
-@@ -549,28 +549,58 @@ class _MapScreenState extends State<MapScreen> {
-     final count = _state.project!.anchors.length;
-     if (count == 0) return const SizedBox.shrink();
-     final hasWorkingPair = _state.workingPair != null;
-     return Dismissible(
-       key: ValueKey(count),
--      direction: DismissDirection.endToStart,
-+      direction: DismissDirection.horizontal,
-       confirmDismiss: (direction) async {
--        if (_state.project!.anchors.length <= 2) {
--          ScaffoldMessenger.of(context).showSnackBar(
--            const SnackBar(
--              content: Text('Нельзя удалить. Для привязки необходимо минимум 2 точки.'),
--              backgroundColor: Colors.orangeAccent,
--            ),
--          );
--          return false;
-+        final anchors = _state.project!.anchors;
-+        if (direction == DismissDirection.endToStart) {
-+          // удаление последней точки
-+          if (anchors.length <= 2) {
-+            ScaffoldMessenger.of(context).showSnackBar(
-+              const SnackBar(
-+                content: Text('Нельзя удалить последнюю точку. Нужно минимум 2 точки.'),
-+                backgroundColor: Colors.orangeAccent,
-+              ),
-+            );
-+            return false;
-+          }
-+        } else if (direction == DismissDirection.startToEnd) {
-+          // удаление первой точки
-+          if (anchors.length <= 2) {
-+            ScaffoldMessenger.of(context).showSnackBar(
-+              const SnackBar(
-+                content: Text('Нельзя удалить первую точку. Нужно минимум 2 точки.'),
-+                backgroundColor: Colors.orangeAccent,
-+              ),
-+            );
-+            return false;
-+          }
-         }
-         return true;
-       },
-       onDismissed: (direction) {
--        _logic.undoLastAnchor();
--        ScaffoldMessenger.of(context).showSnackBar(
--          const SnackBar(
--            content: Text('Последняя привязка удалена'),
--            backgroundColor: Colors.redAccent,
--          ),
--        );
-+        if (direction == DismissDirection.endToStart) {
-+          _logic.undoLastAnchor();
-+          ScaffoldMessenger.of(context).showSnackBar(
-+            const SnackBar(
-+              content: Text('Последняя привязка удалена'),
-+              backgroundColor: Colors.redAccent,
-+            ),
-+          );
-+        } else if (direction == DismissDirection.startToEnd) {
-+          _logic.undoFirstAnchor();
-+          ScaffoldMessenger.of(context).showSnackBar(
-+            const SnackBar(
-+              content: Text('Первая привязка удалена'),
-+              backgroundColor: Colors.redAccent,
-+            ),
-+          );
-+        }
-+      },
-+      background: Container(
-+        decoration: BoxDecoration(
-+          color: Colors.red,
-+          borderRadius: BorderRadius.circular(20),
-+        ),
-+        alignment: Alignment.centerRight,
-+        padding: const EdgeInsets.only(right: 20),
-+        child: const Icon(Icons.delete, color: Colors.white),
-+      ),
-+      secondaryBackground: Container(
-+        decoration: BoxDecoration(
-+          color: Colors.red,
-+          borderRadius: BorderRadius.circular(20),
-+        ),
-+        alignment: Alignment.centerLeft,
-+        padding: const EdgeInsets.only(left: 20),
-+        child: const Icon(Icons.delete, color: Colors.white),
-       ),
--      background: Container(...),
-       child: Tooltip(
--        message: 'Смахни влево чтобы удалить последнюю точку',
-+        message: 'Смахни влево — удалить последнюю, вправо — первую',
-         child: Container(
-           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-           decoration: BoxDecoration(
-diff --git a/lib/services/log_service.dart b/lib/services/log_service.dart
-index 2468ace..97531bd 100644
---- a/lib/services/log_service.dart
-+++ b/lib/services/log_service.dart
-@@ -60,6 +60,25 @@ class LogService {
-     });
-   }
- 
-+  Future<void> removeFirstMapAnchorLog() async {
-+    await _synchronized(() async {
-+      final logItems = await loadLogEntries();
-+
-+      // Найти первую запись типа MapAnchorLogEntry (самую старую)
-+      final int indexToRemove = logItems.indexWhere((item) => item is MapAnchorLogEntry);
-+      if (indexToRemove != -1) {
-+        logItems.removeAt(indexToRemove);
-+        await saveLogEntries(logItems);
-+      }
-+    });
-+  }
-+
-+  Future<void> removeLastMapAnchorLog() async {
-+    await _synchronized(() async {
-+      final logItems = await loadLogEntries();
-+
-+      // Найти последнюю запись типа MapAnchorLogEntry
-+      final int indexToRemove = logItems.lastIndexWhere((item) => item is MapAnchorLogEntry);
-+      if (indexToRemove != -1) {
-+        logItems.removeAt(indexToRemove);
-+        await saveLogEntries(logItems);
-+      }
-+    });
-+  }
-+
-   Future<void> removeLastMapAnchorLog() async {
-     await _synchronized(() async {
+@@ -250,15 +250,26 @@
+               ),
+               MapZoomButtons(
+                 visible: _state.imagePath != null && _state.imageSize != null,
++                onHereNowPressed: _logic.addAnchorFromCurrentGps,
++                onHereFromClipboard: _logic.addAnchorFromClipboard,
++                hereEnabled: !_state.followMode,
++                onTargetPressed: _state.canPlaceTarget && !_state.followMode
++                    ? (_state.plannedTarget == null
++                        ? _logic.placePlannedTargetAtCrosshair
++                        : _logic.activatePlannedTarget)
++                    : null,
++                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null
++                    ? _logic.setTargetAndStartNavigation
++                    : null,
++                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
++                targetEnabled: _state.canPlaceTarget && !_state.followMode,
+                 onZoomIn: _zoomIn,
+                 onZoomOut: _zoomOut,
+                 rotateMode: _state.rotateMode,
+                 onToggleRotateMode: () {
+                   setState(() {
+                     _state.rotateMode = !_state.rotateMode;
+                   });
+                 },
+                 onResetRotation: _resetRotation,
+-                // остальные параметры
+               ),
+             ],
+           );

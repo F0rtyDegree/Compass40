@@ -254,15 +254,17 @@ class _MapScreenState extends State<MapScreen> {
                 visible: _state.imagePath != null && _state.imageSize != null,
                 onHereNowPressed: _logic.addAnchorFromCurrentGps,
                 onHereFromClipboard: _logic.addAnchorFromClipboard,
+                hereEnabled: !_state.followMode,
                 onTargetPressed: _state.canPlaceTarget && !_state.followMode
                     ? (_state.plannedTarget == null
                         ? _logic.placePlannedTargetAtCrosshair
                         : _logic.activatePlannedTarget)
                     : null,
-                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null ? _logic.setTargetAndStartNavigation : null,
+                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null
+                    ? _logic.setTargetAndStartNavigation
+                    : null,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
                 targetEnabled: _state.canPlaceTarget && !_state.followMode,
-                hereEnabled: !_state.followMode,
                 onZoomIn: _zoomIn,
                 onZoomOut: _zoomOut,
                 rotateMode: _state.rotateMode,
