@@ -252,6 +252,54 @@ class MapOverlayPainter extends CustomPainter {
     }
   }
 
+  /// Возвращает (t0, t1) — параметры видимой части отрезка p1-p2 внутри rect,
+  /// или null, если отрезок полностью вне rect.
+  (double t0, double t1)? _clipLineSegment(Offset p1, Offset p2, Rect rect) {
+    final dx = p2.dx - p1.dx;
+    final dy = p2.dy - p1.dy;
+    final p = [-dx, dx, -dy, dy];
+    final q = [
+      p1.dx - rect.left,
+      rect.right - p1.dx,
+      p1.dy - rect.top,
+      rect.bottom - p1.dy,
+    ];
+    double t0 = 0.0;
+    double t1 = 1.0;
+
+    for (int i = 0; i < 4; i++) {
+      if (p[i] == 0) {
+        if (q[i] < 0) return null;
+      } else {
+        final t = q[i] / p[i];
+        if (p[i] < 0) {
+          if (t > t0) t0 = t;
+        } else {
+          if (t < t1) t1 = t;
+        }
+      }
+    }
+    if (t0 <= t1) return (t0, t1);
+    return null;
+  }
+
+  /// Возвращает точку на отрезке p1-p2, гарантированно лежащую внутри rect,
+  /// или null, если отрезок не пересекает rect.
+  Offset? _getLabelPositionInsideViewport(Offset p1, Offset p2, Size viewport) {
+    final rect = Rect.fromLTWH(0, 0, viewport.width, viewport.height);
+    if (p1 == p2) {
+      return rect.contains(p1) ? p1 : null;
+    }
+    final clip = _clipLineSegment(p1, p2, rect);
+    if (clip == null) return null;
+    final (t0, t1) = clip;
+    final tMid = (t0 + t1) / 2;
+    return Offset(
+      p1.dx + (p2.dx - p1.dx) * tMid,
+      p1.dy + (p2.dy - p1.dy) * tMid,
+    );
+  }
+
   void _drawLabels(
     Canvas canvas,
     Offset from,
@@ -259,14 +307,16 @@ class MapOverlayPainter extends CustomPainter {
     double distanceMeters,
     double bearingDegrees,
   ) {
-    final mid = (from + to) / 2;
+    final labelPos = _getLabelPositionInsideViewport(from, to, viewportSize);
+    if (labelPos == null) return;
+
     final distText = distanceMeters >= 1000
         ? '${(distanceMeters / 1000).toStringAsFixed(2)} km'
         : '${distanceMeters.round()} m';
     final bearText = '${bearingDegrees.round()}°';
 
-    _drawLabel(canvas, distText, mid + const Offset(0, -12), Colors.red);
-    _drawLabel(canvas, bearText, mid + const Offset(0, 8), Colors.red);
+    _drawLabel(canvas, distText, labelPos + const Offset(0, -12), Colors.red);
+    _drawLabel(canvas, bearText, labelPos + const Offset(0, 8), Colors.red);
   }
 
   void _drawLabel(Canvas canvas, String text, Offset position, Color color) {

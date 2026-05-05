@@ -1,0 +1,19 @@
+diff --git a/lib/widgets/map_toolbar.dart b/lib/widgets/map_toolbar.dart
+index 0000000..1111111
+--- a/lib/widgets/map_toolbar.dart
++++ b/lib/widgets/map_toolbar.dart
+@@ -70,11 +70,11 @@ class MapToolbar extends StatelessWidget {
+         onTap: enabled ? onTap : null,
+         onLongPress: enabled ? onLongPress : null,
+         child: Container(
+-          width: 80,
+-          height: 80,
++          width: 70,
++          height: 65,
+           decoration: BoxDecoration(
+             color: color.withAlpha(220),
+-            borderRadius: BorderRadius.circular(20),
++            borderRadius: BorderRadius.circular(12),
+             boxShadow: enabled
+                 ? [
+                     BoxShadow(
