@@ -7,7 +7,6 @@ import '../controllers/map_screen_logic.dart';
 import '../widgets/map_crosshair.dart';
 import '../widgets/map_image_painter.dart';
 import '../widgets/map_overlay_painter.dart';
-import '../widgets/map_toolbar.dart';
 import '../widgets/map_zoom_buttons.dart';
 import 'help_viewer_screen.dart';
 
@@ -251,23 +250,15 @@ class _MapScreenState extends State<MapScreen> {
               ),
               if (_state.project != null && _state.project!.anchors.isNotEmpty)
                 Positioned(top: 12, right: 12, child: _buildAnchorBadge()),
-              MapToolbar(
-                onHereNowPressed: _logic.addAnchorFromCurrentGps,
-                onHereFromClipboard: _logic.addAnchorFromClipboard,
-                onTargetPressed: _state.canPlaceTarget
-                    ? (_state.plannedTarget == null
-                        ? _logic.placePlannedTargetAtCrosshair
-                        : _logic.activatePlannedTarget)
-                    : null,
-                onTargetLongPressed: _state.canPlaceTarget && _state.plannedTarget != null
-                    ? _logic.setTargetAndStartNavigation
-                    : null,
-                targetEnabled: _state.canPlaceTarget && !_state.followMode,
-                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
-                followModeEnabled: _state.followMode,
-              ),
               MapZoomButtons(
                 visible: _state.imagePath != null && _state.imageSize != null,
+                onHereNowPressed: _logic.addAnchorFromCurrentGps,
+                onHereFromClipboard: _logic.addAnchorFromClipboard,
+                onTargetPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget == null ? _logic.placePlannedTargetAtCrosshair : null,
+                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null ? _logic.setTargetAndStartNavigation : null,
+                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
+                targetEnabled: _state.canPlaceTarget && !_state.followMode,
+                hereEnabled: !_state.followMode,
                 onZoomIn: _zoomIn,
                 onZoomOut: _zoomOut,
                 rotateMode: _state.rotateMode,

@@ -1,19 +1,286 @@
+diff --git a/lib/screens/map_screen.dart b/lib/screens/map_screen.dart
+index b9e3f6b..c7a4d9f 100644
+--- a/lib/screens/map_screen.dart
++++ b/lib/screens/map_screen.dart
+@@ -250,13 +250,6 @@ class _MapScreenState extends State<MapScreen> {
+                 child: _buildAnchorBadge(),
+               ),
+-              MapToolbar(
+-                onHereNowPressed: _logic.addAnchorFromCurrentGps,
+-                onHereFromClipboard: _logic.addAnchorFromClipboard,
+-                onTargetPressed: _state.canPlaceTarget ? (_state.plannedTarget == null ? _logic.placePlannedTargetAtCrosshair : _logic.activatePlannedTarget) : null,
+-                onTargetLongPressed: _state.canPlaceTarget && _state.plannedTarget != null ? _logic.setTargetAndStartNavigation : null,
+-                targetEnabled: _state.canPlaceTarget && !_state.followMode,
+-                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
+-                followModeEnabled: _state.followMode,
+-              ),
+               MapZoomButtons(
+                 visible: _state.imagePath != null && _state.imageSize != null,
++                onHereNowPressed: _logic.addAnchorFromCurrentGps,
++                onHereFromClipboard: _logic.addAnchorFromClipboard,
++                onTargetPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget == null ? _logic.placePlannedTargetAtCrosshair : null,
++                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null ? _logic.setTargetAndStartNavigation : null,
++                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
++                targetEnabled: _state.canPlaceTarget && !_state.followMode,
++                hereEnabled: !_state.followMode,
+                 onZoomIn: _zoomIn,
+                 onZoomOut: _zoomOut,
+                 rotateMode: _state.rotateMode,
 diff --git a/lib/widgets/map_toolbar.dart b/lib/widgets/map_toolbar.dart
-index 0000000..1111111
+deleted file mode 100644
+index f3e2c1a..0000000
 --- a/lib/widgets/map_toolbar.dart
-+++ b/lib/widgets/map_toolbar.dart
-@@ -70,11 +70,11 @@ class MapToolbar extends StatelessWidget {
-         onTap: enabled ? onTap : null,
-         onLongPress: enabled ? onLongPress : null,
-         child: Container(
++++ /dev/null
+@@ -1,107 +0,0 @@
+-import 'package:flutter/material.dart';
+-
+-class MapToolbar extends StatelessWidget {
+-  final VoidCallback onHereNowPressed;
+-  final VoidCallback onHereFromClipboard;
+-  final VoidCallback? onTargetPressed;
+-  final VoidCallback? onTargetLongPressed;
+-  final bool targetEnabled;
+-  final String targetText;
+-  final bool followModeEnabled;
+-
+-  const MapToolbar({
+-    super.key,
+-    required this.onHereNowPressed,
+-    required this.onHereFromClipboard,
+-    this.onTargetPressed,
+-    this.onTargetLongPressed,
+-    this.targetEnabled = false,
+-    this.targetText = 'ЦЕЛЬ',
+-    required this.followModeEnabled,
+-  });
+-
+-  @override
+-  Widget build(BuildContext context) {
+-    return Positioned(
+-      bottom: 24,
+-      left: 0,
+-      right: 0,
+-      child: Row(
+-        mainAxisAlignment: MainAxisAlignment.center,
+-        children: [
+-          _buildButton(
+-            context: context,
+-            label: 'Я ЗДЕСЬ',
+-            icon: Icons.my_location,
+-            color: Theme.of(context).colorScheme.primary,
+-            onTap: onHereNowPressed,
+-            onLongPress: onHereFromClipboard,
+-            enabled: !followModeEnabled,
+-          ),
+-          const SizedBox(width: 20),
+-          _buildButton(
+-            context: context,
+-            label: targetText,
+-            icon: Icons.flag,
+-            color: targetEnabled
+-                ? (targetText == 'ГОУ' ? Colors.red : Colors.amber[700]!)
+-                : Colors.grey,
+-            onTap: onTargetPressed,
+-            onLongPress: onTargetLongPressed,
+-            enabled: targetEnabled && !followModeEnabled,
+-          ),
+-        ],
+-      ),
+-    );
+-  }
+-
+-  Widget _buildButton({
+-    required BuildContext context,
+-    required String label,
+-    required IconData icon,
+-    required Color color,
+-    VoidCallback? onTap,
+-    VoidCallback? onLongPress,
+-    bool enabled = true,
+-  }) {
+-    return Opacity(
+-      opacity: enabled ? 1.0 : 0.45,
+-      child: GestureDetector(
+-        onTap: enabled ? onTap : null,
+-        onLongPress: enabled ? onLongPress : null,
+-        child: Container(
 -          width: 80,
 -          height: 80,
-+          width: 70,
-+          height: 65,
-           decoration: BoxDecoration(
-             color: color.withAlpha(220),
+-          decoration: BoxDecoration(
+-            color: color.withAlpha(220),
 -            borderRadius: BorderRadius.circular(20),
+-            boxShadow: enabled
+-                ? [
+-                    BoxShadow(
+-                      color: Colors.black.withAlpha(60),
+-                      blurRadius: 8,
+-                      offset: const Offset(0, 3),
+-                    ),
+-                  ]
+-                : null,
+-          ),
+-          child: Column(
+-            mainAxisAlignment: MainAxisAlignment.center,
+-            children: [
+-              Icon(icon, color: Colors.white, size: 28),
+-              const SizedBox(height: 4),
+-              Text(
+-                label,
+-                style: const TextStyle(
+-                  color: Colors.white,
+-                  fontSize: 11,
+-                  fontWeight: FontWeight.bold,
+-                ),
+-              ),
+-            ],
+-          ),
+-        ),
+-      ),
+-    );
+-  }
+-}
+diff --git a/lib/widgets/map_zoom_buttons.dart b/lib/widgets/map_zoom_buttons.dart
+index 72f1e8b..b9a3c7d 100644
+--- a/lib/widgets/map_zoom_buttons.dart
++++ b/lib/widgets/map_zoom_buttons.dart
+@@ -1,12 +1,23 @@
+ import 'package:flutter/material.dart';
+ 
+ class MapZoomButtons extends StatelessWidget {
++  final VoidCallback onHereNowPressed;
++  final VoidCallback onHereFromClipboard;
++  final VoidCallback? onTargetPressed;
++  final VoidCallback? onTargetLongPressed;
++  final String targetText;
++  final bool targetEnabled;
+   final VoidCallback onZoomIn;
+   final VoidCallback onZoomOut;
+   final bool rotateMode;
+   final VoidCallback onToggleRotateMode;
+   final VoidCallback onResetRotation;
+   final bool visible;
++  final bool hereEnabled;
+ 
+   const MapZoomButtons({
++    required this.onHereNowPressed,
++    required this.onHereFromClipboard,
++    this.onTargetPressed,
++    this.onTargetLongPressed,
++    this.targetText = 'ЦЕЛЬ',
++    this.targetEnabled = false,
+     required this.onZoomIn,
+     required this.onZoomOut,
+     required this.rotateMode,
+@@ -14,6 +25,7 @@ class MapZoomButtons extends StatelessWidget {
+     required this.onResetRotation,
+     this.visible = true,
++    this.hereEnabled = true,
+   });
+ 
+   @override
+@@ -22,8 +34,38 @@ class MapZoomButtons extends StatelessWidget {
+ 
+     return Positioned(
+       right: 12,
+       top: MediaQuery.of(context).size.height / 2 - 90,
+       child: Column(
+         children: [
++          // Кнопка цели (условно, если привязка есть)
++          if (targetEnabled)
++            _buildSquareButton(
++              label: targetText,
++              icon: Icons.flag,
++              color: targetText == 'ГОУ' ? Colors.red : Colors.amber[700]!,
++              onTap: onTargetPressed,
++              onLongPress: onTargetLongPressed,
++              enabled: targetEnabled && hereEnabled,
++            ),
++          if (targetEnabled) const SizedBox(height: 12),
++          // Кнопка "Я ЗДЕСЬ"
++          _buildSquareButton(
++            label: 'Я ЗДЕСЬ',
++            icon: Icons.my_location,
++            color: Theme.of(context).colorScheme.primary,
++            onTap: onHereNowPressed,
++            onLongPress: onHereFromClipboard,
++            enabled: hereEnabled,
++          ),
++          const SizedBox(height: 12),
++          // Стандартные кнопки масштаба и поворота
+           _buildButton(icon: Icons.add, onPressed: onZoomIn),
+           const SizedBox(height: 12),
+           _buildRotateButton(context),
+@@ -40,6 +82,8 @@ class MapZoomButtons extends StatelessWidget {
+           _buildButton(icon: Icons.remove, onPressed: onZoomOut),
+         ],
+       ),
+     );
+   }
+ 
+@@ -58,11 +102,52 @@ class MapZoomButtons extends StatelessWidget {
+           shape: BoxShape.circle,
+           border: rotateMode
+               ? Border.all(color: Colors.orange, width: 2)
+               : null,
+         ),
+         child: Icon(
+           Icons.rotate_right,
+           color: rotateMode ? Colors.orange : Colors.white.withAlpha(230),
+           size: 28,
+         ),
+       ),
+     );
+   }
+ 
++  // Новая квадратная кнопка для действий "Я ЗДЕСЬ" и "ЦЕЛЬ"
++  Widget _buildSquareButton({
++    required String label,
++    required IconData icon,
++    required Color color,
++    VoidCallback? onTap,
++    VoidCallback? onLongPress,
++    bool enabled = true,
++  }) {
++    return Opacity(
++      opacity: enabled ? 1.0 : 0.45,
++      child: GestureDetector(
++        onTap: enabled ? onTap : null,
++        onLongPress: enabled ? onLongPress : null,
++        child: Container(
++          width: 48,
++          height: 48,
++          decoration: BoxDecoration(
++            color: color.withAlpha(220),
 +            borderRadius: BorderRadius.circular(12),
-             boxShadow: enabled
-                 ? [
-                     BoxShadow(
++            boxShadow: enabled
++                ? [
++                    BoxShadow(
++                      color: Colors.black.withAlpha(60),
++                      blurRadius: 8,
++                      offset: const Offset(0, 3),
++                    ),
++                  ]
++                : null,
++          ),
++          child: Column(
++            mainAxisAlignment: MainAxisAlignment.center,
++            children: [
++              Icon(icon, color: Colors.white, size: 24),
++              const SizedBox(height: 2),
++              Text(
++                label,
++                style: const TextStyle(
++                  color: Colors.white,
++                  fontSize: 10,
++                  fontWeight: FontWeight.bold,
++                ),
++              ),
++            ],
++          ),
++        ),
++      ),
++    );
++  }
+ 
+   Widget _buildButton({
+     required IconData icon,
