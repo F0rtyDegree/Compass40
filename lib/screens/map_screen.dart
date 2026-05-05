@@ -258,11 +258,9 @@ class _MapScreenState extends State<MapScreen> {
                 onTargetPressed: _state.canPlaceTarget && !_state.followMode
                     ? (_state.plannedTarget == null
                         ? _logic.placePlannedTargetAtCrosshair
-                        : _logic.activatePlannedTarget)
+                        : _logic.setTargetAndStartNavigation)
                     : null,
-                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null
-                    ? _logic.setTargetAndStartNavigation
-                    : null,
+                onTargetLongPressed: null,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
                 targetEnabled: _state.canPlaceTarget && !_state.followMode,
                 onZoomIn: _zoomIn,

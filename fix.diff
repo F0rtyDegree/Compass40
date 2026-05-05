@@ -1,32 +1,64 @@
---- a/lib/screens/map_screen.dart
-+++ b/lib/screens/map_screen.dart
-@@ -250,15 +250,26 @@
-               ),
-               MapZoomButtons(
-                 visible: _state.imagePath != null && _state.imageSize != null,
-+                onHereNowPressed: _logic.addAnchorFromCurrentGps,
-+                onHereFromClipboard: _logic.addAnchorFromClipboard,
-+                hereEnabled: !_state.followMode,
-+                onTargetPressed: _state.canPlaceTarget && !_state.followMode
-+                    ? (_state.plannedTarget == null
-+                        ? _logic.placePlannedTargetAtCrosshair
-+                        : _logic.activatePlannedTarget)
-+                    : null,
-+                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null
-+                    ? _logic.setTargetAndStartNavigation
-+                    : null,
-+                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
-+                targetEnabled: _state.canPlaceTarget && !_state.followMode,
+@@ -257,11 +257,11 @@
+                 onHereFromClipboard: _logic.addAnchorFromClipboard,
+                 hereEnabled: !_state.followMode,
+                 onTargetPressed: _state.canPlaceTarget && !_state.followMode
+                     ? (_state.plannedTarget == null
+                         ? _logic.placePlannedTargetAtCrosshair
+-                        : _logic.activatePlannedTarget)
++                        : _logic.setTargetAndStartNavigation)
+                     : null,
+-                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null
+-                    ? _logic.setTargetAndStartNavigation
+-                    : null,
++                onTargetLongPressed: null,  // длинное нажатие больше не используется
+                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
+                 targetEnabled: _state.canPlaceTarget && !_state.followMode,
                  onZoomIn: _zoomIn,
-                 onZoomOut: _zoomOut,
-                 rotateMode: _state.rotateMode,
-                 onToggleRotateMode: () {
-                   setState(() {
-                     _state.rotateMode = !_state.rotateMode;
-                   });
-                 },
-                 onResetRotation: _resetRotation,
--                // остальные параметры
-               ),
-             ],
-           );
+
+
+@@ -569,25 +569,6 @@
+     });
+   }
+ 
+-  void cancelPlannedTarget() {
+-    setState(() {
+-      state.plannedTarget = null;
+-    });
+-  }
+-
+-  Future<void> activatePlannedTarget() async {
+-    await _persistAndSetActiveTarget(copyCoords: true);
+-  }
+-
+-  Future<void> setTargetAndStartNavigation() async {
+-    final planned = state.plannedTarget;
+-    if (planned == null || planned.latitude == null || planned.longitude == null) {
+-      return;
+-    }
+-    await _persistAndSetActiveTarget(copyCoords: false);
+-
+-    if (onStartNavigation != null) {
+-      await onStartNavigation!(planned.latitude!, planned.longitude!);
+-      showSnackBar('Ведение на цель в компасе запущено');
+-    }
+-  }
++  void cancelPlannedTarget() {
++    setState(() {
++      state.plannedTarget = null;
++    });
++  }
++
++  // activatePlannedTarget удалён – его функциональность (копирование координат) больше не нужна
++
++  Future<void> setTargetAndStartNavigation() async {
++    final planned = state.plannedTarget;
++    if (planned == null || planned.latitude == null || planned.longitude == null) {
++      return;
++    }
++    await _persistAndSetActiveTarget(copyCoords: false);
++
++    if (onStartNavigation != null) {
++      await onStartNavigation!(planned.latitude!, planned.longitude!);
++      showSnackBar('Ведение на цель в компасе запущено');
++    }
++  }
