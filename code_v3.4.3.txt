@@ -5,7 +5,7 @@
      4	  Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
      5	  Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
      6	publish_to: 'none'
-     7	version: 3.4.2
+     7	version: 3.4.3
      8	environment:
      9	  sdk: ^3.9.0
     10	
@@ -201,7 +201,7 @@
     29	*   **Перемещение:** касание одним пальцем и перетаскивание.
     30	*   **Масштабирование:** касание двумя пальцами и их сведение/разведение.
     31	*   **Вращение:**
-    32	    *   касание двумя пальуами и их вращение.
+    32	    *   касание двумя пальцами и их вращение.
     33	    *   При включенной кнопке с иконкой поворота — касание одним пальцем в стороне от прицела и вращение вокруг него.
     34	    *   Сброс поворота — долгое нажатие на кнопку вращения (поворот обнуляется относительно экрана).
     35	*   **Двойной тап по прицелу** — переключает положение прицела: центр экрана ↔ центр нижней половины.
@@ -233,7 +233,7 @@
     61	
     62	## Режим сопровождения (Follow mode)
     63	
-    64	Включается и выключается коротким тапом по прицелу.
+    64	Включается коротким тапом по прицелу.
     65	
     66	**При включении:**
     67	*   Карта автоматически поворачивается так, чтобы ваше направление движения совпадало с вертикалью экрана (ориентация по компасу).
@@ -247,9 +247,9 @@
     75	
     76	Чтобы фото стало картой и на ней можно было видеть своё местоположение и ставить цели, необходимо задать минимум **две точки привязки**, удалённые друг от друга не менее чем на **50 м**.
     77	
-    78	Добавляйте точки привязки, вставая в известные места на местности и нажимая «Я ЗДЕСЬ». Новые якоря уточняют привязку; рабочей парой всегда служат последняя добавленная точка и ближайшая к ней среди предыдущих, удовлетворяющая условию минимального расстояния.
+    78	Добавляйте точки привязки, вставая в известные места на местности и нажимая «Я ЗДЕСЬ». Новые якоря уточняют привязку; рабочей парой всегда служат последняя добавленная точка и самая далекая от нее среди предыдущих, удовлетворяющая условию минимального расстояния.
     79	
-    80	Индикатор в правом верхнем углу показывает количество привязок и статус привязки (зелёный — достаточно, оранжевый — нужно больше). Смахнув индикатор влево, можно удалить последнюю точку привязки (но не менее двух).
+    80	Индикатор в правом верхнем углу показывает количество привязок и статус привязки (зелёный — достаточно, оранжевый — нужно больше). Смахнув индикатор влево, можно удалить последнюю точку привязки. Смахнув индикатор вправо, можно удалить первую точку привязки. Последние две точки привязки удалить нельзя.
     81	
     82	---
     83	
@@ -3347,389 +3347,391 @@
    254	                visible: _state.imagePath != null && _state.imageSize != null,
    255	                onHereNowPressed: _logic.addAnchorFromCurrentGps,
    256	                onHereFromClipboard: _logic.addAnchorFromClipboard,
-   257	                onTargetPressed: _state.canPlaceTarget && !_state.followMode
-   258	                    ? (_state.plannedTarget == null
-   259	                        ? _logic.placePlannedTargetAtCrosshair
-   260	                        : _logic.activatePlannedTarget)
-   261	                    : null,
-   262	                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null ? _logic.setTargetAndStartNavigation : null,
-   263	                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
-   264	                targetEnabled: _state.canPlaceTarget && !_state.followMode,
-   265	                hereEnabled: !_state.followMode,
-   266	                onZoomIn: _zoomIn,
-   267	                onZoomOut: _zoomOut,
-   268	                rotateMode: _state.rotateMode,
-   269	                onToggleRotateMode: () {
-   270	                  setState(() {
-   271	                    _state.rotateMode = !_state.rotateMode;
-   272	                  });
-   273	                },
-   274	                onResetRotation: _resetRotation,
-   275	              ),
-   276	            ],
-   277	          );
-   278	        },
-   279	      ),
-   280	    );
-   281	  }
-   282	
-   283	  void _zoomIn() {
-   284	    final current = _state.transformState;
-   285	    final newScale = (current.scale * 1.5).clamp(0.05, 20.0);
-   286	    _scaleAroundCrosshair(current, newScale);
-   287	  }
-   288	
-   289	  void _zoomOut() {
-   290	    final current = _state.transformState;
-   291	    final newScale = (current.scale / 1.5).clamp(0.05, 20.0);
-   292	    _scaleAroundCrosshair(current, newScale);
-   293	  }
-   294	
-   295	  void _scaleAroundCrosshair(MapTransformState current, double newScale) {
-   296	    if (_state.viewportSize == null || _state.imageSize == null) return;
-   297	    final pivotScreen = _logic.getCrosshairScreenPoint();
-   298	    final pivotImage = _logic.screenToImage(pivotScreen);
-   299	    final tempTransform = MapTransformState(
-   300	      scale: newScale,
-   301	      rotationRadians: current.rotationRadians,
-   302	      translation: current.translation,
-   303	    );
-   304	    final oldTransform = _state.transformState;
-   305	    _state.transformState = tempTransform;
-   306	    final pivotScreenAfterScale = _logic.imageToScreen(pivotImage);
-   307	    _state.transformState = oldTransform;
-   308	    final delta = pivotScreen - pivotScreenAfterScale;
-   309	    final newTranslation = current.translation + delta;
-   310	    _logic.updateTransform(
-   311	      MapTransformState(
-   312	        scale: newScale,
-   313	        rotationRadians: current.rotationRadians,
-   314	        translation: newTranslation,
-   315	      ),
-   316	    );
-   317	  }
-   318	
-   319	  void _resetRotation() {
-   320	    final current = _state.transformState;
-   321	    const newRotation = 0.0;
-   322	    if (_state.viewportSize != null && _state.imageSize != null) {
-   323	      final pivotScreen = _logic.getCrosshairScreenPoint();
-   324	      final pivotImage = _logic.screenToImage(pivotScreen);
-   325	      final tempTransform = MapTransformState(
-   326	        scale: current.scale,
-   327	        rotationRadians: newRotation,
-   328	        translation: current.translation,
-   329	      );
-   330	      final oldTransform = _state.transformState;
-   331	      _state.transformState = tempTransform;
-   332	      final pivotScreenAfterReset = _logic.imageToScreen(pivotImage);
-   333	      _state.transformState = oldTransform;
-   334	      final delta = pivotScreen - pivotScreenAfterReset;
-   335	      final newTranslation = current.translation + delta;
-   336	      _logic.updateTransform(
-   337	        MapTransformState(
-   338	          scale: current.scale,
-   339	          rotationRadians: newRotation,
-   340	          translation: newTranslation,
-   341	        ),
-   342	      );
-   343	    } else {
-   344	      _logic.updateTransform(
-   345	        MapTransformState(
-   346	          scale: current.scale,
-   347	          rotationRadians: newRotation,
-   348	          translation: current.translation,
-   349	        ),
-   350	      );
-   351	    }
-   352	  }
-   353	
-   354	  void _onScaleStart(ScaleStartDetails details) {
-   355	    _gestureStartTranslation = _state.transformState.translation;
-   356	    _gestureStartScale = _state.transformState.scale;
-   357	    _gestureStartRotation = _state.transformState.rotationRadians;
-   358	    _gestureStartFocalPoint = details.focalPoint;
-   359	    if (_state.viewportSize != null && _state.imageSize != null) {
-   360	      final pivotScreen = _logic.getCrosshairScreenPoint();
-   361	      _gestureStartPivotImage = _logic.screenToImage(pivotScreen);
-   362	    } else {
-   363	      _gestureStartPivotImage = null;
-   364	    }
-   365	    _accumulatedRotation = 0.0;
-   366	    if (_state.viewportSize != null && _state.imageSize != null) {
-   367	      final pivotScreen = _logic.getCrosshairScreenPoint();
-   368	      final startVector = _gestureStartFocalPoint - pivotScreen;
-   369	      _lastAngle = math.atan2(startVector.dy, startVector.dx);
-   370	    } else {
-   371	      _lastAngle = 0.0;
-   372	    }
-   373	  }
-   374	
-   375	  void _onScaleUpdate(ScaleUpdateDetails details) {
-   376	    if (_state.viewportSize == null || _state.imageSize == null) return;
-   377	    final pointerCount = details.pointerCount;
-   378	    if (pointerCount == 1) {
-   379	      if (_state.rotateMode) {
-   380	        final currentFocalPoint = details.focalPoint;
-   381	        final pivotScreen = _logic.getCrosshairScreenPoint();
-   382	        final currentVector = currentFocalPoint - pivotScreen;
-   383	        final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
-   384	        double deltaAngle = currentAngle - _lastAngle;
-   385	        if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
-   386	        if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
-   387	        _accumulatedRotation += deltaAngle;
-   388	        _lastAngle = currentAngle;
-   389	        const sensitivity = 0.8;
-   390	        final newRotation = _gestureStartRotation + _accumulatedRotation * sensitivity;
-   391	        if (_gestureStartPivotImage != null) {
-   392	          final tempTransform = MapTransformState(
-   393	            scale: _state.transformState.scale,
-   394	            rotationRadians: newRotation,
-   395	            translation: _gestureStartTranslation,
-   396	          );
-   397	          final oldTransform = _state.transformState;
-   398	          _state.transformState = tempTransform;
-   399	          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
-   400	          _state.transformState = oldTransform;
-   401	          final delta = pivotScreen - pivotScreenAfterRotate;
-   402	          final newTranslation = _gestureStartTranslation + delta;
-   403	          _logic.updateTransform(
-   404	            MapTransformState(
-   405	              scale: _state.transformState.scale,
-   406	              rotationRadians: newRotation,
-   407	              translation: newTranslation,
-   408	            ),
-   409	          );
-   410	        } else {
-   411	          _logic.updateTransform(
-   412	            MapTransformState(
-   413	              scale: _state.transformState.scale,
-   414	              rotationRadians: newRotation,
-   415	              translation: _state.transformState.translation,
-   416	            ),
-   417	          );
-   418	        }
-   419	      } else {
-   420	        final delta = details.focalPoint - _gestureStartFocalPoint;
-   421	        final newTranslation = _gestureStartTranslation + delta;
-   422	        _logic.updateTransform(
-   423	          MapTransformState(
-   424	            scale: _state.transformState.scale,
-   425	            rotationRadians: _state.transformState.rotationRadians,
-   426	            translation: newTranslation,
-   427	          ),
-   428	        );
-   429	      }
-   430	      return;
-   431	    }
-   432	    if (pointerCount == 2) {
-   433	      final scaleChange = (details.scale - 1.0).abs();
-   434	      final rotationChange = details.rotation.abs();
-   435	      if (scaleChange > rotationChange) {
-   436	        final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
-   437	        if (_gestureStartPivotImage != null) {
-   438	          final pivotScreen = _logic.getCrosshairScreenPoint();
-   439	          final tempTransform = MapTransformState(
-   440	            scale: newScale,
-   441	            rotationRadians: _state.transformState.rotationRadians,
-   442	            translation: _gestureStartTranslation,
-   443	          );
-   444	          final oldTransform = _state.transformState;
-   445	          _state.transformState = tempTransform;
-   446	          final pivotScreenAfterScale = _logic.imageToScreen(_gestureStartPivotImage!);
-   447	          _state.transformState = oldTransform;
-   448	          final delta = pivotScreen - pivotScreenAfterScale;
-   449	          final newTranslation = _gestureStartTranslation + delta;
-   450	          _logic.updateTransform(
-   451	            MapTransformState(
-   452	              scale: newScale,
-   453	              rotationRadians: _state.transformState.rotationRadians,
-   454	              translation: newTranslation,
-   455	            ),
-   456	          );
-   457	        } else {
-   458	          _logic.updateTransform(
-   459	            MapTransformState(
-   460	              scale: newScale,
-   461	              rotationRadians: _state.transformState.rotationRadians,
-   462	              translation: _gestureStartTranslation,
-   463	            ),
-   464	          );
-   465	        }
-   466	      } else {
-   467	        final pivotScreen = _logic.getCrosshairScreenPoint();
-   468	        final currentRotation = _gestureStartRotation + details.rotation;
-   469	        if (_gestureStartPivotImage != null) {
-   470	          final tempTransform = MapTransformState(
-   471	            scale: _state.transformState.scale,
-   472	            rotationRadians: currentRotation,
-   473	            translation: _gestureStartTranslation,
-   474	          );
-   475	          final oldTransform = _state.transformState;
-   476	          _state.transformState = tempTransform;
-   477	          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
-   478	          _state.transformState = oldTransform;
-   479	          final delta = pivotScreen - pivotScreenAfterRotate;
-   480	          final newTranslation = _gestureStartTranslation + delta;
-   481	          _logic.updateTransform(
-   482	            MapTransformState(
-   483	              scale: _state.transformState.scale,
-   484	              rotationRadians: currentRotation,
-   485	              translation: newTranslation,
-   486	            ),
-   487	          );
-   488	        } else {
-   489	          _logic.updateTransform(
-   490	            MapTransformState(
-   491	              scale: _state.transformState.scale,
-   492	              rotationRadians: currentRotation,
-   493	              translation: _state.transformState.translation,
-   494	            ),
-   495	          );
-   496	        }
-   497	      }
-   498	      return;
-   499	    }
-   500	    if (pointerCount >= 3) {
-   501	      final currentFocalPoint = details.focalPoint;
-   502	      final pivotScreen = _logic.getCrosshairScreenPoint();
-   503	      final startVector = _gestureStartFocalPoint - pivotScreen;
-   504	      final currentVector = currentFocalPoint - pivotScreen;
-   505	      final startAngle = math.atan2(startVector.dy, startVector.dx);
-   506	      final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
-   507	      double deltaAngle = currentAngle - startAngle;
-   508	      if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
-   509	      if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
-   510	      const sensitivity = 0.8;
-   511	      final newRotation = _gestureStartRotation + deltaAngle * sensitivity;
-   512	      if (_gestureStartPivotImage != null) {
-   513	        final tempTransform = MapTransformState(
-   514	          scale: _state.transformState.scale,
-   515	          rotationRadians: newRotation,
-   516	          translation: _gestureStartTranslation,
-   517	        );
-   518	        final oldTransform = _state.transformState;
-   519	        _state.transformState = tempTransform;
-   520	        final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
-   521	        _state.transformState = oldTransform;
-   522	        final delta = pivotScreen - pivotScreenAfterRotate;
-   523	        final newTranslation = _gestureStartTranslation + delta;
-   524	        _logic.updateTransform(
-   525	          MapTransformState(
-   526	            scale: _state.transformState.scale,
-   527	            rotationRadians: newRotation,
-   528	            translation: newTranslation,
-   529	          ),
-   530	        );
-   531	      } else {
-   532	        _logic.updateTransform(
-   533	          MapTransformState(
-   534	            scale: _state.transformState.scale,
-   535	            rotationRadians: newRotation,
-   536	            translation: _state.transformState.translation,
-   537	          ),
-   538	        );
-   539	      }
-   540	      return;
-   541	    }
-   542	  }
-   543	
-   544	  Widget _buildAnchorBadge() {
-   545	    final count = _state.project!.anchors.length;
-   546	    if (count == 0) return const SizedBox.shrink();
-   547	    final hasWorkingPair = _state.workingPair != null;
-   548	    return Dismissible(
-   549	      key: ValueKey(count),
-   550	      direction: DismissDirection.horizontal,
-   551	      confirmDismiss: (direction) async {
-   552	        final anchors = _state.project!.anchors;
-   553	        if (direction == DismissDirection.endToStart) {
-   554	          // удаление последней точки
-   555	          if (anchors.length <= 2) {
-   556	            ScaffoldMessenger.of(context).showSnackBar(
-   557	              const SnackBar(
-   558	                content: Text('Нельзя удалить последнюю точку. Нужно минимум 2 точки.'),
-   559	                backgroundColor: Colors.orangeAccent,
-   560	              ),
-   561	            );
-   562	            return false;
-   563	          }
-   564	        } else if (direction == DismissDirection.startToEnd) {
-   565	          // удаление первой точки
-   566	          if (anchors.length <= 2) {
-   567	            ScaffoldMessenger.of(context).showSnackBar(
-   568	              const SnackBar(
-   569	                content: Text('Нельзя удалить первую точку. Нужно минимум 2 точки.'),
-   570	                backgroundColor: Colors.orangeAccent,
-   571	              ),
-   572	            );
-   573	            return false;
-   574	          }
-   575	        }
-   576	        return true;
-   577	      },
-   578	      onDismissed: (direction) {
-   579	        if (direction == DismissDirection.endToStart) {
-   580	          _logic.undoLastAnchor();
-   581	          ScaffoldMessenger.of(context).showSnackBar(
-   582	            const SnackBar(
-   583	              content: Text('Последняя привязка удалена'),
-   584	              backgroundColor: Colors.redAccent,
-   585	            ),
-   586	          );
-   587	        } else if (direction == DismissDirection.startToEnd) {
-   588	          _logic.undoFirstAnchor();
-   589	          ScaffoldMessenger.of(context).showSnackBar(
-   590	            const SnackBar(
-   591	              content: Text('Первая привязка удалена'),
-   592	              backgroundColor: Colors.redAccent,
-   593	            ),
-   594	          );
-   595	        }
-   596	      },
-   597	      background: Container(
-   598	        decoration: BoxDecoration(
-   599	          color: Colors.red,
-   600	          borderRadius: BorderRadius.circular(20),
-   601	        ),
-   602	        alignment: Alignment.centerLeft,
-   603	        padding: const EdgeInsets.only(left: 20),
-   604	        child: const Icon(Icons.delete_forever, color: Colors.white),
-   605	      ),
-   606	      secondaryBackground: Container(
-   607	        decoration: BoxDecoration(
-   608	          color: Colors.red,
-   609	          borderRadius: BorderRadius.circular(20),
-   610	        ),
-   611	        alignment: Alignment.centerRight,
-   612	        padding: const EdgeInsets.only(right: 20),
-   613	        child: const Icon(Icons.delete_forever, color: Colors.white),
-   614	      ),
-   615	      child: Tooltip(
-   616	        message: 'Смахни влево — удалить последнюю, вправо — первую',
-   617	        child: Container(
-   618	          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-   619	          decoration: BoxDecoration(
-   620	            color: hasWorkingPair
-   621	                ? Colors.green.withAlpha(200)
-   622	                : Colors.orange.withAlpha(200),
-   623	            borderRadius: BorderRadius.circular(20),
-   624	          ),
-   625	          child: Text(
-   626	            hasWorkingPair
-   627	                ? 'Карта привязана ($count)'
-   628	                : 'Привязок: $count (нужно ≥2, расстояние ≥50м)',
-   629	            style: const TextStyle(
-   630	              color: Colors.white,
-   631	              fontSize: 11,
-   632	              fontWeight: FontWeight.bold,
-   633	            ),
-   634	          ),
-   635	        ),
-   636	      ),
-   637	    );
-   638	  }
-   639	}
+   257	                hereEnabled: !_state.followMode,
+   258	                onTargetPressed: _state.canPlaceTarget && !_state.followMode
+   259	                    ? (_state.plannedTarget == null
+   260	                        ? _logic.placePlannedTargetAtCrosshair
+   261	                        : _logic.activatePlannedTarget)
+   262	                    : null,
+   263	                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null
+   264	                    ? _logic.setTargetAndStartNavigation
+   265	                    : null,
+   266	                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
+   267	                targetEnabled: _state.canPlaceTarget && !_state.followMode,
+   268	                onZoomIn: _zoomIn,
+   269	                onZoomOut: _zoomOut,
+   270	                rotateMode: _state.rotateMode,
+   271	                onToggleRotateMode: () {
+   272	                  setState(() {
+   273	                    _state.rotateMode = !_state.rotateMode;
+   274	                  });
+   275	                },
+   276	                onResetRotation: _resetRotation,
+   277	              ),
+   278	            ],
+   279	          );
+   280	        },
+   281	      ),
+   282	    );
+   283	  }
+   284	
+   285	  void _zoomIn() {
+   286	    final current = _state.transformState;
+   287	    final newScale = (current.scale * 1.5).clamp(0.05, 20.0);
+   288	    _scaleAroundCrosshair(current, newScale);
+   289	  }
+   290	
+   291	  void _zoomOut() {
+   292	    final current = _state.transformState;
+   293	    final newScale = (current.scale / 1.5).clamp(0.05, 20.0);
+   294	    _scaleAroundCrosshair(current, newScale);
+   295	  }
+   296	
+   297	  void _scaleAroundCrosshair(MapTransformState current, double newScale) {
+   298	    if (_state.viewportSize == null || _state.imageSize == null) return;
+   299	    final pivotScreen = _logic.getCrosshairScreenPoint();
+   300	    final pivotImage = _logic.screenToImage(pivotScreen);
+   301	    final tempTransform = MapTransformState(
+   302	      scale: newScale,
+   303	      rotationRadians: current.rotationRadians,
+   304	      translation: current.translation,
+   305	    );
+   306	    final oldTransform = _state.transformState;
+   307	    _state.transformState = tempTransform;
+   308	    final pivotScreenAfterScale = _logic.imageToScreen(pivotImage);
+   309	    _state.transformState = oldTransform;
+   310	    final delta = pivotScreen - pivotScreenAfterScale;
+   311	    final newTranslation = current.translation + delta;
+   312	    _logic.updateTransform(
+   313	      MapTransformState(
+   314	        scale: newScale,
+   315	        rotationRadians: current.rotationRadians,
+   316	        translation: newTranslation,
+   317	      ),
+   318	    );
+   319	  }
+   320	
+   321	  void _resetRotation() {
+   322	    final current = _state.transformState;
+   323	    const newRotation = 0.0;
+   324	    if (_state.viewportSize != null && _state.imageSize != null) {
+   325	      final pivotScreen = _logic.getCrosshairScreenPoint();
+   326	      final pivotImage = _logic.screenToImage(pivotScreen);
+   327	      final tempTransform = MapTransformState(
+   328	        scale: current.scale,
+   329	        rotationRadians: newRotation,
+   330	        translation: current.translation,
+   331	      );
+   332	      final oldTransform = _state.transformState;
+   333	      _state.transformState = tempTransform;
+   334	      final pivotScreenAfterReset = _logic.imageToScreen(pivotImage);
+   335	      _state.transformState = oldTransform;
+   336	      final delta = pivotScreen - pivotScreenAfterReset;
+   337	      final newTranslation = current.translation + delta;
+   338	      _logic.updateTransform(
+   339	        MapTransformState(
+   340	          scale: current.scale,
+   341	          rotationRadians: newRotation,
+   342	          translation: newTranslation,
+   343	        ),
+   344	      );
+   345	    } else {
+   346	      _logic.updateTransform(
+   347	        MapTransformState(
+   348	          scale: current.scale,
+   349	          rotationRadians: newRotation,
+   350	          translation: current.translation,
+   351	        ),
+   352	      );
+   353	    }
+   354	  }
+   355	
+   356	  void _onScaleStart(ScaleStartDetails details) {
+   357	    _gestureStartTranslation = _state.transformState.translation;
+   358	    _gestureStartScale = _state.transformState.scale;
+   359	    _gestureStartRotation = _state.transformState.rotationRadians;
+   360	    _gestureStartFocalPoint = details.focalPoint;
+   361	    if (_state.viewportSize != null && _state.imageSize != null) {
+   362	      final pivotScreen = _logic.getCrosshairScreenPoint();
+   363	      _gestureStartPivotImage = _logic.screenToImage(pivotScreen);
+   364	    } else {
+   365	      _gestureStartPivotImage = null;
+   366	    }
+   367	    _accumulatedRotation = 0.0;
+   368	    if (_state.viewportSize != null && _state.imageSize != null) {
+   369	      final pivotScreen = _logic.getCrosshairScreenPoint();
+   370	      final startVector = _gestureStartFocalPoint - pivotScreen;
+   371	      _lastAngle = math.atan2(startVector.dy, startVector.dx);
+   372	    } else {
+   373	      _lastAngle = 0.0;
+   374	    }
+   375	  }
+   376	
+   377	  void _onScaleUpdate(ScaleUpdateDetails details) {
+   378	    if (_state.viewportSize == null || _state.imageSize == null) return;
+   379	    final pointerCount = details.pointerCount;
+   380	    if (pointerCount == 1) {
+   381	      if (_state.rotateMode) {
+   382	        final currentFocalPoint = details.focalPoint;
+   383	        final pivotScreen = _logic.getCrosshairScreenPoint();
+   384	        final currentVector = currentFocalPoint - pivotScreen;
+   385	        final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
+   386	        double deltaAngle = currentAngle - _lastAngle;
+   387	        if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
+   388	        if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
+   389	        _accumulatedRotation += deltaAngle;
+   390	        _lastAngle = currentAngle;
+   391	        const sensitivity = 0.8;
+   392	        final newRotation = _gestureStartRotation + _accumulatedRotation * sensitivity;
+   393	        if (_gestureStartPivotImage != null) {
+   394	          final tempTransform = MapTransformState(
+   395	            scale: _state.transformState.scale,
+   396	            rotationRadians: newRotation,
+   397	            translation: _gestureStartTranslation,
+   398	          );
+   399	          final oldTransform = _state.transformState;
+   400	          _state.transformState = tempTransform;
+   401	          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+   402	          _state.transformState = oldTransform;
+   403	          final delta = pivotScreen - pivotScreenAfterRotate;
+   404	          final newTranslation = _gestureStartTranslation + delta;
+   405	          _logic.updateTransform(
+   406	            MapTransformState(
+   407	              scale: _state.transformState.scale,
+   408	              rotationRadians: newRotation,
+   409	              translation: newTranslation,
+   410	            ),
+   411	          );
+   412	        } else {
+   413	          _logic.updateTransform(
+   414	            MapTransformState(
+   415	              scale: _state.transformState.scale,
+   416	              rotationRadians: newRotation,
+   417	              translation: _state.transformState.translation,
+   418	            ),
+   419	          );
+   420	        }
+   421	      } else {
+   422	        final delta = details.focalPoint - _gestureStartFocalPoint;
+   423	        final newTranslation = _gestureStartTranslation + delta;
+   424	        _logic.updateTransform(
+   425	          MapTransformState(
+   426	            scale: _state.transformState.scale,
+   427	            rotationRadians: _state.transformState.rotationRadians,
+   428	            translation: newTranslation,
+   429	          ),
+   430	        );
+   431	      }
+   432	      return;
+   433	    }
+   434	    if (pointerCount == 2) {
+   435	      final scaleChange = (details.scale - 1.0).abs();
+   436	      final rotationChange = details.rotation.abs();
+   437	      if (scaleChange > rotationChange) {
+   438	        final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
+   439	        if (_gestureStartPivotImage != null) {
+   440	          final pivotScreen = _logic.getCrosshairScreenPoint();
+   441	          final tempTransform = MapTransformState(
+   442	            scale: newScale,
+   443	            rotationRadians: _state.transformState.rotationRadians,
+   444	            translation: _gestureStartTranslation,
+   445	          );
+   446	          final oldTransform = _state.transformState;
+   447	          _state.transformState = tempTransform;
+   448	          final pivotScreenAfterScale = _logic.imageToScreen(_gestureStartPivotImage!);
+   449	          _state.transformState = oldTransform;
+   450	          final delta = pivotScreen - pivotScreenAfterScale;
+   451	          final newTranslation = _gestureStartTranslation + delta;
+   452	          _logic.updateTransform(
+   453	            MapTransformState(
+   454	              scale: newScale,
+   455	              rotationRadians: _state.transformState.rotationRadians,
+   456	              translation: newTranslation,
+   457	            ),
+   458	          );
+   459	        } else {
+   460	          _logic.updateTransform(
+   461	            MapTransformState(
+   462	              scale: newScale,
+   463	              rotationRadians: _state.transformState.rotationRadians,
+   464	              translation: _gestureStartTranslation,
+   465	            ),
+   466	          );
+   467	        }
+   468	      } else {
+   469	        final pivotScreen = _logic.getCrosshairScreenPoint();
+   470	        final currentRotation = _gestureStartRotation + details.rotation;
+   471	        if (_gestureStartPivotImage != null) {
+   472	          final tempTransform = MapTransformState(
+   473	            scale: _state.transformState.scale,
+   474	            rotationRadians: currentRotation,
+   475	            translation: _gestureStartTranslation,
+   476	          );
+   477	          final oldTransform = _state.transformState;
+   478	          _state.transformState = tempTransform;
+   479	          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+   480	          _state.transformState = oldTransform;
+   481	          final delta = pivotScreen - pivotScreenAfterRotate;
+   482	          final newTranslation = _gestureStartTranslation + delta;
+   483	          _logic.updateTransform(
+   484	            MapTransformState(
+   485	              scale: _state.transformState.scale,
+   486	              rotationRadians: currentRotation,
+   487	              translation: newTranslation,
+   488	            ),
+   489	          );
+   490	        } else {
+   491	          _logic.updateTransform(
+   492	            MapTransformState(
+   493	              scale: _state.transformState.scale,
+   494	              rotationRadians: currentRotation,
+   495	              translation: _state.transformState.translation,
+   496	            ),
+   497	          );
+   498	        }
+   499	      }
+   500	      return;
+   501	    }
+   502	    if (pointerCount >= 3) {
+   503	      final currentFocalPoint = details.focalPoint;
+   504	      final pivotScreen = _logic.getCrosshairScreenPoint();
+   505	      final startVector = _gestureStartFocalPoint - pivotScreen;
+   506	      final currentVector = currentFocalPoint - pivotScreen;
+   507	      final startAngle = math.atan2(startVector.dy, startVector.dx);
+   508	      final currentAngle = math.atan2(currentVector.dy, currentVector.dx);
+   509	      double deltaAngle = currentAngle - startAngle;
+   510	      if (deltaAngle > math.pi) deltaAngle -= 2 * math.pi;
+   511	      if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
+   512	      const sensitivity = 0.8;
+   513	      final newRotation = _gestureStartRotation + deltaAngle * sensitivity;
+   514	      if (_gestureStartPivotImage != null) {
+   515	        final tempTransform = MapTransformState(
+   516	          scale: _state.transformState.scale,
+   517	          rotationRadians: newRotation,
+   518	          translation: _gestureStartTranslation,
+   519	        );
+   520	        final oldTransform = _state.transformState;
+   521	        _state.transformState = tempTransform;
+   522	        final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+   523	        _state.transformState = oldTransform;
+   524	        final delta = pivotScreen - pivotScreenAfterRotate;
+   525	        final newTranslation = _gestureStartTranslation + delta;
+   526	        _logic.updateTransform(
+   527	          MapTransformState(
+   528	            scale: _state.transformState.scale,
+   529	            rotationRadians: newRotation,
+   530	            translation: newTranslation,
+   531	          ),
+   532	        );
+   533	      } else {
+   534	        _logic.updateTransform(
+   535	          MapTransformState(
+   536	            scale: _state.transformState.scale,
+   537	            rotationRadians: newRotation,
+   538	            translation: _state.transformState.translation,
+   539	          ),
+   540	        );
+   541	      }
+   542	      return;
+   543	    }
+   544	  }
+   545	
+   546	  Widget _buildAnchorBadge() {
+   547	    final count = _state.project!.anchors.length;
+   548	    if (count == 0) return const SizedBox.shrink();
+   549	    final hasWorkingPair = _state.workingPair != null;
+   550	    return Dismissible(
+   551	      key: ValueKey(count),
+   552	      direction: DismissDirection.horizontal,
+   553	      confirmDismiss: (direction) async {
+   554	        final anchors = _state.project!.anchors;
+   555	        if (direction == DismissDirection.endToStart) {
+   556	          // удаление последней точки
+   557	          if (anchors.length <= 2) {
+   558	            ScaffoldMessenger.of(context).showSnackBar(
+   559	              const SnackBar(
+   560	                content: Text('Нельзя удалить последнюю точку. Нужно минимум 2 точки.'),
+   561	                backgroundColor: Colors.orangeAccent,
+   562	              ),
+   563	            );
+   564	            return false;
+   565	          }
+   566	        } else if (direction == DismissDirection.startToEnd) {
+   567	          // удаление первой точки
+   568	          if (anchors.length <= 2) {
+   569	            ScaffoldMessenger.of(context).showSnackBar(
+   570	              const SnackBar(
+   571	                content: Text('Нельзя удалить первую точку. Нужно минимум 2 точки.'),
+   572	                backgroundColor: Colors.orangeAccent,
+   573	              ),
+   574	            );
+   575	            return false;
+   576	          }
+   577	        }
+   578	        return true;
+   579	      },
+   580	      onDismissed: (direction) {
+   581	        if (direction == DismissDirection.endToStart) {
+   582	          _logic.undoLastAnchor();
+   583	          ScaffoldMessenger.of(context).showSnackBar(
+   584	            const SnackBar(
+   585	              content: Text('Последняя привязка удалена'),
+   586	              backgroundColor: Colors.redAccent,
+   587	            ),
+   588	          );
+   589	        } else if (direction == DismissDirection.startToEnd) {
+   590	          _logic.undoFirstAnchor();
+   591	          ScaffoldMessenger.of(context).showSnackBar(
+   592	            const SnackBar(
+   593	              content: Text('Первая привязка удалена'),
+   594	              backgroundColor: Colors.redAccent,
+   595	            ),
+   596	          );
+   597	        }
+   598	      },
+   599	      background: Container(
+   600	        decoration: BoxDecoration(
+   601	          color: Colors.red,
+   602	          borderRadius: BorderRadius.circular(20),
+   603	        ),
+   604	        alignment: Alignment.centerLeft,
+   605	        padding: const EdgeInsets.only(left: 20),
+   606	        child: const Icon(Icons.delete_forever, color: Colors.white),
+   607	      ),
+   608	      secondaryBackground: Container(
+   609	        decoration: BoxDecoration(
+   610	          color: Colors.red,
+   611	          borderRadius: BorderRadius.circular(20),
+   612	        ),
+   613	        alignment: Alignment.centerRight,
+   614	        padding: const EdgeInsets.only(right: 20),
+   615	        child: const Icon(Icons.delete_forever, color: Colors.white),
+   616	      ),
+   617	      child: Tooltip(
+   618	        message: 'Смахни влево — удалить последнюю, вправо — первую',
+   619	        child: Container(
+   620	          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+   621	          decoration: BoxDecoration(
+   622	            color: hasWorkingPair
+   623	                ? Colors.green.withAlpha(200)
+   624	                : Colors.orange.withAlpha(200),
+   625	            borderRadius: BorderRadius.circular(20),
+   626	          ),
+   627	          child: Text(
+   628	            hasWorkingPair
+   629	                ? 'Карта привязана ($count)'
+   630	                : 'Привязок: $count (нужно ≥2, расстояние ≥50м)',
+   631	            style: const TextStyle(
+   632	              color: Colors.white,
+   633	              fontSize: 11,
+   634	              fontWeight: FontWeight.bold,
+   635	            ),
+   636	          ),
+   637	        ),
+   638	      ),
+   639	    );
+   640	  }
+   641	}
 
 ============= lib/services/log_service.dart ===
      1	import 'dart:async';
