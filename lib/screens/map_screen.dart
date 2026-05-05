@@ -254,7 +254,11 @@ class _MapScreenState extends State<MapScreen> {
                 visible: _state.imagePath != null && _state.imageSize != null,
                 onHereNowPressed: _logic.addAnchorFromCurrentGps,
                 onHereFromClipboard: _logic.addAnchorFromClipboard,
-                onTargetPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget == null ? _logic.placePlannedTargetAtCrosshair : null,
+                onTargetPressed: _state.canPlaceTarget && !_state.followMode
+                    ? (_state.plannedTarget == null
+                        ? _logic.placePlannedTargetAtCrosshair
+                        : _logic.activatePlannedTarget)
+                    : null,
                 onTargetLongPressed: _state.canPlaceTarget && !_state.followMode && _state.plannedTarget != null ? _logic.setTargetAndStartNavigation : null,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
                 targetEnabled: _state.canPlaceTarget && !_state.followMode,
@@ -543,39 +547,73 @@ class _MapScreenState extends State<MapScreen> {
     final hasWorkingPair = _state.workingPair != null;
     return Dismissible(
       key: ValueKey(count),
-      direction: DismissDirection.endToStart,
+      direction: DismissDirection.horizontal,
       confirmDismiss: (direction) async {
-        if (_state.project!.anchors.length <= 2) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Нельзя удалить. Для привязки необходимо минимум 2 точки.'),
-              backgroundColor: Colors.orangeAccent,
-            ),
-          );
-          return false;
+        final anchors = _state.project!.anchors;
+        if (direction == DismissDirection.endToStart) {
+          // удаление последней точки
+          if (anchors.length <= 2) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Нельзя удалить последнюю точку. Нужно минимум 2 точки.'),
+                backgroundColor: Colors.orangeAccent,
+              ),
+            );
+            return false;
+          }
+        } else if (direction == DismissDirection.startToEnd) {
+          // удаление первой точки
+          if (anchors.length <= 2) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Нельзя удалить первую точку. Нужно минимум 2 точки.'),
+                backgroundColor: Colors.orangeAccent,
+              ),
+            );
+            return false;
+          }
         }
         return true;
       },
       onDismissed: (direction) {
-        _logic.undoLastAnchor();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Последняя привязка удалена'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        if (direction == DismissDirection.endToStart) {
+          _logic.undoLastAnchor();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Последняя привязка удалена'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        } else if (direction == DismissDirection.startToEnd) {
+          _logic.undoFirstAnchor();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Первая привязка удалена'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
       },
       background: Container(
         decoration: BoxDecoration(
           color: Colors.red,
           borderRadius: BorderRadius.circular(20),
         ),
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        child: const Icon(Icons.delete_forever, color: Colors.white),
+      ),
+      secondaryBackground: Container(
+        decoration: BoxDecoration(
+          color: Colors.red,
+          borderRadius: BorderRadius.circular(20),
+        ),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete, color: Colors.white),
+        child: const Icon(Icons.delete_forever, color: Colors.white),
       ),
       child: Tooltip(
-        message: 'Смахни влево чтобы удалить последнюю точку',
+        message: 'Смахни влево — удалить последнюю, вправо — первую',
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(

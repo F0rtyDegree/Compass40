@@ -469,6 +469,36 @@ class MapScreenLogic {
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
+  Future<void> undoFirstAnchor() async {
+    final project = state.project;
+    if (project == null || project.anchors.length <= 2) {
+      return;
+    }
+
+    final updatedAnchors = project.anchors.sublist(1); // удаляем первую точку
+    // Путь и индексы прыжков остаются валидными (координаты изображения не меняются)
+    final updatedUserPath = project.userPath;
+    final updatedPathJumpIndices = project.pathJumpIndices;
+
+    final updatedProject = project.copyWith(
+      anchors: updatedAnchors,
+      userPath: updatedUserPath,
+      pathJumpIndices: updatedPathJumpIndices,
+    );
+
+    await storageService.saveProject(updatedProject);
+    await logService.removeFirstMapAnchorLog();
+
+    setState(() {
+      state.project = updatedProject;
+    });
+
+    _recalculateWorkingPairAndRotation();
+    _recalculateCanPlaceTarget();
+    _recalculateUserImagePoint();
+    await recalculateTargetsAfterNewAnchor(restartNavigation: true);
+  }
+
   Future<void> undoLastAnchor() async {
     final project = state.project;
     if (project == null || project.anchors.length <= 2) {
