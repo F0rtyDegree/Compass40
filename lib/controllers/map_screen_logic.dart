@@ -31,7 +31,6 @@ class MapScreenLogic {
   bool _isAutoRotating = false;
 
   StreamSubscription<GpsData>? _gpsSub;
-  GpsData? _previousGpsData;
   GpsData? _lastGpsData;
   late SensorSettings _sensorSettings;
 
@@ -741,6 +740,10 @@ class MapScreenLogic {
   // ---------------------------------------------------------
 
   void enableFollowMode() {
+    if (state.workingPair == null) {
+      showSnackBar('Режим сопровождения доступен только после привязки карты (добавьте минимум 2 точки привязки)');
+      return;
+    }
     state.followRestoreTimer?.cancel();
     setState(() => state.followMode = true);
     _applyHeadingRotation();
@@ -752,6 +755,10 @@ class MapScreenLogic {
   }
 
   void toggleFollowMode() {
+    if (!state.followMode && state.workingPair == null) {
+      showSnackBar('Режим сопровождения доступен только после привязки карты');
+      return;
+    }
     if (state.followMode) {
       disableFollowMode();
     } else {
@@ -802,23 +809,17 @@ class MapScreenLogic {
       onData: (gpsData) {
         _lastGpsData = gpsData;
 
-        if (_previousGpsData?.latitude != null && (gpsData.speed ?? 0) * 3.6 > _sensorSettings.autoSwitchSpeedKmh) {
-          final bd = calibration.bearingAndDistance(
-            fromLat: _previousGpsData!.latitude!,
-            fromLon: _previousGpsData!.longitude!,
-            toLat: gpsData.latitude!,
-            toLon: gpsData.longitude!,
-            magneticDeclination: magneticDeclination,
-          );
+        // Используем системный GPS-пеленг (более стабилен, не требует проверки minDistance)
+        if (gpsData.gpsBearing != null &&
+            (gpsData.speed ?? 0) * 3.6 > _sensorSettings.autoSwitchSpeedKmh) {
+          final magneticBearing = (gpsData.gpsBearing! - magneticDeclination + 360) % 360;
           setState(() {
-            state.heading = bd.magneticBearing;
+            state.heading = magneticBearing;
           });
-
-          if (state.followMode) {
-            _applyHeadingRotation();
-          }
+           if (state.followMode) {
+             _applyHeadingRotation();
+           }
         }
-        _previousGpsData = gpsData;
 
         if (state.followMode) {
           _recalculateUserImagePoint();
@@ -835,7 +836,7 @@ class MapScreenLogic {
   // ---------------------------------------------------------
 
   void _applyHeadingRotation() {
-    if (!state.followMode || state.heading == null) return;
+    if (!state.followMode || state.heading == null || state.workingPair == null) return;
 
     _isAutoRotating = true;
 
