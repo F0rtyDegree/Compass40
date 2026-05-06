@@ -102,4 +102,24 @@ class MapStorageService {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_currentProjectIdKey);
   }
+
+  /// Полностью удаляет проект и все связанные с ним данные
+  Future<void> deleteProject(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    // Удалить из общего списка проектов
+    final projectsJson = prefs.getString(_projectsKey) ?? '{}';
+    final Map<String, dynamic> projects = jsonDecode(projectsJson);
+    projects.remove(id);
+    await prefs.setString(_projectsKey, jsonEncode(projects));
+    
+    // Удалить сохранённую трансформацию
+    await prefs.remove('$_transformPrefix$id');
+    
+    // Если удаляемый проект был текущим – сбросить current id
+    final currentId = await getCurrentProjectId();
+    if (currentId == id) {
+      await setCurrentProjectId(null);
+    }
+  }
 }

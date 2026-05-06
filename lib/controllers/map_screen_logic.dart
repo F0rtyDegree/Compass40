@@ -153,6 +153,17 @@ class MapScreenLogic {
       if (image == null) return;
 
       final savedPath = await storageService.saveImageToAppStorage(image.path);
+
+      // Удаляем временный файл, который создал ImagePicker
+      try {
+        final tempFile = File(image.path);
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      } catch (e) {
+        debugPrint('Failed to delete temp file: $e');
+      }
+
       final projectId = DateTime.now().millisecondsSinceEpoch.toString();
       final project = MapProject(
         id: projectId,
@@ -188,10 +199,20 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> closeMap() async {
-    if (state.project != null) {
-      await storageService.saveProject(state.project!);
+    // Удаляем файл изображения, если он существует
+    if (state.imagePath != null) {
+      final file = File(state.imagePath!);
+      if (await file.exists()) {
+        await file.delete();
+      }
     }
-    await storageService.setCurrentProjectId(null);
+
+    // Удаляем проект и все его данные из хранилища
+    if (state.project != null) {
+      await storageService.deleteProject(state.project!.id);
+    } else {
+      await storageService.setCurrentProjectId(null);
+    }
 
     setState(() {
       state.project = null;
@@ -471,7 +492,7 @@ class MapScreenLogic {
 
   Future<void> undoFirstAnchor() async {
     final project = state.project;
-    if (project == null || project.anchors.length <= 2) {
+    if (project == null || project.anchors.isEmpty) {
       return;
     }
 
@@ -501,7 +522,7 @@ class MapScreenLogic {
 
   Future<void> undoLastAnchor() async {
     final project = state.project;
-    if (project == null || project.anchors.length <= 2) {
+    if (project == null || project.anchors.isEmpty) {
       return;
     }
 
