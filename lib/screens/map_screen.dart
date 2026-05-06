@@ -549,30 +549,7 @@ class _MapScreenState extends State<MapScreen> {
       key: ValueKey(count),
       direction: DismissDirection.horizontal,
       confirmDismiss: (direction) async {
-        final anchors = _state.project!.anchors;
-        if (direction == DismissDirection.endToStart) {
-          // удаление последней точки
-          if (anchors.length <= 2) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Нельзя удалить последнюю точку. Нужно минимум 2 точки.'),
-                backgroundColor: Colors.orangeAccent,
-              ),
-            );
-            return false;
-          }
-        } else if (direction == DismissDirection.startToEnd) {
-          // удаление первой точки
-          if (anchors.length <= 2) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Нельзя удалить первую точку. Нужно минимум 2 точки.'),
-                backgroundColor: Colors.orangeAccent,
-              ),
-            );
-            return false;
-          }
-        }
+        // Разрешаем удаление любой точки привязки без ограничений
         return true;
       },
       onDismissed: (direction) {

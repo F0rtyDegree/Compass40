@@ -6,7 +6,7 @@ import 'package:gps_info/gps_info.dart';
 import '../log_entry.dart';
 
 // Режимы компаса
-enum CompassMode { magnetic, gps, auto }
+enum CompassMode { auto, magnetic, gps }
 
 class HomeState {
   final GpsInfo gpsInfo = GpsInfo();
@@ -21,7 +21,7 @@ class HomeState {
   final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
 
   // Режим компаса
-  CompassMode compassMode = CompassMode.magnetic;
+  CompassMode compassMode = CompassMode.auto;
 
   // Скорость автопереключения км/ч
   double autoSwitchSpeedKmh = 3.0;
