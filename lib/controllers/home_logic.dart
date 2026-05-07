@@ -5,6 +5,7 @@ import 'package:gps_info/gps_info.dart';
 
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
+import '../services/gps_compass_service.dart';
 import '../utils/geo_utils.dart';
 import 'home_state.dart';
 
@@ -24,10 +25,12 @@ class HomeLogic {
   Future<void> init() async {
     await _loadAllSettings();
     await loadLogEntries();
+    _startGpsCompassService();
     _requestPermissions();
   }
 
   void dispose() {
+    GpsCompassService.instance.stop();
     state.uiUpdateTimer?.cancel();
     state.gpsDataSubscription.cancel();
     state.compassSubscription.cancel();
@@ -54,6 +57,8 @@ class HomeLogic {
 
   Future<void> reloadSettings() async {
     await _loadAllSettings();
+    final settings = await sensorService.loadSettings();
+    GpsCompassService.instance.updateSettings(settings);
   }
 
   Future<void> setCompassMode(CompassMode mode) async {
@@ -74,6 +79,11 @@ class HomeLogic {
   // Сенсоры
   // ----------------------------------------------------------------------
 
+  void _startGpsCompassService() async {
+    final settings = await sensorService.loadSettings();
+    GpsCompassService.instance.start(settings);
+  }
+
   void _requestPermissions() async {
     if (await sensorService.requestLocationPermission()) {
       _subscribeToGpsDataStream();
@@ -88,18 +98,6 @@ class HomeLogic {
       intervalSeconds: settings.gpsInterval,
       onData: (gpsData) {
         state.gpsDataNotifier.value = gpsData;
-
-        final speedKmh = (gpsData.speed ?? 0) * 3.6;
-        if (speedKmh > 0.5 && gpsData.gpsBearing != null) {
-          state.gpsBearingNotifier.value = gpsData.gpsBearing;
-          state.gpsBearingSamples.add((
-            gpsData.gpsBearing!,
-            DateTime.now().millisecondsSinceEpoch,
-          ));
-          if (state.gpsBearingSamples.length > HomeState.maxSamples) {
-            state.gpsBearingSamples.removeAt(0);
-          }
-        }
 
         if (!state.useManualDeclination) {
           setState(() {
@@ -225,8 +223,6 @@ class HomeLogic {
 
   void _updateHeading() {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final speedKmh = (state.gpsDataNotifier.value.speed ?? 0) * 3.6;
-    final gpsBearing = state.gpsBearingNotifier.value;
 
     bool useGps = false;
 
@@ -235,10 +231,10 @@ class HomeLogic {
         useGps = false;
         break;
       case CompassMode.gps:
-        useGps = gpsBearing != null;
+        useGps = GpsCompassService.instance.isActiveNotifier.value;
         break;
       case CompassMode.auto:
-        useGps = gpsBearing != null && speedKmh >= state.autoSwitchSpeedKmh;
+        useGps = GpsCompassService.instance.isActiveNotifier.value;
         break;
     }
 
@@ -247,14 +243,9 @@ class HomeLogic {
     double newHeading;
 
     if (useGps) {
-      final gpsWindow = state.averagingPeriod * 2; // для GPS окно шире
-      state.gpsBearingSamples.removeWhere(
-        (s) => now - s.$2 > gpsWindow,
-      );
-      if (state.gpsBearingSamples.isEmpty) return;
-      final bearings = state.gpsBearingSamples.map((s) => s.$1).toList();
-      final medianTrueBearing = _calculateCircularMedian(bearings);
-      newHeading = (medianTrueBearing - state.magneticDeclination + 360) % 360;
+      final gpsBearing = GpsCompassService.instance.bearingNotifier.value;
+      if (gpsBearing == null) return;
+      newHeading = (gpsBearing - state.magneticDeclination + 360) % 360;
     } else {
       state.headingSamples.removeWhere(
         (s) => now - s.$2 > state.averagingPeriod,

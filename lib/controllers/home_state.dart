@@ -17,7 +17,6 @@ class HomeState {
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
   final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
-  final ValueNotifier<double?> gpsBearingNotifier = ValueNotifier(null);
   final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
 
   // Режим компаса
@@ -40,7 +39,6 @@ class HomeState {
 
   List<LogItem> logItems = [];
   final List<(double, int)> headingSamples = [];
-  final List<(double, int)> gpsBearingSamples = [];
   Timer? uiUpdateTimer;
 
   int averagingPeriod = 500;
@@ -55,7 +53,6 @@ class HomeState {
     gpsDataNotifier.dispose();
     headingNotifier.dispose();
     accuracyNotifier.dispose();
-    gpsBearingNotifier.dispose();
     distanceToWaypoint.dispose();
     bearingToWaypoint.dispose();
     distanceToTarget.dispose();

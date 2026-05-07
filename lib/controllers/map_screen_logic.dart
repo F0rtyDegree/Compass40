@@ -13,6 +13,7 @@ import '../screens/map_screen.dart';
 import '../services/log_service.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
+import '../services/gps_compass_service.dart';
 import 'map_screen_state.dart';
 import '../services/sensor_service.dart';
 
@@ -48,10 +49,12 @@ class MapScreenLogic {
   Future<void> init() async {
     _sensorSettings = await sensorService.loadSettings();
     await _loadLastProject();
+    _startGpsCompassService();
     _startGpsSubscription();
   }
 
   void dispose() {
+    GpsCompassService.instance.bearingNotifier.removeListener(_onGpsBearingChanged);
     if (state.project != null) {
       storageService.saveProject(state.project!);
     }
@@ -852,23 +855,16 @@ class MapScreenLogic {
   // GPS подписка
   // --------------------------------------------------------
 
+  void _startGpsCompassService() {
+    GpsCompassService.instance.start(_sensorSettings);
+  }
+
   void _startGpsSubscription() {
+    GpsCompassService.instance.bearingNotifier.addListener(_onGpsBearingChanged);
     _gpsSub = sensorService.subscribeToGps(
       intervalSeconds: 1,
       onData: (gpsData) {
         _lastGpsData = gpsData;
-
-        // Используем системный GPS-пеленг (более стабилен, не требует проверки minDistance)
-        if (gpsData.gpsBearing != null &&
-            (gpsData.speed ?? 0) * 3.6 > _sensorSettings.autoSwitchSpeedKmh) {
-          final magneticBearing = (gpsData.gpsBearing! - magneticDeclination + 360) % 360;
-          setState(() {
-            state.heading = magneticBearing;
-          });
-           if (state.followMode) {
-             _applyHeadingRotation();
-           }
-        }
 
         if (state.followMode) {
           _recalculateUserImagePoint();
@@ -878,6 +874,19 @@ class MapScreenLogic {
         }
       },
     );
+  }
+
+  void _onGpsBearingChanged() {
+    final bearing = GpsCompassService.instance.bearingNotifier.value;
+    final isActive = GpsCompassService.instance.isActiveNotifier.value;
+    if (bearing != null && isActive) {
+      setState(() {
+        state.heading = (bearing - magneticDeclination + 360) % 360;
+      });
+      if (state.followMode) {
+        _applyHeadingRotation();
+      }
+    }
   }
 
   // --------------------------------------------------------

@@ -21,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _gpsIntervalController = TextEditingController();
   final _uiUpdatePeriodController = TextEditingController();
   final _autoSwitchSpeedController = TextEditingController();
+  final _gpsAveragingWindowController = TextEditingController();
   double _smoothingFactor = 0.5;
   CompassMode _compassMode = CompassMode.magnetic;
 
@@ -44,6 +45,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .toString();
     _autoSwitchSpeedController.text =
         (prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0).toString();
+    _gpsAveragingWindowController.text =
+        (prefs.getInt('gpsAveragingWindowMs') ?? 3000).toString();
 
     double smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
     smoothingFactor = smoothingFactor.clamp(0.01, 0.99);
@@ -79,6 +82,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final autoSpeed = double.tryParse(_autoSwitchSpeedController.text);
     await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? 3.0);
+
+    final gpsWindow = int.tryParse(_gpsAveragingWindowController.text);
+    await prefs.setInt('gpsAveragingWindowMs', gpsWindow ?? 3000);
   }
 
   Widget _buildTextFieldRow(
@@ -119,6 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _gpsIntervalController.dispose();
     _uiUpdatePeriodController.dispose();
     _autoSwitchSpeedController.dispose();
+    _gpsAveragingWindowController.dispose();
     super.dispose();
   }
 
@@ -195,7 +202,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // ✅ Режим компаса
+                  // Режим компаса
                   Text(
                     'Режим компаса',
                     style: Theme.of(context).textTheme.titleMedium,
@@ -228,7 +235,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ✅ Скорость автопереключения
+                  // Скорость автопереключения
                   if (_compassMode == CompassMode.auto) ...[
                     _buildTextFieldRow(
                       'Скорость авто (км/ч):',
@@ -238,6 +245,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
                   ],
+
+                  // Окно усреднения GPS
+                  _buildTextFieldRow(
+                    'Окно GPS (мс):',
+                    _gpsAveragingWindowController,
+                    '3000',
+                    isInt: true,
+                  ),
+                  const SizedBox(height: 16),
 
                   // GPS интервал
                   _buildTextFieldRow(

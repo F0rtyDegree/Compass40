@@ -46,6 +46,7 @@ class SensorService {
       gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
       compassMode: compassMode,
       autoSwitchSpeedKmh: autoSwitchSpeedKmh,
+      gpsAveragingWindowMs: prefs.getInt('gpsAveragingWindowMs') ?? 3000,
     );
   }
 
@@ -87,7 +88,6 @@ class SensorService {
     }).asBroadcastStream();
 
     _sharedGpsSubscription = _sharedGpsStream!.listen((data) {
-      // Create a copy of the list to iterate over, to avoid concurrent modification issues
       final listeners = List<void Function(GpsData)>.from(_gpsListeners);
       for (final listener in listeners) {
         try {
@@ -114,7 +114,6 @@ class SensorService {
     return _GpsListenerSubscription(
       onCancel: () {
         _gpsListeners.remove(onData);
-        // Optional: Stop stream if no listeners are left
         if (_gpsListeners.isEmpty) {
           _sharedGpsSubscription?.cancel();
           _sharedGpsSubscription = null;
@@ -186,7 +185,6 @@ class _GpsListenerSubscription implements StreamSubscription<GpsData> {
 
   @override
   Future<E> asFuture<E>([E? futureValue]) async {
-    // This is a simplified version. A real implementation might need a Completer.
     if (futureValue != null) {
       return futureValue;
     }
@@ -194,8 +192,6 @@ class _GpsListenerSubscription implements StreamSubscription<GpsData> {
   }
 }
 
-
-// Класс настроек (должен быть после SensorService или до – не важно, главное чтобы был)
 class SensorSettings {
   final bool useManualDeclination;
   final double magneticDeclination;
@@ -205,6 +201,7 @@ class SensorSettings {
   final int gpsInterval;
   final CompassMode compassMode;
   final double autoSwitchSpeedKmh;
+  final int gpsAveragingWindowMs; // окно усреднения GPS-пеленга, мс (по умолчанию 3000)
 
   SensorSettings({
     required this.useManualDeclination,
@@ -215,5 +212,6 @@ class SensorSettings {
     required this.gpsInterval,
     required this.compassMode,
     required this.autoSwitchSpeedKmh,
+    this.gpsAveragingWindowMs = 3000,
   });
 }
