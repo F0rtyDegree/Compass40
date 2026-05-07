@@ -234,7 +234,6 @@ class _MapScreenState extends State<MapScreen> {
                         height: 80,
                         child: GestureDetector(
                           onTap: _logic.toggleFollowMode,
-                          onDoubleTap: _logic.toggleCrosshairPosition,
                           onLongPress: () =>
                               _logic.copyCrosshairCoordinatesToClipboard(),
                           child: Container(color: Colors.transparent),

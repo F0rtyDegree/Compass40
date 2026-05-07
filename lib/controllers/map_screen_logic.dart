@@ -267,13 +267,6 @@ class MapScreenLogic {
 
   Offset getCrosshairScreenPoint() => _getCrosshairScreenPoint();
 
-  void toggleCrosshairPosition() {
-    setState(() {
-      state.crosshairInCenter = !state.crosshairInCenter;
-    });
-    _recalculateCrosshairImagePoint();
-  }
-
   Future<void> copyCrosshairCoordinatesToClipboard() async {
     if (state.workingPair == null || state.crosshairImagePoint == null) return;
 
@@ -797,13 +790,24 @@ class MapScreenLogic {
       return;
     }
     state.followRestoreTimer?.cancel();
-    setState(() => state.followMode = true);
+    setState(() {
+      state.followMode = true;
+      state.crosshairInCenter = false; // смещаем прицел вниз для ведения
+    });
+    _recalculateCrosshairImagePoint();
+    _recalculateUserScreenPoint();
+    _centerMapOnUser();
     _applyHeadingRotation();
   }
 
   void disableFollowMode() {
     state.followRestoreTimer?.cancel();
-    setState(() => state.followMode = false);
+    setState(() {
+      state.followMode = false;
+      state.crosshairInCenter = true; // возвращаем прицел в центр
+    });
+    _recalculateCrosshairImagePoint();
+    _recalculateUserScreenPoint();
   }
 
   void toggleFollowMode() {
