@@ -21,7 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _gpsIntervalController = TextEditingController();
   final _uiUpdatePeriodController = TextEditingController();
   final _autoSwitchSpeedController = TextEditingController();
-  final _gpsAveragingWindowController = TextEditingController();
+  final _gpsAveragingSamplesController = TextEditingController();
   double _smoothingFactor = 0.5;
   CompassMode _compassMode = CompassMode.magnetic;
 
@@ -45,8 +45,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .toString();
     _autoSwitchSpeedController.text =
         (prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0).toString();
-    _gpsAveragingWindowController.text =
-        (prefs.getInt('gpsAveragingWindowMs') ?? 3000).toString();
+    _gpsAveragingSamplesController.text =
+        (prefs.getInt('gpsAveragingSamples') ?? 3).toString();
 
     double smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
     smoothingFactor = smoothingFactor.clamp(0.01, 0.99);
@@ -83,8 +83,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final autoSpeed = double.tryParse(_autoSwitchSpeedController.text);
     await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? 3.0);
 
-    final gpsWindow = int.tryParse(_gpsAveragingWindowController.text);
-    await prefs.setInt('gpsAveragingWindowMs', gpsWindow ?? 3000);
+    final gpsSamples = int.tryParse(_gpsAveragingSamplesController.text);
+    await prefs.setInt('gpsAveragingSamples', gpsSamples ?? 3);
   }
 
   Widget _buildTextFieldRow(
@@ -125,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _gpsIntervalController.dispose();
     _uiUpdatePeriodController.dispose();
     _autoSwitchSpeedController.dispose();
-    _gpsAveragingWindowController.dispose();
+    _gpsAveragingSamplesController.dispose();
     super.dispose();
   }
 
@@ -248,9 +248,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   // Окно усреднения GPS
                   _buildTextFieldRow(
-                    'Окно GPS (мс):',
-                    _gpsAveragingWindowController,
-                    '3000',
+                    'Сэмплы GPS (шт):',
+                    _gpsAveragingSamplesController,
+                    '3',
                     isInt: true,
                   ),
                   const SizedBox(height: 16),

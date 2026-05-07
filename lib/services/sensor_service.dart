@@ -46,7 +46,7 @@ class SensorService {
       gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
       compassMode: compassMode,
       autoSwitchSpeedKmh: autoSwitchSpeedKmh,
-      gpsAveragingWindowMs: prefs.getInt('gpsAveragingWindowMs') ?? 3000,
+      gpsAveragingSamples: prefs.getInt('gpsAveragingSamples') ?? 3,
     );
   }
 
@@ -201,7 +201,7 @@ class SensorSettings {
   final int gpsInterval;
   final CompassMode compassMode;
   final double autoSwitchSpeedKmh;
-  final int gpsAveragingWindowMs; // окно усреднения GPS-пеленга, мс (по умолчанию 3000)
+  final int gpsAveragingSamples; // количество сэмплов для GPS-усреднения (по умолчанию 3)
 
   SensorSettings({
     required this.useManualDeclination,
@@ -212,6 +212,6 @@ class SensorSettings {
     required this.gpsInterval,
     required this.compassMode,
     required this.autoSwitchSpeedKmh,
-    this.gpsAveragingWindowMs = 3000,
+    this.gpsAveragingSamples = 3,
   });
 }

@@ -3,9 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
 
-/// Единый сервис GPS-компаса.
-/// Принимает настройки (порог скорости, окно усреднения, сглаживание)
-/// и отдаёт сглаженный магнитный пеленг через ValueNotifier.
 class GpsCompassService {
   static final GpsCompassService instance = GpsCompassService._();
   GpsCompassService._();
@@ -15,16 +12,14 @@ class GpsCompassService {
 
   final SensorService _sensorService = SensorService();
   StreamSubscription<GpsData>? _gpsSub;
-  Timer? _processingTimer;
 
-  final List<_GpsBearingSample> _samples = [];
+  final List<double> _samples = []; // хранит последние maxSamples измерений
   double _filteredBearing = 0.0;
   bool _started = false;
+  static const int _maxSamples = 50; // достаточно для окна любой разумной длины
 
   SensorSettings? _settings;
 
-  /// Запускает сервис с указанными настройками.
-  /// Если уже запущен, повторный вызов игнорируется (используйте updateSettings).
   void start(SensorSettings settings) {
     if (_started) return;
     _started = true;
@@ -33,24 +28,16 @@ class GpsCompassService {
       intervalSeconds: settings.gpsInterval,
       onData: _onGpsData,
     );
-    _processingTimer = Timer.periodic(
-      const Duration(milliseconds: 200),
-      (_) => _processSamples(),
-    );
   }
 
-  /// Останавливает сервис и сбрасывает состояние.
   void stop() {
     _gpsSub?.cancel();
-    _processingTimer?.cancel();
     _samples.clear();
     _started = false;
     bearingNotifier.value = null;
     isActiveNotifier.value = false;
   }
 
-  /// Обновляет настройки без остановки сервиса.
-  /// Перезапускает GPS-подписку, если изменился интервал.
   void updateSettings(SensorSettings settings) {
     _settings = settings;
     if (_started) {
@@ -65,25 +52,24 @@ class GpsCompassService {
   void _onGpsData(GpsData data) {
     final speedKmh = (data.speed ?? 0) * 3.6;
     final bearing = data.gpsBearing;
-    // Порог скорости берётся из настроек (autoSwitchSpeedKmh)
     if (bearing != null && speedKmh >= (_settings?.autoSwitchSpeedKmh ?? 3.0)) {
-      _samples.add(_GpsBearingSample(bearing, DateTime.now().millisecondsSinceEpoch));
-      if (_samples.length > 30) _samples.removeAt(0);
+      _samples.add(bearing);
+      if (_samples.length > _maxSamples) _samples.removeAt(0);
+      _processSamples();
     }
   }
 
   void _processSamples() {
-    final windowMs = _settings?.gpsAveragingWindowMs ?? 3000;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    _samples.removeWhere((s) => now - s.timestamp > windowMs);
-    if (_samples.isEmpty) {
+    final windowSize = _settings?.gpsAveragingSamples ?? 3;
+    if (_samples.length < windowSize) {
       isActiveNotifier.value = false;
       return;
     }
     isActiveNotifier.value = true;
 
-    final bearings = _samples.map((s) => s.bearing).toList();
-    final median = _calculateCircularMedian(bearings);
+    // Берём последние windowSize сэмплов
+    final recent = _samples.sublist(_samples.length - windowSize);
+    final median = _calculateCircularMedian(List.from(recent));
     final smoothing = _settings?.smoothingFactor ?? 0.5;
     double diff = median - _filteredBearing;
     if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
@@ -131,10 +117,4 @@ class GpsCompassService {
     bearingNotifier.dispose();
     isActiveNotifier.dispose();
   }
-}
-
-class _GpsBearingSample {
-  final double bearing;
-  final int timestamp;
-  _GpsBearingSample(this.bearing, this.timestamp);
 }
