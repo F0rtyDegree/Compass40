@@ -262,8 +262,8 @@ class _MapScreenState extends State<MapScreen> {
                 onTargetLongPressed: null,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
                 targetEnabled: _state.canPlaceTarget && !_state.followMode,
-                onZoomIn: _zoomIn,
-                onZoomOut: _zoomOut,
+                onZoomIn: _logic.zoomIn,
+                onZoomOut: _logic.zoomOut,
                 rotateMode: _state.rotateMode,
                 onToggleRotateMode: () {
                   setState(() {
@@ -275,42 +275,6 @@ class _MapScreenState extends State<MapScreen> {
             ],
           );
         },
-      ),
-    );
-  }
-
-  void _zoomIn() {
-    final current = _state.transformState;
-    final newScale = (current.scale * 1.5).clamp(0.05, 20.0);
-    _scaleAroundCrosshair(current, newScale);
-  }
-
-  void _zoomOut() {
-    final current = _state.transformState;
-    final newScale = (current.scale / 1.5).clamp(0.05, 20.0);
-    _scaleAroundCrosshair(current, newScale);
-  }
-
-  void _scaleAroundCrosshair(MapTransformState current, double newScale) {
-    if (_state.viewportSize == null || _state.imageSize == null) return;
-    final pivotScreen = _logic.getCrosshairScreenPoint();
-    final pivotImage = _logic.screenToImage(pivotScreen);
-    final tempTransform = MapTransformState(
-      scale: newScale,
-      rotationRadians: current.rotationRadians,
-      translation: current.translation,
-    );
-    final oldTransform = _state.transformState;
-    _state.transformState = tempTransform;
-    final pivotScreenAfterScale = _logic.imageToScreen(pivotImage);
-    _state.transformState = oldTransform;
-    final delta = pivotScreen - pivotScreenAfterScale;
-    final newTranslation = current.translation + delta;
-    _logic.updateTransform(
-      MapTransformState(
-        scale: newScale,
-        rotationRadians: current.rotationRadians,
-        translation: newTranslation,
       ),
     );
   }

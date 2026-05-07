@@ -30,6 +30,7 @@ class MapScreenLogic {
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   bool _isAutoRotating = false;
+  bool _keepFollowDuringScale = false; // запрещает отключение follow mode при масштабировании кнопками
 
   StreamSubscription<GpsData>? _gpsSub;
   GpsData? _lastGpsData;
@@ -240,7 +241,7 @@ class MapScreenLogic {
       state.transformState = newTransform;
     });
 
-    if (state.followMode && !_isAutoRotating) {
+    if (state.followMode && !_isAutoRotating && !_keepFollowDuringScale) {
       disableFollowMode();
     }
 
@@ -259,6 +260,47 @@ class MapScreenLogic {
     });
     _recalculateCrosshairImagePoint();
     _recalculateUserScreenPoint();
+  }
+
+  /// Увеличение масштаба кнопкой
+  void zoomIn() {
+    _keepFollowDuringScale = true;
+    final current = state.transformState;
+    final newScale = (current.scale * 1.5).clamp(0.05, 20.0);
+    _scaleAroundCrosshair(current, newScale);
+    _keepFollowDuringScale = false;
+  }
+
+  /// Уменьшение масштаба кнопкой
+  void zoomOut() {
+    _keepFollowDuringScale = true;
+    final current = state.transformState;
+    final newScale = (current.scale / 1.5).clamp(0.05, 20.0);
+    _scaleAroundCrosshair(current, newScale);
+    _keepFollowDuringScale = false;
+  }
+
+  void _scaleAroundCrosshair(MapTransformState current, double newScale) {
+    if (state.viewportSize == null || state.imageSize == null) return;
+    final pivotScreen = getCrosshairScreenPoint();
+    final pivotImage = screenToImage(pivotScreen);
+    final tempTransform = MapTransformState(
+      scale: newScale,
+      rotationRadians: current.rotationRadians,
+      translation: current.translation,
+    );
+    _applyTransformWithPivot(current, tempTransform, pivotImage);
+  }
+
+  /// Вспомогательный метод: применяет новый трансформ так, чтобы точка на изображении осталась под перекрестием
+  void _applyTransformWithPivot(MapTransformState oldTransform, MapTransformState tempTransform, Offset pivotImage) {
+    final pivotScreen = getCrosshairScreenPoint();
+    final saved = state.transformState;
+    state.transformState = tempTransform;
+    final pivotScreenAfter = imageToScreen(pivotImage);
+    state.transformState = saved;
+    final delta = pivotScreen - pivotScreenAfter;
+    updateTransform(tempTransform.copyWith(translation: tempTransform.translation + delta));
   }
 
   // --------------------------------------------------------
