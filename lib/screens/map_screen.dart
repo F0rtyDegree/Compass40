@@ -84,7 +84,7 @@ class _MapScreenState extends State<MapScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Спорткарта'),
+          title: const Text('Карта'),
           centerTitle: true,
           actions: [
             if (true) // Кнопка справки должна быть доступна всегда
@@ -220,6 +220,17 @@ class _MapScreenState extends State<MapScreen> {
                   magneticDeclination: widget.magneticDeclination,
                 ),
               ),
+              // Новый слой: тап на карте смещает точку под прицел
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTapUp: (details) {
+                    final tapPos = details.localPosition;
+                    _logic.movePointToCrosshair(tapPos);
+                  },
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
               Builder(
                 builder: (context) {
                   final vp = _state.viewportSize;
@@ -266,9 +277,11 @@ class _MapScreenState extends State<MapScreen> {
                 onZoomOut: _logic.zoomOut,
                 rotateMode: _state.rotateMode,
                 onToggleRotateMode: () {
-                  setState(() {
-                    _state.rotateMode = !_state.rotateMode;
-                  });
+                  if (_state.rotateMode) {
+                    _logic.disableRotateMode();
+                  } else {
+                    _logic.enableRotateMode();
+                  }
                 },
                 onResetRotation: _resetRotation,
               ),
@@ -379,6 +392,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         }
+        _logic.resetRotateModeTimer(); // сбросить таймер после каждого жеста вращения
       } else {
         final delta = details.focalPoint - _gestureStartFocalPoint;
         final newTranslation = _gestureStartTranslation + delta;

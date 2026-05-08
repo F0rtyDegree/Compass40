@@ -22,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _uiUpdatePeriodController = TextEditingController();
   final _autoSwitchSpeedController = TextEditingController();
   final _gpsAveragingSamplesController = TextEditingController();
+  final _rotateModeTimeoutController = TextEditingController();
   double _smoothingFactor = 0.5;
   CompassMode _compassMode = CompassMode.magnetic;
 
@@ -47,6 +48,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         (prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0).toString();
     _gpsAveragingSamplesController.text =
         (prefs.getInt('gpsAveragingSamples') ?? 3).toString();
+    _rotateModeTimeoutController.text =
+        (prefs.getInt('rotateModeTimeoutMs') ?? 1000).toString();
 
     double smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
     smoothingFactor = smoothingFactor.clamp(0.01, 0.99);
@@ -85,13 +88,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final gpsSamples = int.tryParse(_gpsAveragingSamplesController.text);
     await prefs.setInt('gpsAveragingSamples', gpsSamples ?? 3);
+
+    final rotateTimeout = int.tryParse(_rotateModeTimeoutController.text);
+    await prefs.setInt('rotateModeTimeoutMs', rotateTimeout ?? 1000);
   }
+
+
 
   Widget _buildTextFieldRow(
     String label,
     TextEditingController controller,
     String hint, {
     bool isInt = true,
+    String? suffix,
   }) {
     return Row(
       children: [
@@ -110,6 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               hintText: hint,
               border: InputBorder.none,
               contentPadding: EdgeInsets.zero,
+              suffixText: suffix,
             ),
             onChanged: (_) => _saveSettings(),
           ),
@@ -126,6 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _uiUpdatePeriodController.dispose();
     _autoSwitchSpeedController.dispose();
     _gpsAveragingSamplesController.dispose();
+    _rotateModeTimeoutController.dispose();
     super.dispose();
   }
 
@@ -168,13 +179,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Тема
+                  // === Интерфейс ===
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text('Интерфейс', style: Theme.of(context).textTheme.titleLarge),
+                  ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         'Тема',
-                        style: Theme.of(context).textTheme.titleLarge,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       SegmentedButton<ThemeMode>(
                         segments: const [
@@ -200,71 +215,96 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
-
-                  // Режим компаса
-                  Text(
-                    'Режим компаса',
-                    style: Theme.of(context).textTheme.titleMedium,
+                  const SizedBox(height: 16),
+                  _buildTextFieldRow(
+                    'Частота UI:',
+                    _uiUpdatePeriodController,
+                    '250',
+                    suffix: 'мс',
                   ),
-                  const SizedBox(height: 8),
-                  SegmentedButton<CompassMode>(
-                    segments: const [
-                      ButtonSegment(
-                        value: CompassMode.magnetic,
-                        label: Text('Магнитный'),
-                        icon: Icon(Icons.explore),
+                  const SizedBox(height: 24),
+                  const Divider(),
+
+                  // === Компас ===
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text('Компас', style: Theme.of(context).textTheme.titleLarge),
+                  ),
+                   Row(
+                    children: [
+                      Text('Режим:', style: Theme.of(context).textTheme.titleMedium),
+                      const Spacer(),
+                      PopupMenuButton<CompassMode>(
+                        onSelected: (mode) {
+                          setState(() => _compassMode = mode);
+                          _saveSettings();
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: CompassMode.magnetic,
+                            child: Text('Магнитный'),
+                          ),
+                          const PopupMenuItem(
+                            value: CompassMode.gps,
+                            child: Text('GPS'),
+                          ),
+                          const PopupMenuItem(
+                            value: CompassMode.auto,
+                            child: Text('Авто'),
+                          ),
+                        ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _compassMode == CompassMode.magnetic
+                                  ? 'Магнитный'
+                                  : _compassMode == CompassMode.gps
+                                      ? 'GPS'
+                                      : 'Авто',
+                              style: Theme.of(context).textTheme.bodyLarge,
+                            ),
+                            const Icon(Icons.arrow_drop_down),
+                          ],
+                        ),
                       ),
-                      ButtonSegment(
-                        value: CompassMode.gps,
-                        label: Text('GPS'),
-                        icon: Icon(Icons.satellite_alt),
-                      ),
-                      ButtonSegment(
-                        value: CompassMode.auto,
-                        label: Text('Авто'),
-                        icon: Icon(Icons.auto_mode),
-                      ),
+                      if (_compassMode == CompassMode.auto) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 80,
+                          child: TextField(
+                            controller: _autoSwitchSpeedController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            textAlign: TextAlign.end,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                              suffixText: 'км/ч',
+                            ),
+                            onChanged: (_) => _saveSettings(),
+                          ),
+                        ),
+                      ],
                     ],
-                    selected: {_compassMode},
-                    onSelectionChanged: (s) {
-                      setState(() => _compassMode = s.first);
-                      _saveSettings();
-                    },
-                    showSelectedIcon: false,
                   ),
                   const SizedBox(height: 16),
-
-                  // Скорость автопереключения
-                  if (_compassMode == CompassMode.auto) ...[
-                    _buildTextFieldRow(
-                      'Скорость авто (км/ч):',
-                      _autoSwitchSpeedController,
-                      '3.0',
-                      isInt: false,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // Окно усреднения GPS
+                   _buildTextFieldRow(
+                    'Интервал GPS:',
+                    _gpsIntervalController,
+                    '1',
+                    suffix: 'сек',
+                  ),
+                  const SizedBox(height: 16),
                   _buildTextFieldRow(
-                    'Сэмплы GPS (шт):',
+                    'Сэмплы GPS:',
                     _gpsAveragingSamplesController,
                     '3',
                     isInt: true,
+                    suffix: 'шт',
                   ),
                   const SizedBox(height: 16),
-
-                  // GPS интервал
-                  _buildTextFieldRow(
-                    'Интервал GPS (сек):',
-                    _gpsIntervalController,
-                    '1',
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Магнитное склонение
-                  Row(
+                   Row(
                     children: [
                       Text(
                         'Магнитное склонение:',
@@ -306,16 +346,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-
-                  // Усреднение
                   _buildTextFieldRow(
-                    'Усреднение (мс):',
+                    'Стабилизация сенсоров:',
                     _averagingPeriodController,
                     '500',
+                    suffix: 'мс',
                   ),
                   const SizedBox(height: 16),
-
-                  // Сглаживание
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -344,13 +381,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onChanged: (v) => setState(() => _smoothingFactor = v),
                     onChangeEnd: (_) => _saveSettings(),
                   ),
-                  const SizedBox(height: 8),
-
-                  // Частота UI
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  
+                  // === Карта ===
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text('Карта', style: Theme.of(context).textTheme.titleLarge),
+                  ),
                   _buildTextFieldRow(
-                    'Частота UI (мс):',
-                    _uiUpdatePeriodController,
-                    '250',
+                    'Сброс режима вращения:',
+                    _rotateModeTimeoutController,
+                    '1000',
+                    suffix: 'мс',
                   ),
                 ],
               ),

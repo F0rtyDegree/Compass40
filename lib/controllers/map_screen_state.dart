@@ -54,6 +54,7 @@ class MapScreenState {
 
   // Таймер восстановления режима сопровождения
   Timer? followRestoreTimer;
+  Timer? rotateModeTimer; // Таймер для автоматического отключения режима вращения
 
   // Флаг для предотвращения утечек
   bool isDisposed = false;

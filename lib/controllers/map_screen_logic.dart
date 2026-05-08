@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/map_anchor.dart';
 import '../models/map_project.dart';
 import '../models/map_target.dart';
@@ -30,7 +31,8 @@ class MapScreenLogic {
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   bool _isAutoRotating = false;
-  bool _keepFollowDuringScale = false; // запрещает отключение follow mode при масштабировании кнопками
+  bool _keepFollowDuringScale = false;
+  int rotateModeTimeoutMs = 1000; // будет загружено из настроек
 
   StreamSubscription<GpsData>? _gpsSub;
   GpsData? _lastGpsData;
@@ -49,6 +51,7 @@ class MapScreenLogic {
 
   Future<void> init() async {
     _sensorSettings = await sensorService.loadSettings();
+    await _loadRotateModeTimeout();
     await _loadLastProject();
     _startGpsCompassService();
     _startGpsSubscription();
@@ -59,6 +62,7 @@ class MapScreenLogic {
     if (state.project != null) {
       storageService.saveProject(state.project!);
     }
+    state.rotateModeTimer?.cancel();
     state.followRestoreTimer?.cancel();
     _gpsSub?.cancel();
     state.crosshairFeedback.dispose();
@@ -897,6 +901,47 @@ class MapScreenLogic {
     _recalculateUserScreenPoint();
   }
 
+  /// Загружает настройку таймаута режима вращения
+  Future<void> _loadRotateModeTimeout() async {
+    final prefs = await SharedPreferences.getInstance();
+    rotateModeTimeoutMs = prefs.getInt('rotateModeTimeoutMs') ?? 1000;
+  }
+
+  /// Включает режим вращения, запускает таймер автоотключения
+  void enableRotateMode() {
+    setState(() {
+      state.rotateMode = true;
+    });
+    _resetRotateModeTimer();
+  }
+
+  /// Выключает режим вращения, отменяет таймер
+  void disableRotateMode() {
+    state.rotateModeTimer?.cancel();
+    setState(() {
+      state.rotateMode = false;
+    });
+  }
+
+  /// Перезапускает таймер (вызывать при каждом повороте)
+  void resetRotateModeTimer() {
+    _resetRotateModeTimer();
+  }
+
+  void _resetRotateModeTimer() {
+    state.rotateModeTimer?.cancel();
+    if (!state.rotateMode) return;
+    if (rotateModeTimeoutMs <= 0) return; // 0 = никогда не отключать автоматически
+    state.rotateModeTimer = Timer(Duration(milliseconds: rotateModeTimeoutMs), () {
+      if (state.isDisposed) return;
+      setState(() {
+        state.rotateMode = false;
+        state.rotateModeTimer = null;
+      });
+      // При желании покажите сообщение: showSnackBar("Режим вращения отключён");
+    });
+  }
+
   // --------------------------------------------------------
   // GPS подписка
   // --------------------------------------------------------
@@ -970,5 +1015,24 @@ class MapScreenLogic {
     );
 
     _isAutoRotating = false;
+  }
+  
+  /// Перемещает карту так, чтобы точка [tapScreenPoint] оказалась под прицелом.
+  void movePointToCrosshair(Offset tapScreenPoint) {
+    if (state.viewportSize == null) return;
+
+    // Выключаем режим следования, если он был включен
+    if (state.followMode) {
+      disableFollowMode();
+    }
+
+    final crosshairPos = _getCrosshairScreenPoint();
+    final delta = crosshairPos - tapScreenPoint;
+
+    final newTransform = state.transformState.copyWith(
+      translation: state.transformState.translation + delta,
+    );
+
+    updateTransform(newTransform);
   }
 }

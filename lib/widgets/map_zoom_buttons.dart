@@ -60,7 +60,7 @@ class MapZoomButtons extends StatelessWidget {
             onLongPress: onHereFromClipboard,
             enabled: hereEnabled,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 36), // Добавлено пространство
           // Стандартные кнопки масштаба и поворота
           _buildButton(icon: Icons.add, onPressed: onZoomIn),
           const SizedBox(height: 12),

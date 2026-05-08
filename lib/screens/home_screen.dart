@@ -103,8 +103,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ],
         ),
-        body: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        body: ListView(
           children: [
             CompassSection(
               headingNotifier: _state.headingNotifier,
