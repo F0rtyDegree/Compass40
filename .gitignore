@@ -1,16 +1,28 @@
+```
+# Dependencies
 .dart_tool/
-build/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-.pub-cache/
+.build/
+.pub/
+pubspec.lock
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
+.vscode/
+.idea/
 *.iml
 *.ipr
 *.iws
-*.apk
-*.gz
-*.log
-.idea/
-.vscode/
-android/.gradle/
-android/local.properties
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```
