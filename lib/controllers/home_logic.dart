@@ -172,55 +172,6 @@ class HomeLogic {
     );
   }
 
-  double _calculateCircularMedian(List<double> samples) {
-    if (samples.isEmpty) return 0.0;
-    if (samples.length == 1) return samples[0];
-
-    samples.sort();
-
-    double maxGap = 0;
-    int maxGapIndex = -1;
-
-    for (int i = 0; i < samples.length - 1; i++) {
-      final gap = samples[i + 1] - samples[i];
-      if (gap > maxGap) {
-        maxGap = gap;
-        maxGapIndex = i;
-      }
-    }
-
-    final wrapAroundGap = (samples.first + 360) - samples.last;
-    if (wrapAroundGap > maxGap) {
-      maxGap = wrapAroundGap;
-      maxGapIndex = samples.length - 1;
-    }
-
-    List<double> shiftedSamples;
-    if (maxGapIndex == samples.length - 1) {
-      shiftedSamples = List.from(samples);
-    } else {
-      shiftedSamples = [];
-      final shiftPoint = samples[maxGapIndex];
-      for (final s in samples) {
-        if (s > shiftPoint) {
-          shiftedSamples.add(s);
-        } else {
-          shiftedSamples.add(s + 360);
-        }
-      }
-    }
-
-    double median;
-    int mid = shiftedSamples.length ~/ 2;
-    if (shiftedSamples.length % 2 == 1) {
-      median = shiftedSamples[mid];
-    } else {
-      median = (shiftedSamples[mid - 1] + shiftedSamples[mid]) / 2.0;
-    }
-
-    return median % 360;
-  }
-
   void _updateHeading() {
     final now = DateTime.now().millisecondsSinceEpoch;
 
@@ -252,7 +203,7 @@ class HomeLogic {
       );
       if (state.headingSamples.isEmpty) return;
       final headings = state.headingSamples.map((s) => s.$1).toList();
-      newHeading = _calculateCircularMedian(headings);
+      newHeading = calculateCircularMedian(headings);
     }
 
     double diff = newHeading - state.filteredHeading;

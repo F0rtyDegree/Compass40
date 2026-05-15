@@ -1,64 +1,102 @@
-import 'dart:math' as math;
+import 'dart:math';
 
-/// Расчёт координат цели по дистанции и истинному азимуту
+/// Вычисляет круговую медиану для списка углов (в градусах).
+double calculateCircularMedian(List<double> angles) {
+  if (angles.isEmpty) return 0.0;
+  if (angles.length == 1) return angles.first % 360;
+
+  final sorted = List<double>.from(angles)..sort();
+  final n = sorted.length;
+  
+  double maxGap = 0;
+  int gapIndex = 0;
+  
+  for (int i = 0; i < n; i++) {
+    final current = sorted[i];
+    final next = sorted[(i + 1) % n];
+    double gap = (next - current) % 360;
+    if (gap < 0) gap += 360;
+    
+    if (gap > maxGap) {
+      maxGap = gap;
+      gapIndex = i;
+    }
+  }
+  
+  final cutList = <double>[];
+  for (int i = 0; i < n; i++) {
+    final idx = (gapIndex + 1 + i) % n;
+    double val = sorted[idx];
+    if (idx <= gapIndex) {
+      val += 360;
+    }
+    cutList.add(val);
+  }
+  
+  double median;
+  if (n % 2 == 1) {
+    median = cutList[n ~/ 2];
+  } else {
+    median = (cutList[n ~/ 2 - 1] + cutList[n ~/ 2]) / 2;
+  }
+  
+  return median % 360;
+}
+
+/// Вычисляет расстояние между двумя точками (в метрах).
+double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+  const double earthRadius = 6371000; // метров
+  final dLat = _toRadians(lat2 - lat1);
+  final dLon = _toRadians(lon2 - lon1);
+  final a = sin(dLat / 2) * sin(dLat / 2) +
+      cos(_toRadians(lat1)) *
+          cos(_toRadians(lat2)) *
+          sin(dLon / 2) *
+          sin(dLon / 2);
+  final c = 2 * asin(sqrt(a));
+  return earthRadius * c;
+}
+
+/// Вычисляет истинный пеленг (азимут) от точки 1 к точке 2 (в градусах).
+double calculateTrueBearing(
+    double lat1, double lon1, double lat2, double lon2) {
+  final dLon = _toRadians(lon2 - lon1);
+  final lat1Rad = _toRadians(lat1);
+  final lat2Rad = _toRadians(lat2);
+
+  final y = sin(dLon) * cos(lat2Rad);
+  final x = cos(lat1Rad) * sin(lat2Rad) -
+      sin(lat1Rad) * cos(lat2Rad) * cos(dLon);
+  final bearingRad = atan2(y, x);
+  final bearingDeg = bearingRad * (180 / pi);
+  
+  return (bearingDeg + 360) % 360;
+}
+
+/// Вычисляет координаты точки, находящейся на заданном расстоянии и пеленге от начальной точки.
 Map<String, double> calculateTargetCoordinates({
   required double startLat,
   required double startLon,
   required double distanceMeters,
-  required double trueBearingDegrees, // истинный азимут
+  required double trueBearingDegrees,
 }) {
-  const R = 6371000.0;
+  const double earthRadius = 6371000; // метров
 
-  final phi1 = startLat * math.pi / 180;
-  final lambda1 = startLon * math.pi / 180;
-  final theta = trueBearingDegrees * math.pi / 180;
-  final dR = distanceMeters / R;
+  final lat1 = startLat * (pi / 180);
+  final lon1 = startLon * (pi / 180);
+  final bearing = trueBearingDegrees * (pi / 180);
+  final d = distanceMeters / earthRadius;
 
-  final sinPhi2 =
-      math.sin(phi1) * math.cos(dR) +
-      math.cos(phi1) * math.sin(dR) * math.cos(theta);
-  final phi2 = math.asin(sinPhi2);
-  final y = math.sin(theta) * math.sin(dR) * math.cos(phi1);
-  final x = math.cos(dR) - math.sin(phi1) * math.sin(phi2);
-  final lambda2 = lambda1 + math.atan2(y, x);
+  final lat2 = asin(sin(lat1) * cos(d) + cos(lat1) * sin(d) * cos(bearing));
+  final lon2 = lon1 + atan2(
+    sin(bearing) * sin(d) * cos(lat1),
+    cos(d) - sin(lat1) * sin(lat2)
+  );
 
   return {
-    'latitude': phi2 * 180 / math.pi,
-    'longitude': lambda2 * 180 / math.pi,
+    'lat': lat2 * (180 / pi),
+    'lon': lon2 * (180 / pi),
   };
 }
 
-double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-  const R = 6371e3;
-  final phi1 = lat1 * math.pi / 180;
-  final phi2 = lat2 * math.pi / 180;
-  final dPhi = (lat2 - lat1) * math.pi / 180;
-  final dLambda = (lon2 - lon1) * math.pi / 180;
-
-  final a =
-      math.sin(dPhi / 2) * math.sin(dPhi / 2) +
-      math.cos(phi1) *
-          math.cos(phi2) *
-          math.sin(dLambda / 2) *
-          math.sin(dLambda / 2);
-  final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-  return R * c;
-}
-
-/// Возвращает истинный азимут
-double calculateTrueBearing(
-  double lat1,
-  double lon1,
-  double lat2,
-  double lon2,
-) {
-  final phi1 = lat1 * math.pi / 180;
-  final phi2 = lat2 * math.pi / 180;
-  final dLambda = (lon2 - lon1) * math.pi / 180;
-
-  final y = math.sin(dLambda) * math.cos(phi2);
-  final x =
-      math.cos(phi1) * math.sin(phi2) -
-      math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
-  return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
-}
+double _toRadians(double degrees) => degrees * (pi / 180);

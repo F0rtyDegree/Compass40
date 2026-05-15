@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
+import '../utils/geo_utils.dart';
 
 class GpsCompassService {
   static final GpsCompassService instance = GpsCompassService._();
@@ -69,47 +70,12 @@ class GpsCompassService {
 
     // Берём последние windowSize сэмплов
     final recent = _samples.sublist(_samples.length - windowSize);
-    final median = _calculateCircularMedian(List.from(recent));
+    final median = calculateCircularMedian(List.from(recent));
     final smoothing = _settings?.smoothingFactor ?? 0.5;
     double diff = median - _filteredBearing;
     if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
     _filteredBearing = (_filteredBearing + smoothing * diff) % 360;
     bearingNotifier.value = _filteredBearing;
-  }
-
-  double _calculateCircularMedian(List<double> samples) {
-    if (samples.isEmpty) return 0.0;
-    if (samples.length == 1) return samples[0];
-    samples.sort();
-    double maxGap = 0;
-    int maxGapIndex = -1;
-    for (int i = 0; i < samples.length - 1; i++) {
-      final gap = samples[i + 1] - samples[i];
-      if (gap > maxGap) {
-        maxGap = gap;
-        maxGapIndex = i;
-      }
-    }
-    final wrapAroundGap = (samples.first + 360) - samples.last;
-    if (wrapAroundGap > maxGap) {
-      maxGap = wrapAroundGap;
-      maxGapIndex = samples.length - 1;
-    }
-    List<double> shiftedSamples;
-    if (maxGapIndex == samples.length - 1) {
-      shiftedSamples = List.from(samples);
-    } else {
-      shiftedSamples = [];
-      final shiftPoint = samples[maxGapIndex];
-      for (final s in samples) {
-        shiftedSamples.add(s > shiftPoint ? s : s + 360);
-      }
-    }
-    int mid = shiftedSamples.length ~/ 2;
-    double median = shiftedSamples.length % 2 == 1
-        ? shiftedSamples[mid]
-        : (shiftedSamples[mid - 1] + shiftedSamples[mid]) / 2.0;
-    return median % 360;
   }
 
   void dispose() {
