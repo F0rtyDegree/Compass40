@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/map_transform_state.dart';
 
+// Статический кеш загруженных изображений
+final Map<String, ui.Image> _imageCache = {};
+
 /// Отрисовывает изображение карты с трансформацией.
-/// Центр координатной системы — центр viewport.
-/// Изображение рисуется своим центром в центре экрана,
-/// затем применяется масштаб, поворот и пользовательский сдвиг.
-class MapImageLayer extends StatelessWidget {
+class MapImageLayer extends StatefulWidget {
   final String imagePath;
   final Size imageSize;
   final MapTransformState transformState;
@@ -22,29 +22,88 @@ class MapImageLayer extends StatelessWidget {
   });
 
   @override
+  State<MapImageLayer> createState() => _MapImageLayerState();
+}
+
+class _MapImageLayerState extends State<MapImageLayer> {
+  ui.Image? _image;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImage();
+  }
+
+  @override
+  void didUpdateWidget(MapImageLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.imagePath != oldWidget.imagePath) {
+      _loadImage();
+    }
+  }
+
+  Future<void> _loadImage() async {
+    if (_imageCache.containsKey(widget.imagePath)) {
+      if (mounted) {
+        setState(() {
+          _image = _imageCache[widget.imagePath];
+        });
+      }
+      return;
+    }
+
+    if (_isLoading) return;
+    
+    if(mounted){
+      setState(() {
+        _isLoading = true;
+        _image = null; // Reset image on new load
+      });
+    }
+
+    try {
+      final bytes = await File(widget.imagePath).readAsBytes();
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final loadedImage = frame.image;
+      _imageCache[widget.imagePath] = loadedImage;
+      if (mounted) {
+        setState(() {
+          _image = loadedImage;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final s = transformState.scale;
-    final r = transformState.rotationRadians;
-    final tx = transformState.translation.dx;
-    final ty = transformState.translation.dy;
+    final s = widget.transformState.scale;
+    final r = widget.transformState.rotationRadians;
+    final tx = widget.transformState.translation.dx;
+    final ty = widget.transformState.translation.dy;
 
-    // Центр viewport
-    final vpCx = viewportSize.width / 2.0;
-    final vpCy = viewportSize.height / 2.0;
+    final vpCx = widget.viewportSize.width / 2.0;
+    final vpCy = widget.viewportSize.height / 2.0;
 
-    // Итоговое смещение центра изображения на экране:
-    // центр изображения → в начало координат → масштаб+поворот → в центр экрана + пользовательский сдвиг
     final finalX = vpCx + tx;
     final finalY = vpCy + ty;
 
     return ClipRect(
       child: SizedBox(
-        width: viewportSize.width,
-        height: viewportSize.height,
+        width: widget.viewportSize.width,
+        height: widget.viewportSize.height,
         child: CustomPaint(
           painter: _ImagePainter(
-            imagePath: imagePath,
-            imageSize: imageSize,
+            image: _image,
+            imageSize: widget.imageSize,
             scale: s,
             rotation: r,
             centerX: finalX,
@@ -57,19 +116,15 @@ class MapImageLayer extends StatelessWidget {
 }
 
 class _ImagePainter extends CustomPainter {
-  final String imagePath;
+  final ui.Image? image;
   final Size imageSize;
   final double scale;
   final double rotation;
   final double centerX;
   final double centerY;
 
-  // Статический кеш загруженных изображений
-  static final Map<String, ui.Image?> _cache = {};
-  static final Map<String, bool> _loading = {};
-
   _ImagePainter({
-    required this.imagePath,
+    required this.image,
     required this.imageSize,
     required this.scale,
     required this.rotation,
@@ -79,29 +134,18 @@ class _ImagePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cachedImage = _cache[imagePath];
-
-    if (cachedImage == null) {
-      // Рисуем placeholder
+    if (image == null) {
       _drawPlaceholder(canvas);
-      // Запускаем загрузку если ещё не загружается
-      if (_loading[imagePath] != true) {
-        _loading[imagePath] = true;
-        _loadImage(imagePath);
-      }
       return;
     }
 
     canvas.save();
-
-    // Переходим в точку отображения центра карты
     canvas.translate(centerX, centerY);
     canvas.rotate(rotation);
     canvas.scale(scale);
 
-    // Рисуем изображение со смещением так, чтобы его центр совпал с (0,0)
     canvas.drawImage(
-      cachedImage,
+      image!,
       Offset(-imageSize.width / 2, -imageSize.height / 2),
       Paint()..filterQuality = FilterQuality.medium,
     );
@@ -123,24 +167,12 @@ class _ImagePainter extends CustomPainter {
     );
   }
 
-  Future<void> _loadImage(String path) async {
-    try {
-      final bytes = await File(path).readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      _cache[path] = frame.image;
-      _loading[path] = false;
-    } catch (e) {
-      _loading[path] = false;
-    }
-  }
-
   @override
   bool shouldRepaint(covariant _ImagePainter old) {
-    return old.scale != scale ||
+    return old.image != image ||
+        old.scale != scale ||
         old.rotation != rotation ||
         old.centerX != centerX ||
-        old.centerY != centerY ||
-        old.imagePath != imagePath;
+        old.centerY != centerY;
   }
 }
