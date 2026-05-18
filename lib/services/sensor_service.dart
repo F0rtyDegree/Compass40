@@ -1,13 +1,51 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:my_compass/my_compass.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../controllers/home_state.dart';
+
+/// Обертка над реальной подпиской для корректного управления жизненным циклом.
+/// Гарантирует вызов callback'а onCancel при отмене и предотвращает двойную отмену.
+class _WrappedSubscription<T> implements StreamSubscription<T> {
+  final StreamSubscription<T> _inner;
+  final void Function()? onCancel;
+  bool _isCanceled = false;
+
+  _WrappedSubscription(this._inner, {this.onCancel});
+
+  @override
+  Future<void> cancel() async {
+    if (_isCanceled) return;
+    _isCanceled = true;
+    await _inner.cancel();
+    onCancel?.call();
+  }
+
+  @override
+  void onData(void Function(T data)? handleData) => _inner.onData(handleData);
+
+  @override
+  void onError(Function? handleError) => _inner.onError(handleError);
+
+  @override
+  void onDone(void Function()? onDone) => _inner.onDone(onDone);
+
+  @override
+  void pause([Future<void>? resumeSignal]) => _inner.pause(resumeSignal);
+
+  @override
+  void resume() => _inner.resume();
+
+  @override
+  Future<E> asFuture<E>([E? defaultValue]) => _inner.asFuture(defaultValue);
+
+  @override
+  bool get isPaused => _inner.isPaused;
+}
 
 class SensorService {
   static final SensorService _instance = SensorService._internal();
@@ -18,6 +56,8 @@ class SensorService {
   Stream<GpsData>? _sharedGpsStream;
   StreamSubscription<GpsData>? _sharedGpsSubscription;
   int? _sharedGpsIntervalMs;
+  
+  // Храним пары (подписка, коллбек) для очистки, но основная логика теперь в обертке
   final List<void Function(GpsData)> _gpsListeners = [];
 
   final GpsInfo _gpsInfo = GpsInfo();
@@ -71,7 +111,7 @@ class SensorService {
     final intervalMs = intervalSeconds * 1000;
     if (_sharedGpsStream != null && _sharedGpsIntervalMs == intervalMs) return;
 
-    // Закрываем старый
+    // Закрываем старый поток
     _sharedGpsSubscription?.cancel();
     _sharedGpsStream = null;
 
@@ -111,18 +151,31 @@ class SensorService {
 
     _gpsListeners.add(onData);
 
-    return _GpsListenerSubscription(
-      onCancel: () {
-        _gpsListeners.remove(onData);
-        if (_gpsListeners.isEmpty) {
-          _sharedGpsSubscription?.cancel();
-          _sharedGpsSubscription = null;
-          _sharedGpsStream = null;
-          _sharedGpsIntervalMs = null;
-          developer.log('Shared GPS stream stopped.', name: 'by.fortydegree.compass40');
-        }
-      },
-    );
+    // Создаем реальную подписку на поток
+    final innerSubscription = _sharedGpsStream!.listen((data) {
+      try {
+        onData(data);
+      } catch (e) {
+        developer.log(
+          'Error in GPS listener callback',
+          name: 'by.fortydegree.compass40',
+          error: e,
+        );
+      }
+    });
+
+    // Возвращаем обертку, которая удалит слушателя из списка при отмене
+    return _WrappedSubscription(innerSubscription, onCancel: () {
+      _gpsListeners.remove(onData);
+      
+      if (_gpsListeners.isEmpty) {
+        _sharedGpsSubscription?.cancel();
+        _sharedGpsSubscription = null;
+        _sharedGpsStream = null;
+        _sharedGpsIntervalMs = null;
+        developer.log('Shared GPS stream stopped.', name: 'by.fortydegree.compass40');
+      }
+    });
   }
 
   // ------------------------------------------------------------
@@ -147,48 +200,6 @@ class SensorService {
         );
       },
     );
-  }
-}
-
-// Вспомогательный класс подписки
-class _GpsListenerSubscription implements StreamSubscription<GpsData> {
-  final VoidCallback _onCancel;
-  bool _isCanceled = false;
-
-  _GpsListenerSubscription({required VoidCallback onCancel}) : _onCancel = onCancel;
-
-  @override
-  Future<void> cancel() async {
-    if (!_isCanceled) {
-      _isCanceled = true;
-      _onCancel();
-    }
-  }
-
-  @override
-  void onData(void Function(GpsData)? handleData) {}
-
-  @override
-  void onError(Function? handleError) {}
-
-  @override
-  void onDone(void Function()? handleDone) {}
-
-  @override
-  bool get isPaused => false;
-
-  @override
-  void pause([Future<void>? resumeSignal]) {}
-
-  @override
-  void resume() {}
-
-  @override
-  Future<E> asFuture<E>([E? futureValue]) async {
-    if (futureValue != null) {
-      return futureValue;
-    }
-    return Completer<E>().future;
   }
 }
 

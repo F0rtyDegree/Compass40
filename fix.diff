@@ -1,0 +1,78 @@
+--- a/lib/services/sensor_service.dart
++++ b/lib/services/sensor_service.dart
+@@ -1,6 +1,7 @@
+ import 'dart:async';
+ import 'package:flutter/foundation.dart';
+ 
++/// Обертка над реальной подпиской для корректного управления жизненным циклом
+ class _WrappedSubscription<T> implements StreamSubscription<T> {
+   final StreamSubscription<T> _inner;
+   final void Function()? onCancel;
+@@ -8,24 +9,36 @@ class _WrappedSubscription<T> implements StreamSubscription<T> {
+ 
+   _WrappedSubscription(this._inner, {this.onCancel});
+ 
++  @override
+   Future<void> cancel() async {
+     if (_isCanceled) return;
+     _isCanceled = true;
+     await _inner.cancel();
+     onCancel?.call();
+   }
+ 
++  @override
+   void onData(void Function(T data)? handleData) => _inner.onData(handleData);
++  @override
+   void onError(Function? handleError) => _inner.onError(handleError);
++  @override
+   void onDone(void Function()? onDone) => _inner.onDone(onDone);
++  @override
+   void pause([Future<void>? resumeSignal]) => _inner.pause(resumeSignal);
++  @override
+   void resume() => _inner.resume();
++  @override
+   Future<E> asFuture<E>([E? defaultValue]) => _inner.asFuture(defaultValue);
+ }
+ 
+ class SensorService extends ChangeNotifier {
+-  final List<_GpsListenerSubscription> _gpsListeners = [];
+-  StreamController<GpsData>? _gpsController;
++  final _gpsController = StreamController<GpsData>.broadcast();
++  final Set<StreamSubscription<GpsData>> _gpsListeners = {};
+ 
+   // ... (конструктор остается без изменений)
+ 
+   @override
+   Future<void> dispose() async {
+-    for (var listener in _gpsListeners) {
+-      listener.cancel();
++    await _gpsController.close();
++    for (var sub in _gpsListeners) {
++      await sub.cancel();
+     }
++    _gpsListeners.clear();
++    _gpsController.close();
+     super.dispose();
+   }
+ 
+   StreamSubscription<GpsData> subscribeToGps(void Function(GpsData) onGpsUpdate) {
+-    var sub = _GpsListenerSubscription(
+-      onData: (data) => onGpsUpdate(data),
+-      onCancel: () => _gpsListeners.remove(sub),
+-    );
+-    _gpsListeners.add(sub);
+-    return sub;
++    final subscription = _gpsController.stream.listen(onGpsUpdate);
++    _gpsListeners.add(subscription);
++    
++    return _WrappedSubscription(subscription, onCancel: () {
++      _gpsListeners.remove(subscription);
++    });
+   }
+ 
+   void _emitGpsData(GpsData data) {
+-    for (var listener in _gpsListeners) {
+-      listener.onData(data);
+-    }
++    _gpsController.add(data);
+   }
