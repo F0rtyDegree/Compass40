@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'dart:io'; // Импортируем dart:io
 
 import 'map_screen.dart';
 import 'help_viewer_screen.dart';
@@ -61,10 +62,15 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> _handleExitRequest() async {
-    final exit = await showExitConfirmDialog(context);
-    if (exit == true) {
+    final exitConfirmed = await showExitConfirmDialog(context);
+    if (exitConfirmed == true) {
       await _logic.clearWaypoint();
-      SystemNavigator.pop();
+      // Используем exit(0) для надежного завершения приложения на Android.
+      if (Platform.isAndroid) {
+        exit(0);
+      } else {
+        SystemNavigator.pop();
+      }
     }
   }
 

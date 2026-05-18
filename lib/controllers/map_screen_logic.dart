@@ -953,7 +953,7 @@ class MapScreenLogic {
   void _startGpsSubscription() {
     GpsCompassService.instance.bearingNotifier.addListener(_onGpsBearingChanged);
     _gpsSub = sensorService.subscribeToGps(
-      intervalSeconds: 1,
+      intervalSeconds: _sensorSettings.gpsInterval,
       onData: (gpsData) {
         _lastGpsData = gpsData;
 
