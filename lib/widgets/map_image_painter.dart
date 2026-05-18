@@ -147,7 +147,7 @@ class _ImagePainter extends CustomPainter {
     canvas.drawImage(
       image!,
       Offset(-imageSize.width / 2, -imageSize.height / 2),
-      Paint()..filterQuality = FilterQuality.medium,
+      Paint()..filterQuality = FilterQuality.high,
     );
 
     canvas.restore();
