@@ -79,11 +79,13 @@ class HomeLogic {
   // ----------------------------------------------------------------------
 
   Future<void> _initServicesAndPermissions() async {
+    // Магнитный компас доступен всегда, без разрешения
+    _subscribeToCompassStream();
+
     if (await sensorService.requestLocationPermission()) {
       final settings = await sensorService.loadSettings();
       GpsCompassService.instance.start(settings);
       _subscribeToGpsDataStream();
-      _subscribeToCompassStream();
     }
   }
 
@@ -383,7 +385,7 @@ class HomeLogic {
   String getAccuracyText(double accuracy) {
     switch (accuracy.toInt()) {
       case 0:
-        return 'Низкая (калибруйте)';
+        return 'Инициализация...';
       case 1:
         return 'Средняя (калибруйте)';
       case 2:
@@ -398,7 +400,7 @@ class HomeLogic {
   Color getAccuracyStatusColor(double accuracy) {
     switch (accuracy.toInt()) {
       case 0:
-        return Colors.red;
+        return Colors.grey;
       case 1:
         return Colors.orange;
       case 2:
