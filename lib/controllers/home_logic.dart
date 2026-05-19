@@ -25,8 +25,7 @@ class HomeLogic {
   Future<void> init() async {
     await _loadAllSettings();
     await loadLogEntries();
-    _startGpsCompassService();
-    _requestPermissions();
+    await _initServicesAndPermissions();
   }
 
   void dispose() {
@@ -79,13 +78,10 @@ class HomeLogic {
   // Сенсоры
   // ----------------------------------------------------------------------
 
-  void _startGpsCompassService() async {
-    final settings = await sensorService.loadSettings();
-    GpsCompassService.instance.start(settings);
-  }
-
-  void _requestPermissions() async {
+  Future<void> _initServicesAndPermissions() async {
     if (await sensorService.requestLocationPermission()) {
+      final settings = await sensorService.loadSettings();
+      GpsCompassService.instance.start(settings);
       _subscribeToGpsDataStream();
       _subscribeToCompassStream();
     }
