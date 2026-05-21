@@ -519,16 +519,32 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildAnchorBadge() {
-    final count = _state.project!.anchors.length;
-    if (count == 0) return const SizedBox.shrink();
-    final hasWorkingPair = _state.workingPair != null;
+    final total = _logic.totalAnchorCount;
+    if (total == 0) return const SizedBox.shrink();
+
+    final used = _logic.usedAnchorCount;
+    final rmse = _logic.rmseMeters;
+    final selfError = _logic.selfPointErrorMeters;
+
+    final Color bgColor;
+    if (total >= 3) {
+      bgColor = Colors.green.withAlpha(200);
+    } else if (total == 2 && used == 2) {
+      bgColor = Colors.orange.withAlpha(200);
+    } else {
+      bgColor = Colors.red.withAlpha(200);
+    }
+
+    final buffer = StringBuffer()
+  ..write('$used/$total')
+  ..write(rmse != null ? ' ±${rmse.toStringAsFixed(1)}m' : '')
+  ..write(selfError != null ? ' 📍${selfError.toStringAsFixed(1)}m' : '');
+  final String text = buffer.toString();
+
     return Dismissible(
-      key: ValueKey(count),
+      key: ValueKey(total),
       direction: DismissDirection.horizontal,
-      confirmDismiss: (direction) async {
-        // Разрешаем удаление любой точки привязки без ограничений
-        return true;
-      },
+      confirmDismiss: (direction) async => true,
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
           _logic.undoLastAnchor();
@@ -571,18 +587,14 @@ class _MapScreenState extends State<MapScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: hasWorkingPair
-                ? Colors.green.withAlpha(200)
-                : Colors.orange.withAlpha(200),
+            color: bgColor,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
-            hasWorkingPair
-                ? 'Карта привязана ($count)'
-                : 'Привязок: $count (нужно ≥2, расстояние ≥50м)',
+            text,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
             ),
           ),

@@ -24,7 +24,7 @@ class MapScreenLogic {
   final void Function(String message) showSnackBar;
   final MapStorageService storageService;
   final double magneticDeclination;
-  final MapCalibrationService calibration = MapCalibrationService();
+  final MapCalibrationService _calibrationService = MapCalibrationService();
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
   final Function(double lat, double lon, double? distance, String timeStr)? onAnchorAdded;
@@ -48,6 +48,14 @@ class MapScreenLogic {
     this.onStartNavigation,
     this.onCancelNavigation,
   });
+
+  bool get canPlaceTarget => state.canPlaceTarget;
+  bool get followMode => state.followMode;
+
+  int get usedAnchorCount => _calibrationService.usedAnchorCount;
+  int get totalAnchorCount => _calibrationService.totalAnchorCount;
+  double? get rmseMeters => _calibrationService.rmseMeters;
+  double? get selfPointErrorMeters => _calibrationService.selfPointErrorMeters;
 
   Future<void> init() async {
     _sensorSettings = await sensorService.loadSettings();
@@ -95,6 +103,7 @@ class MapScreenLogic {
       }
     });
 
+    _calibrationService.updateAnchors(project.anchors);
     await _loadImageSize();
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
@@ -196,6 +205,7 @@ class MapScreenLogic {
         state.activeTarget = null;
       });
 
+      _calibrationService.updateAnchors([]);
       await _loadImageSize();
     } catch (e) {
       debugPrint('MapScreenLogic.pickImage error: $e');
@@ -234,6 +244,7 @@ class MapScreenLogic {
       state.currentUserImagePoint = null;
       state.currentUserScreenPoint = null;
     });
+    _calibrationService.updateAnchors([]);
   }
 
   // --------------------------------------------------------
@@ -314,12 +325,9 @@ class MapScreenLogic {
   Offset getCrosshairScreenPoint() => _getCrosshairScreenPoint();
 
   Future<void> copyCrosshairCoordinatesToClipboard() async {
-    if (state.workingPair == null || state.crosshairImagePoint == null) return;
+    if (state.crosshairImagePoint == null) return;
 
-    final geo = calibration.imagePointToGeo(
-      imagePoint: state.crosshairImagePoint!,
-      pair: state.workingPair!,
-    );
+    final geo = _calibrationService.imagePointToGeoFromCurrent(state.crosshairImagePoint!);
 
     if (geo != null) {
       final lat = geo.latitude.toStringAsFixed(6);
@@ -486,7 +494,7 @@ class MapScreenLogic {
     double? distanceFromPrevious;
     if (project.anchors.isNotEmpty) {
       final lastAnchor = project.anchors.last;
-      distanceFromPrevious = calibration.distanceBetweenAnchorsMeters(lastAnchor, MapAnchor(
+      distanceFromPrevious = _calibrationService.distanceBetweenAnchorsMeters(lastAnchor, MapAnchor(
         id: '',
         imageX: imagePoint.dx,
         imageY: imagePoint.dy,
@@ -517,6 +525,7 @@ class MapScreenLogic {
       state.project = updatedProject;
     });
 
+    _calibrationService.updateAnchors(updatedAnchors);
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
     _recalculateUserImagePoint();
@@ -556,6 +565,7 @@ class MapScreenLogic {
       state.project = updatedProject;
     });
 
+    _calibrationService.updateAnchors(updatedAnchors);
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
     _recalculateUserImagePoint();
@@ -592,6 +602,7 @@ class MapScreenLogic {
       state.project = updatedProject;
     });
 
+    _calibrationService.updateAnchors(updatedAnchors);
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
     _recalculateUserImagePoint();
@@ -606,10 +617,7 @@ class MapScreenLogic {
     if (!state.canPlaceTarget) return;
     if (state.crosshairImagePoint == null) return;
 
-    final geo = calibration.imagePointToGeo(
-      imagePoint: state.crosshairImagePoint!,
-      pair: state.workingPair!,
-    );
+    final geo = _calibrationService.imagePointToGeoFromCurrent(state.crosshairImagePoint!);
 
     final target = MapTarget(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -717,12 +725,12 @@ class MapScreenLogic {
 
   void _recalculateWorkingPairAndRotation() {
     final anchors = state.project?.anchors ?? [];
-    final newPair = calibration.selectWorkingPair(anchors);
+    final newPair = _calibrationService.selectWorkingPair(anchors);
 
     setState(() {
       state.workingPair = newPair;
       if (newPair != null) {
-        state.mapRotation = calibration.getMapRotation(newPair) ?? 0.0;
+        state.mapRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
       } else {
         state.mapRotation = 0.0;
       }
@@ -731,30 +739,29 @@ class MapScreenLogic {
 
   void _recalculateCanPlaceTarget() {
     setState(() {
-      state.canPlaceTarget = state.workingPair != null;
+      state.canPlaceTarget = _calibrationService.totalAnchorCount >= 2;
     });
   }
 
   void _recalculateUserImagePoint() {
-    final gps = _lastGpsData;
-    if (gps?.latitude == null || state.workingPair == null || state.project == null) return;
+  final gps = _lastGpsData;
+  if (gps == null) return;
+  final lat = gps.latitude;
+  final lon = gps.longitude;
+  if (lat == null || lon == null || state.project == null) return;
 
-    final imagePoint = calibration.geoToImagePoint(
-      latitude: gps!.latitude!,
-      longitude: gps.longitude!,
-      pair: state.workingPair!,
-    );
-    if (imagePoint == null) return;
+  final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
+  if (imagePoint == null) return;
 
-    final updatedPath = [...state.project!.userPath, imagePoint];
+  final updatedPath = [...state.project!.userPath, imagePoint];
 
-    setState(() {
-      state.currentUserImagePoint = imagePoint;
-      state.project = state.project!.copyWith(userPath: updatedPath);
-    });
-    _recalculateUserScreenPoint();
-    _recalculatePreview();
-  }
+  setState(() {
+    state.currentUserImagePoint = imagePoint;
+    state.project = state.project!.copyWith(userPath: updatedPath);
+  });
+  _recalculateUserScreenPoint();
+  _recalculatePreview();
+}
 
   void _recalculateUserScreenPoint() {
     final imagePoint = state.currentUserImagePoint;
@@ -777,7 +784,7 @@ class MapScreenLogic {
       return;
     }
 
-    final bd = calibration.bearingAndDistance(
+    final bd = _calibrationService.bearingAndDistance(
       fromLat: gps!.latitude!,
       fromLon: gps.longitude!,
       toLat: active!.latitude!,
@@ -793,14 +800,10 @@ class MapScreenLogic {
 
   Future<void> recalculateTargetsAfterNewAnchor({bool restartNavigation = false}) async {
     final project = state.project;
-    final pair = state.workingPair;
-    if (project == null || pair == null) return;
+    if (project == null) return;
 
     final updatedTargets = project.targets.map((t) {
-      final geo = calibration.imagePointToGeo(
-        imagePoint: Offset(t.imageX, t.imageY),
-        pair: pair,
-      );
+      final geo = _calibrationService.imagePointToGeoFromCurrent(Offset(t.imageX, t.imageY));
       if (geo == null) return t;
       return t.copyWith(latitude: geo.latitude, longitude: geo.longitude);
     }).toList();
