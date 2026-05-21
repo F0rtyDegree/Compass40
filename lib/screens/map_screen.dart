@@ -15,7 +15,7 @@ typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 class MapScreen extends StatefulWidget {
   final double magneticDeclination;
   final Function(double lat, double lon, double? distance, String timeStr)?
-  onAnchorAdded;
+      onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
 
@@ -206,6 +206,7 @@ class _MapScreenState extends State<MapScreen> {
                     ..._state.project?.targets ?? [],
                     if (_state.plannedTarget != null) _state.plannedTarget!,
                   ],
+                  activeAnchorIds: _logic.activeAnchorIds ?? {},
                   userPath: _state.project?.userPath ?? [],
                   pathJumpIndices: _state.project?.pathJumpIndices ?? [],
                   currentUserImagePoint: _state.currentUserImagePoint,
@@ -269,8 +270,8 @@ class _MapScreenState extends State<MapScreen> {
                 hereEnabled: !_state.followMode,
                 onTargetPressed: _state.canPlaceTarget && !_state.followMode
                     ? (_state.plannedTarget == null
-                          ? _logic.placePlannedTargetAtCrosshair
-                          : _logic.setTargetAndStartNavigation)
+                        ? _logic.placePlannedTargetAtCrosshair
+                        : _logic.setTargetAndStartNavigation)
                     : null,
                 onTargetLongPressed: null,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
@@ -375,9 +376,8 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterRotate = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
+          final pivotScreenAfterRotate =
+              _logic.imageToScreen(_gestureStartPivotImage!);
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterRotate;
           final newTranslation = _gestureStartTranslation + delta;
@@ -397,8 +397,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         }
-        _logic
-            .resetRotateModeTimer(); // сбросить таймер после каждого жеста вращения
+        _logic.resetRotateModeTimer(); // сбросить таймер после каждого жеста вращения
       } else {
         final delta = details.focalPoint - _gestureStartFocalPoint;
         final newTranslation = _gestureStartTranslation + delta;
@@ -426,9 +425,8 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterScale = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
+          final pivotScreenAfterScale =
+              _logic.imageToScreen(_gestureStartPivotImage!);
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterScale;
           final newTranslation = _gestureStartTranslation + delta;
@@ -459,9 +457,8 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterRotate = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
+          final pivotScreenAfterRotate =
+              _logic.imageToScreen(_gestureStartPivotImage!);
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterRotate;
           final newTranslation = _gestureStartTranslation + delta;
@@ -504,9 +501,8 @@ class _MapScreenState extends State<MapScreen> {
         );
         final oldTransform = _state.transformState;
         _state.transformState = tempTransform;
-        final pivotScreenAfterRotate = _logic.imageToScreen(
-          _gestureStartPivotImage!,
-        );
+        final pivotScreenAfterRotate =
+            _logic.imageToScreen(_gestureStartPivotImage!);
         _state.transformState = oldTransform;
         final delta = pivotScreen - pivotScreenAfterRotate;
         final newTranslation = _gestureStartTranslation + delta;
@@ -531,18 +527,17 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildAnchorBadge() {
-    final total = _logic.totalAnchorCount;
-    if (total == 0) return const SizedBox.shrink();
-
+    final totalCount = _logic.totalAnchorCount;
+    if (totalCount == 0) return const SizedBox.shrink();
     final used = _logic.usedAnchorCount;
     final rmse = _logic.rmseMeters;
     final selfError = _logic.selfPointErrorMeters;
     final metersPerPx = _logic.metersPerScreenPixel;
 
     final Color textColor;
-    if (total >= 3) {
+    if (totalCount >= 3) {
       textColor = Colors.green;
-    } else if (total == 2 && used == 2) {
+    } else if (totalCount == 2 && used == 2) {
       textColor = Colors.orange;
     } else {
       textColor = Colors.red;
@@ -568,7 +563,7 @@ class _MapScreenState extends State<MapScreen> {
         500,
         1000,
         2000,
-        5000,
+        5000
       ];
       for (final num in niceNumbers) {
         final w = num / metersPerPx;
@@ -585,7 +580,7 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
-    final topLeftText = '$used/$total';
+    final topLeftText = '$used/$totalCount';
     final topRightText = rmse != null && selfError != null
         ? '${rmse.toStringAsFixed(1)}/${selfError.toStringAsFixed(1)}'
         : (rmse != null ? '${rmse.toStringAsFixed(1)}m' : '');
@@ -599,36 +594,21 @@ class _MapScreenState extends State<MapScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                topLeftText,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                topRightText,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text(topLeftText,
+                  style: TextStyle(
+                      color: textColor, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text(topRightText,
+                  style: TextStyle(
+                      color: textColor, fontSize: 12, fontWeight: FontWeight.bold)),
             ],
           ),
         );
       } else {
         topRowFullWidth = SizedBox(
           width: segmentWidth,
-          child: Text(
-            topLeftText,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          child: Text(topLeftText,
+              style: TextStyle(
+                  color: textColor, fontSize: 12, fontWeight: FontWeight.bold)),
         );
       }
     }
@@ -657,40 +637,24 @@ class _MapScreenState extends State<MapScreen> {
     } else {
       scaleWidget = Text(
         topLeftText,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
+        style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.bold),
       );
     }
 
     return Dismissible(
-      key: ValueKey(total),
+      key: ValueKey(totalCount),
       direction: DismissDirection.horizontal,
       confirmDismiss: (direction) async => true,
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
           _logic.undoLastAnchor();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Последняя привязка удалена'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
         } else if (direction == DismissDirection.startToEnd) {
           _logic.undoFirstAnchor();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Первая привязка удалена'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
         }
       },
       background: Container(
         decoration: BoxDecoration(
-          color: Colors.red,
+          color: Colors.red.withValues(alpha: 200 / 255),
           borderRadius: BorderRadius.circular(4),
         ),
         alignment: Alignment.centerLeft,
@@ -699,7 +663,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
       secondaryBackground: Container(
         decoration: BoxDecoration(
-          color: Colors.red,
+          color: Colors.red.withValues(alpha: 200 / 255),
           borderRadius: BorderRadius.circular(4),
         ),
         alignment: Alignment.centerRight,

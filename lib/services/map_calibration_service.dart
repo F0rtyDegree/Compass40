@@ -150,10 +150,10 @@ class _AffineTransformerAdapter implements _MapTransformer {
     required List<MapAnchor> selectedPoints,
     required double rmse,
     required double selfError,
-  }) : _affine = affine,
-       _selectedPoints = selectedPoints,
-       _rmse = rmse,
-       _selfError = selfError;
+  })  : _affine = affine,
+        _selectedPoints = selectedPoints,
+        _rmse = rmse,
+        _selfError = selfError;
 
   factory _AffineTransformerAdapter.fromAnchors(List<MapAnchor> anchors) {
     final selected = _selectBestPoints(anchors);
@@ -182,10 +182,87 @@ class _AffineTransformerAdapter implements _MapTransformer {
     double sumSq = 0;
     for (final a in points) {
       final pred = affine.transform(Offset(a.imageX, a.imageY));
-      final d = _haversineDistance(a.latitude, a.longitude, pred.dy, pred.dx);
+      final d =
+          _haversineDistance(a.latitude, a.longitude, pred.dy, pred.dx);
       sumSq += d * d;
     }
     return math.sqrt(sumSq / points.length);
+  }
+
+  /// Отбирает до 6 разнонаправленных точек.
+  /// При <=6 якорях возвращает все.
+  /// При >6 отбирает latest + до 5 точек с максимизацией минимального угла.
+  static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
+    if (anchors.length <= 6) return anchors;
+    final latest = anchors.last;
+    final candidates = anchors.sublist(0, anchors.length - 1);
+    // сортируем по удалённости от latest
+    candidates.sort((a, b) {
+      final da = _pixelDistSq(latest, a);
+      final db = _pixelDistSq(latest, b);
+      return db.compareTo(da);
+    });
+    final selected = <MapAnchor>[latest];
+    const minSeparationPx = 50.0;
+    const minAngleDeg = 15.0;
+
+    while (selected.length < 6) {
+      MapAnchor? bestCandidate;
+      double bestMinAngle = -1;
+      for (final candidate in candidates) {
+        if (selected.contains(candidate)) continue;
+        // проверка минимального расстояния
+        bool farEnough = true;
+        for (final s in selected) {
+          if (_pixelDistSq(s, candidate) < minSeparationPx * minSeparationPx) {
+            farEnough = false;
+            break;
+          }
+        }
+        if (!farEnough) continue;
+        // если в selected только latest, добавляем farthest без проверки угла
+        if (selected.length == 1) {
+          bestCandidate = candidate;
+          break; // farthest – самый удалённый, он уже первый в отсортированном списке
+        }
+        // проверяем углы с уже выбранными точками
+        double minAngle = 180;
+        final vLatest = Offset(latest.imageX, latest.imageY);
+        final vCandidate = Offset(candidate.imageX, candidate.imageY);
+        final dirCandidate = vCandidate - vLatest;
+        final lenCandidate = dirCandidate.distance;
+        if (lenCandidate < 1) continue;
+        for (final s in selected) {
+          if (s == latest) continue;
+          final vS = Offset(s.imageX, s.imageY);
+          final dirS = vS - vLatest;
+          final lenS = dirS.distance;
+          if (lenS < 1) continue;
+          final cosAngle =
+              (dirCandidate.dx * dirS.dx + dirCandidate.dy * dirS.dy) /
+                  (lenCandidate * lenS);
+          final angle =
+              math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
+          if (angle < minAngle) minAngle = angle;
+        }
+        if (minAngle < minAngleDeg || minAngle > 180 - minAngleDeg) {
+          continue; // почти коллинеарен – пропускаем
+        }
+        if (minAngle > bestMinAngle) {
+          bestMinAngle = minAngle;
+          bestCandidate = candidate;
+        } else if (minAngle == bestMinAngle && bestCandidate != null) {
+          // при равных углах выбираем более удалённого
+          if (_pixelDistSq(latest, candidate) >
+              _pixelDistSq(latest, bestCandidate)) {
+            bestCandidate = candidate;
+          }
+        }
+      }
+      if (bestCandidate == null) break; // больше нечего добавить
+      selected.add(bestCandidate);
+    }
+    return selected;
   }
 
   static double _computeSelfError(
@@ -219,31 +296,6 @@ class _AffineTransformerAdapter implements _MapTransformer {
             math.sin(dLon / 2) *
             math.sin(dLon / 2);
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-  }
-
-  static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
-    if (anchors.length <= 6) return anchors;
-    final latest = anchors.last;
-    final candidates = anchors.sublist(0, anchors.length - 1);
-    candidates.sort((a, b) {
-      final da = _pixelDistSq(latest, a);
-      final db = _pixelDistSq(latest, b);
-      return db.compareTo(da);
-    });
-    final selected = <MapAnchor>[latest];
-    const minSeparationPx = 50.0;
-    for (final candidate in candidates) {
-      if (selected.length >= 6) break;
-      bool farEnough = true;
-      for (final s in selected) {
-        if (_pixelDistSq(s, candidate) < minSeparationPx * minSeparationPx) {
-          farEnough = false;
-          break;
-        }
-      }
-      if (farEnough) selected.add(candidate);
-    }
-    return selected;
   }
 
   @override
@@ -300,7 +352,18 @@ class MapCalibrationService {
 
   double? get metersPerImagePixel => _currentTransform?.metersPerImagePixel;
 
-  /// Вызывается извне при любом изменении списка якорей
+  /// ID якорей, используемых в текущем преобразовании
+  Set<String>? get activeAnchorIds {
+    final t = _currentTransform;
+    if (t is _AffineTransformerAdapter) {
+      return t._selectedPoints.map((a) => a.id).toSet();
+    }
+    if (t is SimilarityTransform) {
+      return null; // для двух точек не выделяем
+    }
+    return null;
+  }
+
   void updateAnchors(List<MapAnchor> anchors) {
     _anchors = anchors;
     _buildTransformFromAnchors();
@@ -489,8 +552,7 @@ class MapCalibrationService {
     final dLambda = (toLon - fromLon) * math.pi / 180;
 
     final y = math.sin(dLambda) * math.cos(phi2);
-    final x =
-        math.cos(phi1) * math.sin(phi2) -
+    final x = math.cos(phi1) * math.sin(phi2) -
         math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
 
     final trueBearing = (math.atan2(y, x) * 180 / math.pi + 360) % 360;

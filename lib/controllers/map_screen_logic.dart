@@ -58,6 +58,8 @@ class MapScreenLogic {
   double? get rmseMeters => _calibrationService.rmseMeters;
   double? get selfPointErrorMeters => _calibrationService.selfPointErrorMeters;
 
+  Set<String>? get activeAnchorIds => _calibrationService.activeAnchorIds;
+
   double? get metersPerScreenPixel {
     final imageScale = _calibrationService.metersPerImagePixel;
     if (imageScale == null || state.transformState.scale == 0) return null;

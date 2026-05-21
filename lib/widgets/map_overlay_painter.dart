@@ -11,6 +11,7 @@ class MapOverlayPainter extends CustomPainter {
 
   final List<MapAnchor> anchors;
   final List<MapTarget> targets;
+  final Set<String> activeAnchorIds;
   final List<Offset> userPath;
   final List<int> pathJumpIndices;
 
@@ -29,6 +30,7 @@ class MapOverlayPainter extends CustomPainter {
     required this.viewportSize,
     required this.anchors,
     required this.targets,
+    this.activeAnchorIds = const {},
     this.userPath = const [],
     this.pathJumpIndices = const [],
     this.currentUserImagePoint,
@@ -46,7 +48,7 @@ class MapOverlayPainter extends CustomPainter {
 
     for (final anchor in anchors) {
       final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
-      _drawAnchor(canvas, screen);
+      _drawAnchor(canvas, screen, anchor);
     }
 
     for (final target in targets) {
@@ -73,23 +75,23 @@ class MapOverlayPainter extends CustomPainter {
       _drawCurrentPosition(canvas, screen);
     }
   }
-  
+
   void _drawUserPath(Canvas canvas) {
     if (userPath.length < 2) return;
 
     final solidPathPaint = Paint()
-      ..color = Colors.blue.withAlpha(204)
+      ..color = Colors.blue.withValues(alpha: 204/255)
       ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
 
     final dashedPathPaint = Paint()
-      ..color = Colors.blue.withAlpha(150)
+      ..color = Colors.blue.withValues(alpha: 150/255)
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
-      
+
     final jumpIndicesSet = pathJumpIndices.toSet();
 
     for (int i = 1; i < userPath.length; i++) {
@@ -118,9 +120,12 @@ class MapOverlayPainter extends CustomPainter {
     return center + transformState.translation + rotated;
   }
 
-  void _drawAnchor(Canvas canvas, Offset screen) {
+  void _drawAnchor(Canvas canvas, Offset screen, MapAnchor anchor) {
+    final bool isActive = activeAnchorIds.contains(anchor.id);
+    final Color baseColor = isActive ? Colors.green : Colors.purple;
+
     final paint = Paint()
-      ..color = Colors.purple
+      ..color = baseColor
       ..style = PaintingStyle.fill;
 
     final borderPaint = Paint()
@@ -138,12 +143,14 @@ class MapOverlayPainter extends CustomPainter {
     );
 
     final linePaint = Paint()
-      ..color = Colors.purple
+      ..color = baseColor
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
-    canvas.drawLine(screen + const Offset(-5, 0), screen + const Offset(5, 0), linePaint);
-    canvas.drawLine(screen + const Offset(0, -8), screen + const Offset(0, 5), linePaint);
+    canvas.drawLine(
+        screen + const Offset(-5, 0), screen + const Offset(5, 0), linePaint);
+    canvas.drawLine(
+        screen + const Offset(0, -8), screen + const Offset(0, 5), linePaint);
 
     final path = Path()
       ..moveTo(screen.dx - 5, screen.dy + 5)
@@ -160,7 +167,7 @@ class MapOverlayPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
 
     final innerShadowPaint = Paint()
-      ..color = Colors.black.withAlpha(128)
+      ..color = Colors.black.withValues(alpha: 128/255)
       ..strokeWidth = 0.75
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
@@ -223,7 +230,7 @@ class MapOverlayPainter extends CustomPainter {
 
   void _drawLine(Canvas canvas, Offset from, Offset to) {
     final paint = Paint()
-      ..color = Colors.red.withAlpha(180)
+      ..color = Colors.red.withValues(alpha: 180/255)
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
