@@ -15,7 +15,7 @@ typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 class MapScreen extends StatefulWidget {
   final double magneticDeclination;
   final Function(double lat, double lon, double? distance, String timeStr)?
-      onAnchorAdded;
+  onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
 
@@ -50,7 +50,9 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _logic = MapScreenLogic(
       state: _state,
-      setState: (fn) { if (mounted) setState(fn); },
+      setState: (fn) {
+        if (mounted) setState(fn);
+      },
       showSnackBar: (msg) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -267,8 +269,8 @@ class _MapScreenState extends State<MapScreen> {
                 hereEnabled: !_state.followMode,
                 onTargetPressed: _state.canPlaceTarget && !_state.followMode
                     ? (_state.plannedTarget == null
-                        ? _logic.placePlannedTargetAtCrosshair
-                        : _logic.setTargetAndStartNavigation)
+                          ? _logic.placePlannedTargetAtCrosshair
+                          : _logic.setTargetAndStartNavigation)
                     : null,
                 onTargetLongPressed: null,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
@@ -363,7 +365,8 @@ class _MapScreenState extends State<MapScreen> {
         _accumulatedRotation += deltaAngle;
         _lastAngle = currentAngle;
         const sensitivity = 0.8;
-        final newRotation = _gestureStartRotation + _accumulatedRotation * sensitivity;
+        final newRotation =
+            _gestureStartRotation + _accumulatedRotation * sensitivity;
         if (_gestureStartPivotImage != null) {
           final tempTransform = MapTransformState(
             scale: _state.transformState.scale,
@@ -372,7 +375,9 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterRotate = _logic.imageToScreen(
+            _gestureStartPivotImage!,
+          );
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterRotate;
           final newTranslation = _gestureStartTranslation + delta;
@@ -392,7 +397,8 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         }
-        _logic.resetRotateModeTimer(); // сбросить таймер после каждого жеста вращения
+        _logic
+            .resetRotateModeTimer(); // сбросить таймер после каждого жеста вращения
       } else {
         final delta = details.focalPoint - _gestureStartFocalPoint;
         final newTranslation = _gestureStartTranslation + delta;
@@ -420,7 +426,9 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterScale = _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterScale = _logic.imageToScreen(
+            _gestureStartPivotImage!,
+          );
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterScale;
           final newTranslation = _gestureStartTranslation + delta;
@@ -451,7 +459,9 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterRotate = _logic.imageToScreen(
+            _gestureStartPivotImage!,
+          );
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterRotate;
           final newTranslation = _gestureStartTranslation + delta;
@@ -494,7 +504,9 @@ class _MapScreenState extends State<MapScreen> {
         );
         final oldTransform = _state.transformState;
         _state.transformState = tempTransform;
-        final pivotScreenAfterRotate = _logic.imageToScreen(_gestureStartPivotImage!);
+        final pivotScreenAfterRotate = _logic.imageToScreen(
+          _gestureStartPivotImage!,
+        );
         _state.transformState = oldTransform;
         final delta = pivotScreen - pivotScreenAfterRotate;
         final newTranslation = _gestureStartTranslation + delta;
@@ -525,21 +537,133 @@ class _MapScreenState extends State<MapScreen> {
     final used = _logic.usedAnchorCount;
     final rmse = _logic.rmseMeters;
     final selfError = _logic.selfPointErrorMeters;
+    final metersPerPx = _logic.metersPerScreenPixel;
 
-    final Color bgColor;
+    final Color textColor;
     if (total >= 3) {
-      bgColor = Colors.green.withAlpha(200);
+      textColor = Colors.green;
     } else if (total == 2 && used == 2) {
-      bgColor = Colors.orange.withAlpha(200);
+      textColor = Colors.orange;
     } else {
-      bgColor = Colors.red.withAlpha(200);
+      textColor = Colors.red;
     }
 
-    final buffer = StringBuffer()
-  ..write('$used/$total')
-  ..write(rmse != null ? ' ±${rmse.toStringAsFixed(1)}m' : '')
-  ..write(selfError != null ? ' 📍${selfError.toStringAsFixed(1)}m' : '');
-  final String text = buffer.toString();
+    // Масштабная линейка
+    double segmentWidth = 0;
+    String scaleLabel = '';
+    if (metersPerPx != null && metersPerPx > 0) {
+      final screenWidth = MediaQuery.of(context).size.width;
+      final maxWidth = screenWidth * 0.4;
+      const niceNumbers = [
+        1,
+        2,
+        5,
+        10,
+        20,
+        50,
+        100,
+        150,
+        200,
+        250,
+        500,
+        1000,
+        2000,
+        5000,
+      ];
+      for (final num in niceNumbers) {
+        final w = num / metersPerPx;
+        if (w <= maxWidth) {
+          segmentWidth = w;
+          scaleLabel = '$num м';
+        } else {
+          break;
+        }
+      }
+      if (segmentWidth == 0) {
+        segmentWidth = niceNumbers.last / metersPerPx;
+        scaleLabel = '${niceNumbers.last} м';
+      }
+    }
+
+    final topLeftText = '$used/$total';
+    final topRightText = rmse != null && selfError != null
+        ? '${rmse.toStringAsFixed(1)}/${selfError.toStringAsFixed(1)}'
+        : (rmse != null ? '${rmse.toStringAsFixed(1)}m' : '');
+
+    // Верхняя строка на ширину отрезка
+    Widget topRowFullWidth = const SizedBox.shrink();
+    if (metersPerPx != null && segmentWidth > 0) {
+      if (topRightText.isNotEmpty) {
+        topRowFullWidth = SizedBox(
+          width: segmentWidth,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                topLeftText,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                topRightText,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        topRowFullWidth = SizedBox(
+          width: segmentWidth,
+          child: Text(
+            topLeftText,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      }
+    }
+
+    Widget scaleWidget;
+    if (metersPerPx != null && segmentWidth > 0) {
+      scaleWidget = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: topRowFullWidth,
+          ),
+          Container(width: segmentWidth, height: 2, color: Colors.black),
+          SizedBox(
+            width: segmentWidth,
+            child: Text(
+              scaleLabel,
+              style: const TextStyle(color: Colors.black, fontSize: 11),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      );
+    } else {
+      scaleWidget = Text(
+        topLeftText,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    }
 
     return Dismissible(
       key: ValueKey(total),
@@ -567,38 +691,24 @@ class _MapScreenState extends State<MapScreen> {
       background: Container(
         decoration: BoxDecoration(
           color: Colors.red,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(4),
         ),
         alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.only(left: 20),
+        padding: const EdgeInsets.only(left: 8),
         child: const Icon(Icons.delete_forever, color: Colors.white),
       ),
       secondaryBackground: Container(
         decoration: BoxDecoration(
           color: Colors.red,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(4),
         ),
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
+        padding: const EdgeInsets.only(right: 8),
         child: const Icon(Icons.delete_forever, color: Colors.white),
       ),
       child: Tooltip(
         message: 'Смахни влево — удалить последнюю, вправо — первую',
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            text,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
+        child: scaleWidget,
       ),
     );
   }

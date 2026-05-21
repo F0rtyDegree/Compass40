@@ -28,6 +28,7 @@ abstract class _MapTransformer {
   double? get rmseMeters => null;
   int get usedAnchorCount => 0;
   double? get selfPointErrorMeters => null;
+  double? get metersPerImagePixel => null;
 }
 
 /// Двухточечное подобие (перенос + поворот + равномерный масштаб)
@@ -112,6 +113,9 @@ class SimilarityTransform implements _MapTransformer {
   double? get selfPointErrorMeters => null;
 
   @override
+  double? get metersPerImagePixel => scale;
+
+  @override
   Offset geoToImage(Offset geoPoint) {
     final lon = geoPoint.dx;
     final lat = geoPoint.dy;
@@ -146,10 +150,10 @@ class _AffineTransformerAdapter implements _MapTransformer {
     required List<MapAnchor> selectedPoints,
     required double rmse,
     required double selfError,
-  })  : _affine = affine,
-        _selectedPoints = selectedPoints,
-        _rmse = rmse,
-        _selfError = selfError;
+  }) : _affine = affine,
+       _selectedPoints = selectedPoints,
+       _rmse = rmse,
+       _selfError = selfError;
 
   factory _AffineTransformerAdapter.fromAnchors(List<MapAnchor> anchors) {
     final selected = _selectBestPoints(anchors);
@@ -170,7 +174,7 @@ class _AffineTransformerAdapter implements _MapTransformer {
 
   static List<double> _buildWeights(int n) {
     final w = List.filled(n, 1.0);
-    if (n > 0) w[0] = 1000.0;
+    if (n > 0) w[0] = 10.0;
     return w;
   }
 
@@ -178,30 +182,42 @@ class _AffineTransformerAdapter implements _MapTransformer {
     double sumSq = 0;
     for (final a in points) {
       final pred = affine.transform(Offset(a.imageX, a.imageY));
-      final d = _haversineDistance(
-          a.latitude, a.longitude, pred.dy, pred.dx);
+      final d = _haversineDistance(a.latitude, a.longitude, pred.dy, pred.dx);
       sumSq += d * d;
     }
     return math.sqrt(sumSq / points.length);
   }
 
-  static double _computeSelfError(List<MapAnchor> points, AffineTransform affine) {
+  static double _computeSelfError(
+    List<MapAnchor> points,
+    AffineTransform affine,
+  ) {
     if (points.isEmpty) return 0;
     final latest = points.first;
     final pred = affine.transform(Offset(latest.imageX, latest.imageY));
     return _haversineDistance(
-        latest.latitude, latest.longitude, pred.dy, pred.dx);
+      latest.latitude,
+      latest.longitude,
+      pred.dy,
+      pred.dx,
+    );
   }
 
   static double _haversineDistance(
-      double lat1, double lon1, double lat2, double lon2) {
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
     const R = 6371000.0;
     final dLat = (lat2 - lat1) * math.pi / 180;
     final dLon = (lon2 - lon1) * math.pi / 180;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(lat1 * math.pi / 180) *
             math.cos(lat2 * math.pi / 180) *
-            math.sin(dLon / 2) * math.sin(dLon / 2);
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   }
 
@@ -228,6 +244,15 @@ class _AffineTransformerAdapter implements _MapTransformer {
       if (farEnough) selected.add(candidate);
     }
     return selected;
+  }
+
+  @override
+  double? get metersPerImagePixel {
+    if (_selectedPoints.isEmpty) return null;
+    final dx = _affine.m[0]; // dLon/dx
+    final dy = _affine.m[3]; // dLat/dx
+    final distDeg = math.sqrt(dx * dx + dy * dy);
+    return distDeg * 111320;
   }
 
   static double _pixelDistSq(MapAnchor a, MapAnchor b) {
@@ -273,6 +298,8 @@ class MapCalibrationService {
 
   double? get selfPointErrorMeters => _currentTransform?.selfPointErrorMeters;
 
+  double? get metersPerImagePixel => _currentTransform?.metersPerImagePixel;
+
   /// Вызывается извне при любом изменении списка якорей
   void updateAnchors(List<MapAnchor> anchors) {
     _anchors = anchors;
@@ -285,8 +312,10 @@ class MapCalibrationService {
     } else if (_anchors.length == 2) {
       final pair = selectWorkingPair(_anchors);
       if (pair != null) {
-        _currentTransform =
-            SimilarityTransform.fromPair(pair.latest, pair.reference);
+        _currentTransform = SimilarityTransform.fromPair(
+          pair.latest,
+          pair.reference,
+        );
       } else {
         _currentTransform = null;
       }
@@ -460,7 +489,8 @@ class MapCalibrationService {
     final dLambda = (toLon - fromLon) * math.pi / 180;
 
     final y = math.sin(dLambda) * math.cos(phi2);
-    final x = math.cos(phi1) * math.sin(phi2) -
+    final x =
+        math.cos(phi1) * math.sin(phi2) -
         math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
 
     final trueBearing = (math.atan2(y, x) * 180 / math.pi + 360) % 360;

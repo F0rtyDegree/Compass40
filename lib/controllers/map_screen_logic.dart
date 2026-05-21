@@ -27,7 +27,8 @@ class MapScreenLogic {
   final MapCalibrationService _calibrationService = MapCalibrationService();
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
-  final Function(double lat, double lon, double? distance, String timeStr)? onAnchorAdded;
+  final Function(double lat, double lon, double? distance, String timeStr)?
+      onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   bool _isAutoRotating = false;
@@ -57,6 +58,12 @@ class MapScreenLogic {
   double? get rmseMeters => _calibrationService.rmseMeters;
   double? get selfPointErrorMeters => _calibrationService.selfPointErrorMeters;
 
+  double? get metersPerScreenPixel {
+    final imageScale = _calibrationService.metersPerImagePixel;
+    if (imageScale == null || state.transformState.scale == 0) return null;
+    return imageScale / state.transformState.scale;
+  }
+
   Future<void> init() async {
     _sensorSettings = await sensorService.loadSettings();
     await _loadRotateModeTimeout();
@@ -66,7 +73,8 @@ class MapScreenLogic {
   }
 
   void dispose() {
-    GpsCompassService.instance.bearingNotifier.removeListener(_onGpsBearingChanged);
+    GpsCompassService.instance.bearingNotifier
+        .removeListener(_onGpsBearingChanged);
     if (state.project != null) {
       storageService.saveProject(state.project!);
     }
@@ -83,10 +91,14 @@ class MapScreenLogic {
 
   Future<void> _loadLastProject() async {
     final projectId = await storageService.getCurrentProjectId();
-    if (projectId == null) return;
+    if (projectId == null) {
+      return;
+    }
 
     final project = await storageService.loadProject(projectId);
-    if (project == null) return;
+    if (project == null) {
+      return;
+    }
 
     final savedTransform = await storageService.loadTransform(projectId);
 
@@ -97,8 +109,10 @@ class MapScreenLogic {
         state.transformState = savedTransform;
       }
       try {
-        state.activeTarget = project.targets.firstWhere((t) => t.status == MapTargetStatus.active);
-      } catch(e) {
+        state.activeTarget = project.targets.firstWhere(
+          (t) => t.status == MapTargetStatus.active,
+        );
+      } catch (e) {
         state.activeTarget = null;
       }
     });
@@ -110,9 +124,13 @@ class MapScreenLogic {
   }
 
   Future<void> _loadImageSize() async {
-    if (state.imagePath == null) return;
+    if (state.imagePath == null) {
+      return;
+    }
     final file = File(state.imagePath!);
-    if (!await file.exists()) return;
+    if (!await file.exists()) {
+      return;
+    }
 
     final bytes = await file.readAsBytes();
     final decoded = await decodeImageFromList(bytes);
@@ -144,7 +162,9 @@ class MapScreenLogic {
 
   void _fitImageToViewport(double imgW, double imgH) {
     final vp = state.viewportSize;
-    if (vp == null || imgW == 0 || imgH == 0) return;
+    if (vp == null || imgW == 0 || imgH == 0) {
+      return;
+    }
 
     final fitScale = math.min(vp.width / imgW, vp.height / imgH) * 0.92;
 
@@ -167,7 +187,9 @@ class MapScreenLogic {
     try {
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      if (image == null) return;
+      if (image == null) {
+        return;
+      }
 
       final savedPath = await storageService.saveImageToAppStorage(image.path);
 
@@ -269,7 +291,9 @@ class MapScreenLogic {
   }
 
   void updateViewportSize(Size size) {
-    if (state.viewportSize == size) return;
+    if (state.viewportSize == size) {
+      return;
+    }
     setState(() {
       state.viewportSize = size;
     });
@@ -296,7 +320,9 @@ class MapScreenLogic {
   }
 
   void _scaleAroundCrosshair(MapTransformState current, double newScale) {
-    if (state.viewportSize == null || state.imageSize == null) return;
+    if (state.viewportSize == null || state.imageSize == null) {
+      return;
+    }
     final pivotScreen = getCrosshairScreenPoint();
     final pivotImage = screenToImage(pivotScreen);
     final tempTransform = MapTransformState(
@@ -308,14 +334,20 @@ class MapScreenLogic {
   }
 
   /// Вспомогательный метод: применяет новый трансформ так, чтобы точка на изображении осталась под перекрестием
-  void _applyTransformWithPivot(MapTransformState oldTransform, MapTransformState tempTransform, Offset pivotImage) {
+  void _applyTransformWithPivot(
+    MapTransformState oldTransform,
+    MapTransformState tempTransform,
+    Offset pivotImage,
+  ) {
     final pivotScreen = getCrosshairScreenPoint();
     final saved = state.transformState;
     state.transformState = tempTransform;
     final pivotScreenAfter = imageToScreen(pivotImage);
     state.transformState = saved;
     final delta = pivotScreen - pivotScreenAfter;
-    updateTransform(tempTransform.copyWith(translation: tempTransform.translation + delta));
+    updateTransform(
+      tempTransform.copyWith(translation: tempTransform.translation + delta),
+    );
   }
 
   // --------------------------------------------------------
@@ -325,9 +357,12 @@ class MapScreenLogic {
   Offset getCrosshairScreenPoint() => _getCrosshairScreenPoint();
 
   Future<void> copyCrosshairCoordinatesToClipboard() async {
-    if (state.crosshairImagePoint == null) return;
+    if (state.crosshairImagePoint == null) {
+      return;
+    }
 
-    final geo = _calibrationService.imagePointToGeoFromCurrent(state.crosshairImagePoint!);
+    final geo = _calibrationService
+        .imagePointToGeoFromCurrent(state.crosshairImagePoint!);
 
     if (geo != null) {
       final lat = geo.latitude.toStringAsFixed(6);
@@ -344,7 +379,9 @@ class MapScreenLogic {
   }
 
   Offset _getCrosshairScreenPoint() {
-    if (state.viewportSize == null) return Offset.zero;
+    if (state.viewportSize == null) {
+      return Offset.zero;
+    }
     final vp = state.viewportSize!;
     if (state.crosshairInCenter) {
       return Offset(vp.width / 2, vp.height / 2);
@@ -354,7 +391,9 @@ class MapScreenLogic {
   }
 
   void _recalculateCrosshairImagePoint() {
-    if (state.imageSize == null || state.viewportSize == null) return;
+    if (state.imageSize == null || state.viewportSize == null) {
+      return;
+    }
 
     final screenPoint = _getCrosshairScreenPoint();
     final imagePoint = screenToImage(screenPoint);
@@ -403,7 +442,8 @@ class MapScreenLogic {
     final imageSize = state.imageSize!;
 
     final center = Offset(vp.width / 2, vp.height / 2);
-    final local = imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+    final local =
+        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
     final scaled = local * t.scale;
 
     final angle = t.rotationRadians;
@@ -484,7 +524,9 @@ class MapScreenLogic {
     required double longitude,
   }) async {
     final project = state.project;
-    if (project == null) return;
+    if (project == null) {
+      return;
+    }
 
     final newPathJumpIndices = [...project.pathJumpIndices];
     if (project.userPath.isNotEmpty) {
@@ -494,14 +536,17 @@ class MapScreenLogic {
     double? distanceFromPrevious;
     if (project.anchors.isNotEmpty) {
       final lastAnchor = project.anchors.last;
-      distanceFromPrevious = _calibrationService.distanceBetweenAnchorsMeters(lastAnchor, MapAnchor(
-        id: '',
-        imageX: imagePoint.dx,
-        imageY: imagePoint.dy,
-        latitude: latitude,
-        longitude: longitude,
-        createdAt: DateTime.now(),
-      ));
+      distanceFromPrevious = _calibrationService.distanceBetweenAnchorsMeters(
+        lastAnchor,
+        MapAnchor(
+          id: '',
+          imageX: imagePoint.dx,
+          imageY: imagePoint.dy,
+          latitude: latitude,
+          longitude: longitude,
+          createdAt: DateTime.now(),
+        ),
+      );
     }
 
     final anchor = MapAnchor(
@@ -533,7 +578,8 @@ class MapScreenLogic {
 
     if (onAnchorAdded != null) {
       final now = DateTime.now();
-      final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+      final timeStr =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
       await onAnchorAdded!(latitude, longitude, distanceFromPrevious, timeStr);
     }
 
@@ -578,7 +624,10 @@ class MapScreenLogic {
       return;
     }
 
-    final updatedAnchors = project.anchors.sublist(0, project.anchors.length - 1);
+    final updatedAnchors = project.anchors.sublist(
+      0,
+      project.anchors.length - 1,
+    );
     List<int> updatedPathJumpIndices = [...project.pathJumpIndices];
     List<Offset> updatedUserPath = [...project.userPath];
 
@@ -614,10 +663,15 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void placePlannedTargetAtCrosshair() {
-    if (!state.canPlaceTarget) return;
-    if (state.crosshairImagePoint == null) return;
+    if (!state.canPlaceTarget) {
+      return;
+    }
+    if (state.crosshairImagePoint == null) {
+      return;
+    }
 
-    final geo = _calibrationService.imagePointToGeoFromCurrent(state.crosshairImagePoint!);
+    final geo = _calibrationService
+        .imagePointToGeoFromCurrent(state.crosshairImagePoint!);
 
     final target = MapTarget(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -644,7 +698,9 @@ class MapScreenLogic {
 
   Future<void> setTargetAndStartNavigation() async {
     final planned = state.plannedTarget;
-    if (planned == null || planned.latitude == null || planned.longitude == null) {
+    if (planned == null ||
+        planned.latitude == null ||
+        planned.longitude == null) {
       return;
     }
     await _persistAndSetActiveTarget(copyCoords: false);
@@ -657,10 +713,14 @@ class MapScreenLogic {
 
   Future<void> _persistAndSetActiveTarget({required bool copyCoords}) async {
     final planned = state.plannedTarget;
-    if (planned == null) return;
+    if (planned == null) {
+      return;
+    }
 
     final project = state.project;
-    if (project == null) return;
+    if (project == null) {
+      return;
+    }
 
     if (planned.latitude == null || planned.longitude == null) {
       showSnackBar('Координаты цели не определены — добавьте привязку');
@@ -698,10 +758,14 @@ class MapScreenLogic {
 
   void markActiveTargetAsPassed() async {
     final active = state.activeTarget;
-    if (active == null) return;
+    if (active == null) {
+      return;
+    }
 
     final project = state.project;
-    if (project == null) return;
+    if (project == null) {
+      return;
+    }
 
     final updatedTargets = project.targets.map((t) {
       if (t.id == active.id) {
@@ -744,28 +808,36 @@ class MapScreenLogic {
   }
 
   void _recalculateUserImagePoint() {
-  final gps = _lastGpsData;
-  if (gps == null) return;
-  final lat = gps.latitude;
-  final lon = gps.longitude;
-  if (lat == null || lon == null || state.project == null) return;
+    final gps = _lastGpsData;
+    if (gps == null) {
+      return;
+    }
+    final lat = gps.latitude;
+    final lon = gps.longitude;
+    if (lat == null || lon == null || state.project == null) {
+      return;
+    }
 
-  final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
-  if (imagePoint == null) return;
+    final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
+    if (imagePoint == null) {
+      return;
+    }
 
-  final updatedPath = [...state.project!.userPath, imagePoint];
+    final updatedPath = [...state.project!.userPath, imagePoint];
 
-  setState(() {
-    state.currentUserImagePoint = imagePoint;
-    state.project = state.project!.copyWith(userPath: updatedPath);
-  });
-  _recalculateUserScreenPoint();
-  _recalculatePreview();
-}
+    setState(() {
+      state.currentUserImagePoint = imagePoint;
+      state.project = state.project!.copyWith(userPath: updatedPath);
+    });
+    _recalculateUserScreenPoint();
+    _recalculatePreview();
+  }
 
   void _recalculateUserScreenPoint() {
     final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null) return;
+    if (imagePoint == null) {
+      return;
+    }
 
     setState(() {
       state.currentUserScreenPoint = imageToScreen(imagePoint);
@@ -798,13 +870,21 @@ class MapScreenLogic {
     });
   }
 
-  Future<void> recalculateTargetsAfterNewAnchor({bool restartNavigation = false}) async {
+  Future<void> recalculateTargetsAfterNewAnchor({
+    bool restartNavigation = false,
+  }) async {
     final project = state.project;
-    if (project == null) return;
+    if (project == null) {
+      return;
+    }
 
     final updatedTargets = project.targets.map((t) {
-      final geo = _calibrationService.imagePointToGeoFromCurrent(Offset(t.imageX, t.imageY));
-      if (geo == null) return t;
+      final geo = _calibrationService.imagePointToGeoFromCurrent(
+        Offset(t.imageX, t.imageY),
+      );
+      if (geo == null) {
+        return t;
+      }
       return t.copyWith(latitude: geo.latitude, longitude: geo.longitude);
     }).toList();
 
@@ -813,8 +893,10 @@ class MapScreenLogic {
 
     MapTarget? newActiveTarget;
     try {
-      newActiveTarget = updatedTargets.firstWhere((t) => t.status == MapTargetStatus.active);
-    } catch(e) {
+      newActiveTarget = updatedTargets.firstWhere(
+        (t) => t.status == MapTargetStatus.active,
+      );
+    } catch (e) {
       newActiveTarget = null;
     }
 
@@ -823,8 +905,13 @@ class MapScreenLogic {
       state.activeTarget = newActiveTarget;
     });
 
-    if (restartNavigation && onStartNavigation != null && newActiveTarget?.latitude != null) {
-      await onStartNavigation!(newActiveTarget!.latitude!, newActiveTarget.longitude!);
+    if (restartNavigation &&
+        onStartNavigation != null &&
+        newActiveTarget?.latitude != null) {
+      await onStartNavigation!(
+        newActiveTarget!.latitude!,
+        newActiveTarget.longitude!,
+      );
       showSnackBar('Навигация перезапущена с новыми координатами цели');
     }
   }
@@ -835,7 +922,9 @@ class MapScreenLogic {
 
   void enableFollowMode() {
     if (state.workingPair == null) {
-      showSnackBar('Режим сопровождения доступен только после привязки карты (добавьте минимум 2 точки привязки)');
+      showSnackBar(
+        'Режим сопровождения доступен только после привязки карты (добавьте минимум 2 точки привязки)',
+      );
       return;
     }
     state.followRestoreTimer?.cancel();
@@ -873,7 +962,9 @@ class MapScreenLogic {
 
   void _centerMapOnUser() {
     final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null || state.viewportSize == null) return;
+    if (imagePoint == null || state.viewportSize == null) {
+      return;
+    }
 
     final crosshairScreen = _getCrosshairScreenPoint();
     final vp = state.viewportSize!;
@@ -882,9 +973,12 @@ class MapScreenLogic {
 
     final t = state.transformState;
     final imageSize = state.imageSize;
-    if (imageSize == null) return;
+    if (imageSize == null) {
+      return;
+    }
 
-    final local = imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+    final local =
+        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
     final scaled = local * t.scale;
 
     final angle = t.rotationRadians;
@@ -933,16 +1027,25 @@ class MapScreenLogic {
 
   void _resetRotateModeTimer() {
     state.rotateModeTimer?.cancel();
-    if (!state.rotateMode) return;
-    if (rotateModeTimeoutMs <= 0) return; // 0 = никогда не отключать автоматически
-    state.rotateModeTimer = Timer(Duration(milliseconds: rotateModeTimeoutMs), () {
-      if (state.isDisposed) return;
-      setState(() {
-        state.rotateMode = false;
-        state.rotateModeTimer = null;
-      });
-      // При желании покажите сообщение: showSnackBar("Режим вращения отключён");
-    });
+    if (!state.rotateMode) {
+      return;
+    }
+    if (rotateModeTimeoutMs <= 0) {
+      return; // 0 = никогда не отключать автоматически
+    }
+    state.rotateModeTimer = Timer(
+      Duration(milliseconds: rotateModeTimeoutMs),
+      () {
+        if (state.isDisposed) {
+          return;
+        }
+        setState(() {
+          state.rotateMode = false;
+          state.rotateModeTimer = null;
+        });
+        // При желании покажите сообщение: showSnackBar("Режим вращения отключён");
+      },
+    );
   }
 
   // --------------------------------------------------------
@@ -954,7 +1057,9 @@ class MapScreenLogic {
   }
 
   void _startGpsSubscription() {
-    GpsCompassService.instance.bearingNotifier.addListener(_onGpsBearingChanged);
+    GpsCompassService.instance.bearingNotifier.addListener(
+      _onGpsBearingChanged,
+    );
     _gpsSub = sensorService.subscribeToGps(
       intervalSeconds: _sensorSettings.gpsInterval,
       onData: (gpsData) {
@@ -988,7 +1093,9 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void _applyHeadingRotation() {
-    if (!state.followMode || state.heading == null || state.workingPair == null) return;
+    if (!state.followMode || state.heading == null || state.workingPair == null) {
+      return;
+    }
 
     _isAutoRotating = true;
 
@@ -1019,10 +1126,12 @@ class MapScreenLogic {
 
     _isAutoRotating = false;
   }
-  
+
   /// Перемещает карту так, чтобы точка [tapScreenPoint] оказалась под прицелом.
   void movePointToCrosshair(Offset tapScreenPoint) {
-    if (state.viewportSize == null) return;
+    if (state.viewportSize == null) {
+      return;
+    }
 
     // Выключаем режим следования, если он был включен
     if (state.followMode) {
