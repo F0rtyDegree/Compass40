@@ -593,13 +593,34 @@ class _MapScreenState extends State<MapScreen> {
           width: segmentWidth,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
+            children: [ 
               Text(topLeftText,
                   style: TextStyle(
-                      color: textColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                      color: textColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      shadows: [
+                        Shadow(color: Colors.white, blurRadius: 2),
+                        Shadow(color: Colors.white, blurRadius: 4),
+                      ])),
+              Text('◇',
+                style: TextStyle(
+                  color: textColor, 
+                  fontSize: 14, 
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(color: Colors.white, blurRadius: 2), 
+                    Shadow(color: Colors.white, blurRadius: 4)
+                    ])),
               Text(topRightText,
                   style: TextStyle(
-                      color: textColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                      color: textColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      shadows: [
+                        Shadow(color: Colors.white, blurRadius: 2),
+                        Shadow(color: Colors.white, blurRadius: 4),
+                      ])),
             ],
           ),
         );
@@ -608,7 +629,13 @@ class _MapScreenState extends State<MapScreen> {
           width: segmentWidth,
           child: Text(topLeftText,
               style: TextStyle(
-                  color: textColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                  color: textColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(color: Colors.white, blurRadius: 2),
+                    Shadow(color: Colors.white, blurRadius: 4),
+                  ])),
         );
       }
     }
@@ -628,7 +655,14 @@ class _MapScreenState extends State<MapScreen> {
             width: segmentWidth,
             child: Text(
               scaleLabel,
-              style: const TextStyle(color: Colors.black, fontSize: 11),
+              style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(color: Colors.white, blurRadius: 2),
+                    Shadow(color: Colors.white, blurRadius: 4),
+                  ]),
               textAlign: TextAlign.center,
             ),
           ),
@@ -637,7 +671,14 @@ class _MapScreenState extends State<MapScreen> {
     } else {
       scaleWidget = Text(
         topLeftText,
-        style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.bold),
+        style: TextStyle(
+            color: textColor,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            shadows: [
+              Shadow(color: Colors.white, blurRadius: 2),
+              Shadow(color: Colors.white, blurRadius: 4),
+            ]),
       );
     }
 

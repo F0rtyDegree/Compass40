@@ -1,27 +1,18 @@
 #!/bin/bash
 # Скрипт для сборки релиза APK
 
-echo "--- Запускаю сборку APK ---"
-# 5. Отображение информации о свободном месте
-echo "5/5: Информация о свободном месте..."
-df -h .
+flutter clean 
 
-# 1. Очистка проекта
-echo "1/5: Очистка проекта (flutter clean)..."
-flutter clean && \
+flutter pub get
 
-# 2. Получение зависимостей
-echo "2/5: Получение зависимостей (flutter pub get)..."
-flutter pub get && \
+flutter build apk --release
 
-# 3. Сборка APK в режиме релиза
-echo "3/5: Сборка APK (flutter build apk --release)..."
-flutter build apk --release && \
+mv build/app/outputs/flutter-apk/app-release.apk Compass40.apk
 
-# 4. Переименование и перемещение APK в корень проекта
-echo "4/5: Перемещение и переименование APK..."
-mv build/app/outputs/flutter-apk/app-release.apk Compass40.apk && \
+echo "--- сборка завершена: $(date) ---" >> sizes-log
+du -h --max-depth=1 /home/user/ | sort -rh >> sizes-log
+du -h --max-depth=1 /home/user/.gradle | sort -rh >> sizes-log
+du -h --max-depth=1 /home/user/.gradle/daemon | sort -rh >> sizes-log
+du -h --max-depth=1 /home/user/.gradle/caches | sort -rh >> sizes-log
+df -h .  >> sizes-log
 
-echo "---"
-echo "Сборка успешно завершена!"
-echo "Файл Compass40.apk готов в корне проекта."

@@ -12,7 +12,8 @@ build/
 *.log
 .idea/
 .vscode/
+.diff
 android/.gradle/
 android/local.properties
 *.lock
-diff_orig.txt
+sizes-log

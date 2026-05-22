@@ -189,81 +189,129 @@ class _AffineTransformerAdapter implements _MapTransformer {
     return math.sqrt(sumSq / points.length);
   }
 
-  /// Отбирает до 6 разнонаправленных точек.
-  /// При <=6 якорях возвращает все.
-  /// При >6 отбирает latest + до 5 точек с максимизацией минимального угла.
-  static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
-    if (anchors.length <= 6) return anchors;
-    final latest = anchors.last;
-    final candidates = anchors.sublist(0, anchors.length - 1);
-    // сортируем по удалённости от latest
-    candidates.sort((a, b) {
-      final da = _pixelDistSq(latest, a);
-      final db = _pixelDistSq(latest, b);
-      return db.compareTo(da);
-    });
-    final selected = <MapAnchor>[latest];
-    const minSeparationPx = 50.0;
-    const minAngleDeg = 15.0;
+/// Отбирает до 6 точек по принципу:
+/// 1. База: latest + самая удалённая точка (farthest).
+/// 2. Третья точка: ближайшая к углу 60° (но не < 15°).
+/// 3. Далее итеративно добавляется точка, максимально снижающая RMSE
+///    (по всем отобранным), пока не наберём 6 или не исчерпаем улучшения.
+static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
+  final latest = anchors.last;
+  final candidates = anchors.sublist(0, anchors.length - 1);
+  if (candidates.isEmpty) return <MapAnchor>[latest];
 
-    while (selected.length < 6) {
-      MapAnchor? bestCandidate;
-      double bestMinAngle = -1;
-      for (final candidate in candidates) {
-        if (selected.contains(candidate)) continue;
-        // проверка минимального расстояния
-        bool farEnough = true;
-        for (final s in selected) {
-          if (_pixelDistSq(s, candidate) < minSeparationPx * minSeparationPx) {
-            farEnough = false;
-            break;
-          }
-        }
-        if (!farEnough) continue;
-        // если в selected только latest, добавляем farthest без проверки угла
-        if (selected.length == 1) {
-          bestCandidate = candidate;
-          break; // farthest – самый удалённый, он уже первый в отсортированном списке
-        }
-        // проверяем углы с уже выбранными точками
-        double minAngle = 180;
-        final vLatest = Offset(latest.imageX, latest.imageY);
-        final vCandidate = Offset(candidate.imageX, candidate.imageY);
-        final dirCandidate = vCandidate - vLatest;
-        final lenCandidate = dirCandidate.distance;
-        if (lenCandidate < 1) continue;
-        for (final s in selected) {
-          if (s == latest) continue;
-          final vS = Offset(s.imageX, s.imageY);
-          final dirS = vS - vLatest;
-          final lenS = dirS.distance;
-          if (lenS < 1) continue;
-          final cosAngle =
-              (dirCandidate.dx * dirS.dx + dirCandidate.dy * dirS.dy) /
-                  (lenCandidate * lenS);
-          final angle =
-              math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
-          if (angle < minAngle) minAngle = angle;
-        }
-        if (minAngle < minAngleDeg || minAngle > 180 - minAngleDeg) {
-          continue; // почти коллинеарен – пропускаем
-        }
-        if (minAngle > bestMinAngle) {
-          bestMinAngle = minAngle;
-          bestCandidate = candidate;
-        } else if (minAngle == bestMinAngle && bestCandidate != null) {
-          // при равных углах выбираем более удалённого
-          if (_pixelDistSq(latest, candidate) >
-              _pixelDistSq(latest, bestCandidate)) {
-            bestCandidate = candidate;
-          }
-        }
+  // сортируем по удалённости от latest
+  candidates.sort((a, b) {
+    final da = _pixelDistSq(latest, a);
+    final db = _pixelDistSq(latest, b);
+    return db.compareTo(da);
+  });
+
+  final selected = <MapAnchor>[latest];
+  const minSeparationPx = 50.0;
+  const minAngleDeg = 15.0;
+
+  // Шаг 1: добавляем farthest (самый первый в отсортированном списке)
+  final farthest = candidates.first;
+  selected.add(farthest);
+
+  // Если кандидатов больше нет – возвращаем базу из двух
+  if (candidates.length == 1) return selected;
+
+  // Шаг 2: ищем третью точку с углом, наиболее близким к 60° (но не менее 15°)
+  final vLatest = Offset(latest.imageX, latest.imageY);
+  final vFarthest = Offset(farthest.imageX, farthest.imageY);
+  final baseDir = vFarthest - vLatest;
+  final baseLen = baseDir.distance;
+  if (baseLen < 1) return selected; // крайне редкий случай
+
+  MapAnchor? bestThird;
+  double bestAngleDiff = double.infinity; // разница с целевым углом 60°
+  for (int i = 1; i < candidates.length; i++) {
+    final candidate = candidates[i];
+    // проверка минимального расстояния
+    bool farEnough = true;
+    for (final s in selected) {
+      if (_pixelDistSq(s, candidate) < minSeparationPx * minSeparationPx) {
+        farEnough = false;
+        break;
       }
-      if (bestCandidate == null) break; // больше нечего добавить
-      selected.add(bestCandidate);
     }
+    if (!farEnough) continue;
+
+    final vCand = Offset(candidate.imageX, candidate.imageY);
+    final dirCand = vCand - vLatest;
+    final lenCand = dirCand.distance;
+    if (lenCand < 1) continue;
+    final cosAngle = (baseDir.dx * dirCand.dx + baseDir.dy * dirCand.dy) /
+        (baseLen * lenCand);
+    final angle = math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
+
+    if (angle < minAngleDeg || angle > 180 - minAngleDeg) continue; // почти коллинеарен
+
+    final diff = (angle - 60).abs();
+    if (diff < bestAngleDiff) {
+      bestAngleDiff = diff;
+      bestThird = candidate;
+    }
+  }
+
+  // Если нашли третью, добавляем её, иначе останавливаемся (база из двух)
+  if (bestThird != null) {
+    selected.add(bestThird);
+  } else {
     return selected;
   }
+
+  // Шаг 3: итеративное добавление 4-6 точек по минимуму RMSE
+  // Строим вспомогательную функцию для оценки RMSE на наборе точек
+  double computeRmse(List<MapAnchor> points) {
+    final affine = AffineTransform.fromPoints(
+      points.map((a) => Offset(a.imageX, a.imageY)).toList(),
+      points.map((a) => Offset(a.longitude, a.latitude)).toList(),
+      weights: _buildWeights(points.length), // latest вес 10, остальные 1
+    );
+    double sumSq = 0;
+    for (final a in points) {
+      final pred = affine.transform(Offset(a.imageX, a.imageY));
+      final d = _haversineDistance(a.latitude, a.longitude, pred.dy, pred.dx);
+      sumSq += d * d;
+    }
+    return math.sqrt(sumSq / points.length);
+  }
+
+  double currentRmse = computeRmse(selected);
+  while (selected.length < 6) {
+    // исключаем уже выбранные
+    final remaining = candidates.where((c) => !selected.contains(c)).toList();
+    if (remaining.isEmpty) break;
+
+    MapAnchor? bestCandidate;
+    double bestRmse = currentRmse;
+    for (final candidate in remaining) {
+      // проверка минимального расстояния
+      bool farEnough = true;
+      for (final s in selected) {
+        if (_pixelDistSq(s, candidate) < minSeparationPx * minSeparationPx) {
+          farEnough = false;
+          break;
+        }
+      }
+      if (!farEnough) continue;
+
+      final testSet = [...selected, candidate];
+      final testRmse = computeRmse(testSet);
+      if (testRmse < bestRmse) {
+        bestRmse = testRmse;
+        bestCandidate = candidate;
+      }
+    }
+    if (bestCandidate == null || bestRmse >= currentRmse) break; // не улучшили
+    selected.add(bestCandidate);
+    currentRmse = bestRmse;
+  }
+
+  return selected;
+}
 
   static double _computeSelfError(
     List<MapAnchor> points,
@@ -370,22 +418,32 @@ class MapCalibrationService {
   }
 
   void _buildTransformFromAnchors() {
-    if (_anchors.length >= 3) {
-      _currentTransform = _AffineTransformerAdapter.fromAnchors(_anchors);
-    } else if (_anchors.length == 2) {
-      final pair = selectWorkingPair(_anchors);
-      if (pair != null) {
-        _currentTransform = SimilarityTransform.fromPair(
-          pair.latest,
-          pair.reference,
-        );
-      } else {
-        _currentTransform = null;
+  if (_anchors.length >= 3) {
+      _MapTransformer? transform;
+      try {
+        final adapter = _AffineTransformerAdapter.fromAnchors(_anchors);
+        transform = adapter;
+      } catch (_) {
+        transform = null;
       }
-    } else {
-      _currentTransform = null;
-    }
+      if (transform != null && transform.usedAnchorCount >= 3) {
+        _currentTransform = transform;
+      } else {
+        // Не удалось набрать 3 неколлинеарные точки – используем двухточечную схему
+        final pair = selectWorkingPair(_anchors);
+        _currentTransform = pair != null
+            ? SimilarityTransform.fromPair(pair.latest, pair.reference)
+            : null;
+      }
+  } else if (_anchors.length == 2) {
+    final pair = selectWorkingPair(_anchors);
+    _currentTransform = pair != null
+        ? SimilarityTransform.fromPair(pair.latest, pair.reference)
+        : null;
+  } else {
+    _currentTransform = null;
   }
+}
 
   /// Преобразование изображение → гео (использует текущее состояние)
   GeoPoint? imagePointToGeoFromCurrent(Offset imagePoint) {
