@@ -579,11 +579,14 @@ class MapScreenLogic {
     await recalculateTargetsAfterNewAnchor(restartNavigation: true);
 
     if (onAnchorAdded != null) {
-      final now = DateTime.now();
-      final timeStr =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-      await onAnchorAdded!(latitude, longitude, distanceFromPrevious, timeStr);
-    }
+       final now = DateTime.now();
+       final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+      final anchorIndices = _calibrationService.activeAnchorIndices;
+      final timeWithIndices = anchorIndices != null
+          ? '$timeStr ($anchorIndices)'
+          : timeStr;
+      await onAnchorAdded!(latitude, longitude, distanceFromPrevious, timeWithIndices);
+     }
 
     final anchorNum = updatedAnchors.length;
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');

@@ -150,10 +150,10 @@ class _AffineTransformerAdapter implements _MapTransformer {
     required List<MapAnchor> selectedPoints,
     required double rmse,
     required double selfError,
-  })  : _affine = affine,
-        _selectedPoints = selectedPoints,
-        _rmse = rmse,
-        _selfError = selfError;
+  }) : _affine = affine,
+       _selectedPoints = selectedPoints,
+       _rmse = rmse,
+       _selfError = selfError;
 
   factory _AffineTransformerAdapter.fromAnchors(List<MapAnchor> anchors) {
     final selected = _selectBestPoints(anchors);
@@ -182,136 +182,229 @@ class _AffineTransformerAdapter implements _MapTransformer {
     double sumSq = 0;
     for (final a in points) {
       final pred = affine.transform(Offset(a.imageX, a.imageY));
-      final d =
-          _haversineDistance(a.latitude, a.longitude, pred.dy, pred.dx);
-      sumSq += d * d;
-    }
-    return math.sqrt(sumSq / points.length);
-  }
-
-/// Отбирает до 6 точек по принципу:
-/// 1. База: latest + самая удалённая точка (farthest).
-/// 2. Третья точка: ближайшая к углу 60° (но не < 15°).
-/// 3. Далее итеративно добавляется точка, максимально снижающая RMSE
-///    (по всем отобранным), пока не наберём 6 или не исчерпаем улучшения.
-static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
-  final latest = anchors.last;
-  final candidates = anchors.sublist(0, anchors.length - 1);
-  if (candidates.isEmpty) return <MapAnchor>[latest];
-
-  // сортируем по удалённости от latest
-  candidates.sort((a, b) {
-    final da = _pixelDistSq(latest, a);
-    final db = _pixelDistSq(latest, b);
-    return db.compareTo(da);
-  });
-
-  final selected = <MapAnchor>[latest];
-  const minSeparationPx = 50.0;
-  const minAngleDeg = 15.0;
-
-  // Шаг 1: добавляем farthest (самый первый в отсортированном списке)
-  final farthest = candidates.first;
-  selected.add(farthest);
-
-  // Если кандидатов больше нет – возвращаем базу из двух
-  if (candidates.length == 1) return selected;
-
-  // Шаг 2: ищем третью точку с углом, наиболее близким к 60° (но не менее 15°)
-  final vLatest = Offset(latest.imageX, latest.imageY);
-  final vFarthest = Offset(farthest.imageX, farthest.imageY);
-  final baseDir = vFarthest - vLatest;
-  final baseLen = baseDir.distance;
-  if (baseLen < 1) return selected; // крайне редкий случай
-
-  MapAnchor? bestThird;
-  double bestAngleDiff = double.infinity; // разница с целевым углом 60°
-  for (int i = 1; i < candidates.length; i++) {
-    final candidate = candidates[i];
-    // проверка минимального расстояния
-    bool farEnough = true;
-    for (final s in selected) {
-      if (_pixelDistSq(s, candidate) < minSeparationPx * minSeparationPx) {
-        farEnough = false;
-        break;
-      }
-    }
-    if (!farEnough) continue;
-
-    final vCand = Offset(candidate.imageX, candidate.imageY);
-    final dirCand = vCand - vLatest;
-    final lenCand = dirCand.distance;
-    if (lenCand < 1) continue;
-    final cosAngle = (baseDir.dx * dirCand.dx + baseDir.dy * dirCand.dy) /
-        (baseLen * lenCand);
-    final angle = math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
-
-    if (angle < minAngleDeg || angle > 180 - minAngleDeg) continue; // почти коллинеарен
-
-    final diff = (angle - 60).abs();
-    if (diff < bestAngleDiff) {
-      bestAngleDiff = diff;
-      bestThird = candidate;
-    }
-  }
-
-  // Если нашли третью, добавляем её, иначе останавливаемся (база из двух)
-  if (bestThird != null) {
-    selected.add(bestThird);
-  } else {
-    return selected;
-  }
-
-  // Шаг 3: итеративное добавление 4-6 точек по минимуму RMSE
-  // Строим вспомогательную функцию для оценки RMSE на наборе точек
-  double computeRmse(List<MapAnchor> points) {
-    final affine = AffineTransform.fromPoints(
-      points.map((a) => Offset(a.imageX, a.imageY)).toList(),
-      points.map((a) => Offset(a.longitude, a.latitude)).toList(),
-      weights: _buildWeights(points.length), // latest вес 10, остальные 1
-    );
-    double sumSq = 0;
-    for (final a in points) {
-      final pred = affine.transform(Offset(a.imageX, a.imageY));
       final d = _haversineDistance(a.latitude, a.longitude, pred.dy, pred.dx);
       sumSq += d * d;
     }
     return math.sqrt(sumSq / points.length);
   }
 
-  double currentRmse = computeRmse(selected);
-  while (selected.length < 6) {
-    // исключаем уже выбранные
-    final remaining = candidates.where((c) => !selected.contains(c)).toList();
-    if (remaining.isEmpty) break;
+  /// Алгоритм выбора до 6 опорных точек с максимальным покрытием территории.
+  /// Правила:
+  /// 1. Текущая точка (latest) всегда участвует, позже с большим весом.
+  /// 2. Точки привязки не могут быть ближе 50 метров друг к другу.
+  /// 3. Двухточечная схема (latest + farthest), пока все точки коллинеарны.
+  /// 4. При появлении неколлинеарной точки – поиск треугольника (latest, farthest, X)
+  ///    с максимальной площадью.
+  /// 5. Для 4-х точек: к фиксированному треугольнику добавляется новый latest.
+  /// 6. Для 5-и точек: выбираются 4 точки (кроме latest) с максимальной площадью
+  ///    выпуклой оболочки, и добавляется latest.
+  /// 7. Для 6-и точек: выбираются 5 точек (кроме latest) с максимальной площадью
+  ///    выпуклой оболочки, и добавляется latest.
+  static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
+    final latest = anchors.last;
+    if (anchors.length == 1) return <MapAnchor>[latest];
 
-    MapAnchor? bestCandidate;
-    double bestRmse = currentRmse;
-    for (final candidate in remaining) {
-      // проверка минимального расстояния
-      bool farEnough = true;
-      for (final s in selected) {
-        if (_pixelDistSq(s, candidate) < minSeparationPx * minSeparationPx) {
-          farEnough = false;
-          break;
+    // ---------- вспомогательные функции ----------
+    double distMeters(MapAnchor a, MapAnchor b) {
+      return _haversineDistance(
+        a.latitude,
+        a.longitude,
+        b.latitude,
+        b.longitude,
+      );
+    }
+
+    double triangleAreaM2(MapAnchor a, MapAnchor b, MapAnchor c) {
+      final ab = distMeters(a, b);
+      final bc = distMeters(b, c);
+      final ca = distMeters(c, a);
+      final s = (ab + bc + ca) / 2;
+      if (s - ab <= 0 || s - bc <= 0 || s - ca <= 0) return 0;
+      return math.sqrt(s * (s - ab) * (s - bc) * (s - ca));
+    }
+
+    double convexHullAreaM2(List<MapAnchor> points) {
+      if (points.length < 3) return 0;
+      double sumLat = 0, sumLon = 0;
+      for (final p in points) {
+        sumLat += p.latitude;
+        sumLon += p.longitude;
+      }
+      final centerLat = sumLat / points.length;
+      final centerLon = sumLon / points.length;
+      const metersPerDegLat = 111320.0;
+      final metersPerDegLon = 111320.0 * math.cos(centerLat * math.pi / 180);
+
+      final local = points.map((p) {
+        final dx = (p.longitude - centerLon) * metersPerDegLon;
+        final dy = (p.latitude - centerLat) * metersPerDegLat;
+        return Offset(dx, dy);
+      }).toList();
+
+      int start = 0;
+      for (int i = 1; i < local.length; i++) {
+        if (local[i].dy < local[start].dy ||
+            (local[i].dy == local[start].dy && local[i].dx < local[start].dx)) {
+          start = i;
         }
       }
-      if (!farEnough) continue;
+      final pivot = local[start];
+      final sorted = <Offset>[];
+      for (int i = 0; i < local.length; i++) {
+        if (i == start) continue;
+        sorted.add(local[i]);
+      }
+      sorted.sort((a, b) {
+        final cross =
+            (a.dx - pivot.dx) * (b.dy - pivot.dy) -
+            (a.dy - pivot.dy) * (b.dx - pivot.dx);
+        if (cross != 0) return cross < 0 ? 1 : -1;
+        final distA =
+            (a.dx - pivot.dx) * (a.dx - pivot.dx) +
+            (a.dy - pivot.dy) * (a.dy - pivot.dy);
+        final distB =
+            (b.dx - pivot.dx) * (b.dx - pivot.dx) +
+            (b.dy - pivot.dy) * (b.dy - pivot.dy);
+        return distA.compareTo(distB);
+      });
 
-      final testSet = [...selected, candidate];
-      final testRmse = computeRmse(testSet);
-      if (testRmse < bestRmse) {
-        bestRmse = testRmse;
-        bestCandidate = candidate;
+      final hull = <Offset>[pivot];
+      for (final p in sorted) {
+        while (hull.length >= 2) {
+          final a = hull[hull.length - 2];
+          final b = hull.last;
+          final cross =
+              (b.dx - a.dx) * (p.dy - a.dy) - (b.dy - a.dy) * (p.dx - a.dx);
+          if (cross <= 0) {
+            hull.removeLast();
+          } else {
+            break;
+          }
+        }
+        hull.add(p);
+      }
+
+      double area = 0;
+      for (int i = 0; i < hull.length; i++) {
+        final j = (i + 1) % hull.length;
+        area += hull[i].dx * hull[j].dy;
+        area -= hull[j].dx * hull[i].dy;
+      }
+      return area.abs() / 2;
+    }
+
+    // ---------- основной алгоритм ----------
+    final others = anchors.sublist(0, anchors.length - 1);
+
+    MapAnchor? farthest;
+    double maxDist = -1;
+    for (final a in others) {
+      final d = distMeters(latest, a);
+      if (d >= 50 && d > maxDist) {
+        maxDist = d;
+        farthest = a;
       }
     }
-    if (bestCandidate == null || bestRmse >= currentRmse) break; // не улучшили
-    selected.add(bestCandidate);
-    currentRmse = bestRmse;
-  }
+    if (farthest == null) return <MapAnchor>[latest];
 
-  return selected;
-}
+    final base = <MapAnchor>[latest, farthest];
+    if (others.length == 1) return base;
+
+    bool hasNonCollinear = false;
+    for (final x in others) {
+      if (x == farthest) continue;
+      if (triangleAreaM2(latest, farthest, x) > 1e-6) {
+        hasNonCollinear = true;
+        break;
+      }
+    }
+    if (!hasNonCollinear) return base;
+
+    // Переменная для результата
+    List<MapAnchor> result;
+
+    if (anchors.length == 3) {
+      MapAnchor? bestThird;
+      double bestArea = -1;
+      for (final x in others) {
+        if (x == farthest) continue;
+        if (distMeters(latest, x) < 50 || distMeters(farthest, x) < 50) {
+          continue;
+        }
+
+        final area = triangleAreaM2(latest, farthest, x);
+        if (area > bestArea) {
+          bestArea = area;
+          bestThird = x;
+        }
+      }
+      result = bestThird != null
+          ? <MapAnchor>[latest, farthest, bestThird]
+          : base;
+    } else if (anchors.length == 4) {
+      final latestNow = anchors.last;
+      final prevTriangle = anchors.sublist(0, anchors.length - 1);
+      bool valid = true;
+      for (int i = 0; i < prevTriangle.length && valid; i++) {
+        for (int j = i + 1; j < prevTriangle.length; j++) {
+          if (distMeters(prevTriangle[i], prevTriangle[j]) < 50) valid = false;
+        }
+      }
+      if (valid &&
+          triangleAreaM2(prevTriangle[0], prevTriangle[1], prevTriangle[2]) >
+              1e-6) {
+        result = [...prevTriangle, latestNow];
+      } else {
+        result = <MapAnchor>[latestNow, farthest];
+      }
+    } else {
+      // anchors.length >= 5
+      final n = anchors.length >= 6 ? 5 : 4;
+      final latestNow = anchors.last;
+      final pool = anchors.sublist(0, anchors.length - 1);
+      double bestHullArea = -1;
+      List<MapAnchor>? bestHullSet;
+
+      void findBestCombination(int start, List<MapAnchor> current) {
+        if (current.length == n) {
+          for (int i = 0; i < current.length; i++) {
+            for (int j = i + 1; j < current.length; j++) {
+              if (distMeters(current[i], current[j]) < 50) return;
+            }
+          }
+          final area = convexHullAreaM2(current);
+          if (area > bestHullArea) {
+            bestHullArea = area;
+            bestHullSet = List.from(current);
+          }
+          return;
+        }
+        for (int i = start; i <= pool.length - (n - current.length); i++) {
+          current.add(pool[i]);
+          findBestCombination(i + 1, current);
+          current.removeLast();
+        }
+      }
+
+      findBestCombination(0, []);
+      if (bestHullSet != null && bestHullArea > 0) {
+        if (!bestHullSet!.contains(latestNow)) {
+          bestHullSet!.add(latestNow);
+        }
+        result = bestHullSet!;
+      } else {
+        result = <MapAnchor>[latestNow, farthest];
+      }
+    }
+
+    // Гарантируем, что latest на первом месте (для _computeSelfError)
+    final idx = result.indexOf(latest);
+    if (idx > 0) {
+      final moved = result.removeAt(idx);
+      result.insert(0, moved);
+    }
+    return result;
+  }
 
   static double _computeSelfError(
     List<MapAnchor> points,
@@ -353,12 +446,6 @@ static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
     final dy = _affine.m[3]; // dLat/dx
     final distDeg = math.sqrt(dx * dx + dy * dy);
     return distDeg * 111320;
-  }
-
-  static double _pixelDistSq(MapAnchor a, MapAnchor b) {
-    final dx = a.imageX - b.imageX;
-    final dy = a.imageY - b.imageY;
-    return dx * dx + dy * dy;
   }
 
   @override
@@ -412,13 +499,41 @@ class MapCalibrationService {
     return null;
   }
 
+  /// Возвращает строку с номерами (начиная с 1) активных якорей в _anchors,
+  /// разделёнными пробелами. Например: "9 1 3".
+  String? get activeAnchorIndices {
+    final t = _currentTransform;
+    if (t == null) return null;
+
+    Set<String>? ids;
+    if (t is _AffineTransformerAdapter) {
+      ids = t._selectedPoints.map((a) => a.id).toSet();
+    } else if (t is SimilarityTransform) {
+      // для двухточечной схемы перевычисляем пару
+      final pair = selectWorkingPair(_anchors);
+      if (pair != null) {
+        ids = {pair.latest.id, pair.reference.id};
+      }
+    }
+    if (ids == null || ids.isEmpty) return null;
+
+    final indices = <int>[];
+    for (int i = 0; i < _anchors.length; i++) {
+      if (ids.contains(_anchors[i].id)) {
+        indices.add(i + 1); // нумерация с 1
+      }
+    }
+    indices.sort();
+    return indices.join(' ');
+  }
+
   void updateAnchors(List<MapAnchor> anchors) {
     _anchors = anchors;
     _buildTransformFromAnchors();
   }
 
   void _buildTransformFromAnchors() {
-  if (_anchors.length >= 3) {
+    if (_anchors.length >= 3) {
       _MapTransformer? transform;
       try {
         final adapter = _AffineTransformerAdapter.fromAnchors(_anchors);
@@ -435,15 +550,15 @@ class MapCalibrationService {
             ? SimilarityTransform.fromPair(pair.latest, pair.reference)
             : null;
       }
-  } else if (_anchors.length == 2) {
-    final pair = selectWorkingPair(_anchors);
-    _currentTransform = pair != null
-        ? SimilarityTransform.fromPair(pair.latest, pair.reference)
-        : null;
-  } else {
-    _currentTransform = null;
+    } else if (_anchors.length == 2) {
+      final pair = selectWorkingPair(_anchors);
+      _currentTransform = pair != null
+          ? SimilarityTransform.fromPair(pair.latest, pair.reference)
+          : null;
+    } else {
+      _currentTransform = null;
+    }
   }
-}
 
   /// Преобразование изображение → гео (использует текущее состояние)
   GeoPoint? imagePointToGeoFromCurrent(Offset imagePoint) {
@@ -610,7 +725,8 @@ class MapCalibrationService {
     final dLambda = (toLon - fromLon) * math.pi / 180;
 
     final y = math.sin(dLambda) * math.cos(phi2);
-    final x = math.cos(phi1) * math.sin(phi2) -
+    final x =
+        math.cos(phi1) * math.sin(phi2) -
         math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
 
     final trueBearing = (math.atan2(y, x) * 180 / math.pi + 360) % 360;
