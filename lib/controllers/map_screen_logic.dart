@@ -28,7 +28,7 @@ class MapScreenLogic {
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
   final Function(double lat, double lon, double? distance, String timeStr)?
-      onAnchorAdded;
+  onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   bool _isAutoRotating = false;
@@ -51,7 +51,47 @@ class MapScreenLogic {
   });
 
   bool get canPlaceTarget => state.canPlaceTarget;
+  bool get isTwoPointPreferred => _calibrationService.isTwoPointPreferred;
+
+  void toggleCalibrationScheme() {
+    _calibrationService.toggleCalibrationScheme();
+    _recalculateUserImagePoint(); // обновить позицию курсора при смене схемы
+    setState(() {});
+  }
+
   bool get followMode => state.followMode;
+
+  /// Расстояние в метрах от текущей позиции до перекрестия прицела.
+  /// Возвращает null, если нет GPS, карты или привязки.
+  double? get distanceToCrosshairMeters {
+    final gps = _lastGpsData;
+    final lat = gps?.latitude;
+    final lon = gps?.longitude;
+    if (lat == null || lon == null) return null;
+    final crosshair = state.crosshairImagePoint;
+    if (crosshair == null) return null;
+    final geo = _calibrationService.imagePointToGeoFromCurrent(crosshair);
+    //print('DEBUG_DIST: lat=$lat, lon=$lon, crosshair=$crosshair, geo=$geo');
+    if (geo == null) return null;
+    return _calibrationService.distanceBetweenAnchorsMeters(
+      MapAnchor(
+        id: '',
+        imageX: 0,
+        imageY: 0,
+        latitude: lat,
+        longitude: lon,
+        createdAt: DateTime.now(),
+      ),
+      MapAnchor(
+        id: '',
+        imageX: crosshair.dx,
+        imageY: crosshair.dy,
+        latitude: geo.latitude,
+        longitude: geo.longitude,
+        createdAt: DateTime.now(),
+      ),
+    );
+  }
 
   int get usedAnchorCount => _calibrationService.usedAnchorCount;
   int get totalAnchorCount => _calibrationService.totalAnchorCount;
@@ -62,6 +102,7 @@ class MapScreenLogic {
 
   double? get metersPerScreenPixel {
     final imageScale = _calibrationService.metersPerImagePixel;
+
     if (imageScale == null || state.transformState.scale == 0) return null;
     return imageScale / state.transformState.scale;
   }
@@ -75,8 +116,9 @@ class MapScreenLogic {
   }
 
   void dispose() {
-    GpsCompassService.instance.bearingNotifier
-        .removeListener(_onGpsBearingChanged);
+    GpsCompassService.instance.bearingNotifier.removeListener(
+      _onGpsBearingChanged,
+    );
     if (state.project != null) {
       storageService.saveProject(state.project!);
     }
@@ -363,8 +405,9 @@ class MapScreenLogic {
       return;
     }
 
-    final geo = _calibrationService
-        .imagePointToGeoFromCurrent(state.crosshairImagePoint!);
+    final geo = _calibrationService.imagePointToGeoFromCurrent(
+      state.crosshairImagePoint!,
+    );
 
     if (geo != null) {
       final lat = geo.latitude.toStringAsFixed(6);
@@ -579,14 +622,20 @@ class MapScreenLogic {
     await recalculateTargetsAfterNewAnchor(restartNavigation: true);
 
     if (onAnchorAdded != null) {
-       final now = DateTime.now();
-       final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+      final now = DateTime.now();
+      final timeStr =
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
       final anchorIndices = _calibrationService.activeAnchorIndices;
       final timeWithIndices = anchorIndices != null
           ? '$timeStr ($anchorIndices)'
           : timeStr;
-      await onAnchorAdded!(latitude, longitude, distanceFromPrevious, timeWithIndices);
-     }
+      await onAnchorAdded!(
+        latitude,
+        longitude,
+        distanceFromPrevious,
+        timeWithIndices,
+      );
+    }
 
     final anchorNum = updatedAnchors.length;
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
@@ -675,8 +724,9 @@ class MapScreenLogic {
       return;
     }
 
-    final geo = _calibrationService
-        .imagePointToGeoFromCurrent(state.crosshairImagePoint!);
+    final geo = _calibrationService.imagePointToGeoFromCurrent(
+      state.crosshairImagePoint!,
+    );
 
     final target = MapTarget(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -823,8 +873,11 @@ class MapScreenLogic {
       return;
     }
 
+    //print('DEBUG_RECALC: gps=($lat, $lon)');
     final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
-    if (imagePoint == null) {
+    //print('DEBUG_RECALC: imagePoint after geoToImage=$imagePoint');
+
+    if (imagePoint == null || (imagePoint.dx == 0.0 && imagePoint.dy == 0.0)) {
       return;
     }
 
@@ -1098,7 +1151,9 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void _applyHeadingRotation() {
-    if (!state.followMode || state.heading == null || state.workingPair == null) {
+    if (!state.followMode ||
+        state.heading == null ||
+        state.workingPair == null) {
       return;
     }
 

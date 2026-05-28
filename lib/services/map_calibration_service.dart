@@ -39,6 +39,8 @@ class SimilarityTransform implements _MapTransformer {
   final double referenceImageY;
   final double scale; // метров на пиксель (локальных)
   final double angleRadians;
+  final String latestId;
+  final String referenceId;
 
   SimilarityTransform({
     required this.originLat,
@@ -47,6 +49,8 @@ class SimilarityTransform implements _MapTransformer {
     required this.referenceImageY,
     required this.scale,
     required this.angleRadians,
+    required this.latestId,
+    required this.referenceId,
   });
 
   factory SimilarityTransform.fromPair(MapAnchor latest, MapAnchor reference) {
@@ -79,6 +83,8 @@ class SimilarityTransform implements _MapTransformer {
       referenceImageY: reference.imageY,
       scale: scale,
       angleRadians: angle,
+      latestId: latest.id,
+      referenceId: reference.id,
     );
   }
 
@@ -136,6 +142,8 @@ class SimilarityTransform implements _MapTransformer {
     final dy = rotY / scale;
     return Offset(referenceImageX + dx, referenceImageY + dy);
   }
+
+  Set<String>? get activeAnchorIds => {latestId, referenceId};
 }
 
 /// Адаптер для аффинного преобразования (3+ точек)
@@ -155,18 +163,25 @@ class _AffineTransformerAdapter implements _MapTransformer {
        _rmse = rmse,
        _selfError = selfError;
 
-  factory _AffineTransformerAdapter.fromAnchors(List<MapAnchor> anchors) {
-    final selected = _selectBestPoints(anchors);
+  /// Создаёт адаптер, гарантированно использующий только треугольник (3 точки).
+  factory _AffineTransformerAdapter.fromAnchorsThreePoints(
+    List<MapAnchor> anchors,
+  ) {
+    final selected = _selectBestPoints(anchors, forceComboSize: 2);
+    if (selected.length < 3) {
+      throw ArgumentError('Could not find valid triangle');
+    }
+    final three = selected.take(3).toList();
     final affine = AffineTransform.fromPoints(
-      selected.map((a) => Offset(a.imageX, a.imageY)).toList(),
-      selected.map((a) => Offset(a.longitude, a.latitude)).toList(),
-      weights: _buildWeights(selected.length),
+      three.map((a) => Offset(a.imageX, a.imageY)).toList(),
+      three.map((a) => Offset(a.longitude, a.latitude)).toList(),
+      weights: _buildWeights(three.length),
     );
-    final rmse = _computeRmse(selected, affine);
-    final selfError = _computeSelfError(selected, affine);
+    final rmse = _computeRmse(three, affine);
+    final selfError = _computeSelfError(three, affine);
     return _AffineTransformerAdapter._(
       affine: affine,
-      selectedPoints: selected,
+      selectedPoints: three,
       rmse: rmse,
       selfError: selfError,
     );
@@ -200,7 +215,10 @@ class _AffineTransformerAdapter implements _MapTransformer {
   ///    выпуклой оболочки, и добавляется latest.
   /// 7. Для 6-и точек: выбираются 5 точек (кроме latest) с максимальной площадью
   ///    выпуклой оболочки, и добавляется latest.
-  static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
+  static List<MapAnchor> _selectBestPoints(
+    List<MapAnchor> anchors, {
+    int? forceComboSize,
+  }) {
     final latest = anchors.last;
     if (anchors.length == 1) return <MapAnchor>[latest];
 
@@ -306,104 +324,124 @@ class _AffineTransformerAdapter implements _MapTransformer {
       }
     }
     if (farthest == null) return <MapAnchor>[latest];
+    if (others.length == 1) return <MapAnchor>[latest, farthest];
 
-    final base = <MapAnchor>[latest, farthest];
-    if (others.length == 1) return base;
+    if (forceComboSize != null) {
+      final comboSize = forceComboSize;
+      if (comboSize == 2) {
+        // Ищем третью точку с максимальной площадью треугольника
+        MapAnchor? bestThird;
+        double bestArea = -1;
+        for (final x in others) {
+          if (x == farthest) continue;
+          if (distMeters(latest, x) < 50 || distMeters(farthest, x) < 50) {
+            continue;
+          }
 
-    bool hasNonCollinear = false;
-    for (final x in others) {
-      if (x == farthest) continue;
-      if (triangleAreaM2(latest, farthest, x) > 1e-6) {
-        hasNonCollinear = true;
-        break;
+          // Проверяем угол при вершине latest (между farthest и кандидатом)
+          final a = distMeters(farthest, x);
+          final b = distMeters(latest, x);
+          final c = distMeters(latest, farthest);
+          if (a < 1 || b < 1 || c < 1) continue;
+
+          final cosAngle = (b * b + c * c - a * a) / (2 * b * c);
+          final angle = math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
+
+          //print('DEBUG_TRIANGLE: candidate=${x.id} sides=(${a.toStringAsFixed(1)},${b.toStringAsFixed(1)},${c.toStringAsFixed(1)}) angleLatest=${angle.toStringAsFixed(1)}',);
+
+          // Отбрасываем слишком вытянутые треугольники (угол при latest < 15° или > 165°)
+          if (angle < 15 || angle > 165) {
+            //print('DEBUG_TRIANGLE: rejected due to small/large angle');
+            continue;
+          }
+
+          final area = triangleAreaM2(latest, farthest, x);
+          //print('DEBUG_TRIANGLE: area=${area.toStringAsFixed(1)}');
+
+          if (area > bestArea) {
+            bestArea = area;
+            bestThird = x;
+          }
+        }
+        if (bestArea < 1.0) {
+          // Площадь слишком мала — треугольник почти коллинеарен, возвращаем пустой набор
+          return <MapAnchor>[];
+        }
+        if (bestThird != null) {
+          return <MapAnchor>[latest, farthest, bestThird];
+        } else {
+          return <MapAnchor>[];
+        }
       }
+      // Для других размеров можно оставить общий перебор, если понадобится
     }
-    if (!hasNonCollinear) return base;
 
-    // Переменная для результата
-    List<MapAnchor> result;
-
-    if (anchors.length == 3) {
-      MapAnchor? bestThird;
+    // Перебираем размеры комбинаций от максимально возможного до 2 (треугольник)
+    final int maxCombo = (others.length < 5) ? others.length : 5;
+    for (int comboSize = maxCombo; comboSize >= 2; comboSize--) {
       double bestArea = -1;
-      for (final x in others) {
-        if (x == farthest) continue;
-        if (distMeters(latest, x) < 50 || distMeters(farthest, x) < 50) {
-          continue;
-        }
+      List<MapAnchor>? bestSet;
 
-        final area = triangleAreaM2(latest, farthest, x);
-        if (area > bestArea) {
-          bestArea = area;
-          bestThird = x;
-        }
-      }
-      result = bestThird != null
-          ? <MapAnchor>[latest, farthest, bestThird]
-          : base;
-    } else if (anchors.length == 4) {
-      final latestNow = anchors.last;
-      final prevTriangle = anchors.sublist(0, anchors.length - 1);
-      bool valid = true;
-      for (int i = 0; i < prevTriangle.length && valid; i++) {
-        for (int j = i + 1; j < prevTriangle.length; j++) {
-          if (distMeters(prevTriangle[i], prevTriangle[j]) < 50) valid = false;
-        }
-      }
-      if (valid &&
-          triangleAreaM2(prevTriangle[0], prevTriangle[1], prevTriangle[2]) >
-              1e-6) {
-        result = [...prevTriangle, latestNow];
-      } else {
-        result = <MapAnchor>[latestNow, farthest];
-      }
-    } else {
-      // anchors.length >= 5
-      final n = anchors.length >= 6 ? 5 : 4;
-      final latestNow = anchors.last;
-      final pool = anchors.sublist(0, anchors.length - 1);
-      double bestHullArea = -1;
-      List<MapAnchor>? bestHullSet;
-
-      void findBestCombination(int start, List<MapAnchor> current) {
-        if (current.length == n) {
+      void findCombination(int start, List<MapAnchor> current) {
+        if (current.length == comboSize) {
+          // проверка минимального расстояния 50 м между всеми точками
           for (int i = 0; i < current.length; i++) {
             for (int j = i + 1; j < current.length; j++) {
               if (distMeters(current[i], current[j]) < 50) return;
             }
           }
-          final area = convexHullAreaM2(current);
-          if (area > bestHullArea) {
-            bestHullArea = area;
-            bestHullSet = List.from(current);
+          // также проверяем расстояние от latest до каждой выбранной точки
+          for (final p in current) {
+            if (distMeters(latest, p) < 50) return;
+          }
+          // Для гомографии (4+ точек) обязательно проверяем, что никакие три точки не коллинеарны
+          if (comboSize >= 3) {
+            final allPoints = [latest, ...current];
+            bool hasCollinear = false;
+            for (int i = 0; i < allPoints.length && !hasCollinear; i++) {
+              for (int j = i + 1; j < allPoints.length && !hasCollinear; j++) {
+                for (int k = j + 1; k < allPoints.length; k++) {
+                  if (triangleAreaM2(allPoints[i], allPoints[j], allPoints[k]) <
+                      1.0) {
+                    hasCollinear = true;
+                    break;
+                  }
+                }
+              }
+            }
+            if (hasCollinear) return;
+          }
+          double area;
+          if (comboSize == 2) {
+            area = triangleAreaM2(latest, current[0], current[1]);
+          } else {
+            area = convexHullAreaM2([latest, ...current]);
+          }
+          if (area > bestArea) {
+            bestArea = area;
+            bestSet = List.from(current);
           }
           return;
         }
-        for (int i = start; i <= pool.length - (n - current.length); i++) {
-          current.add(pool[i]);
-          findBestCombination(i + 1, current);
+        for (
+          int i = start;
+          i <= others.length - (comboSize - current.length);
+          i++
+        ) {
+          current.add(others[i]);
+          findCombination(i + 1, current);
           current.removeLast();
         }
       }
 
-      findBestCombination(0, []);
-      if (bestHullSet != null && bestHullArea > 0) {
-        if (!bestHullSet!.contains(latestNow)) {
-          bestHullSet!.add(latestNow);
-        }
-        result = bestHullSet!;
-      } else {
-        result = <MapAnchor>[latestNow, farthest];
+      findCombination(0, []);
+      if (bestSet != null && bestArea > 0) {
+        return [latest, ...bestSet!];
       }
     }
 
-    // Гарантируем, что latest на первом месте (для _computeSelfError)
-    final idx = result.indexOf(latest);
-    if (idx > 0) {
-      final moved = result.removeAt(idx);
-      result.insert(0, moved);
-    }
-    return result;
+    // fallback
+    return <MapAnchor>[latest, farthest];
   }
 
   static double _computeSelfError(
@@ -442,10 +480,18 @@ class _AffineTransformerAdapter implements _MapTransformer {
   @override
   double? get metersPerImagePixel {
     if (_selectedPoints.isEmpty) return null;
-    final dx = _affine.m[0]; // dLon/dx
-    final dy = _affine.m[3]; // dLat/dx
-    final distDeg = math.sqrt(dx * dx + dy * dy);
-    return distDeg * 111320;
+    // Берём точку latest для оценки локального масштаба
+    final p = _selectedPoints.first;
+    final a = _affine.m[0]; // dLon/dx (градусы на пиксель)
+    final d = _affine.m[3]; // dLat/dx (градусы на пиксель)
+    // Переводим градусы в метры с учётом широты
+    final latRad = p.latitude * math.pi / 180;
+    final metersPerDegLon = 111320.0 * math.cos(latRad);
+    final metersPerDegLat = 111320.0;
+    // Компоненты масштаба в метрах на пиксель изображения по оси X
+    final dxMeters = a * metersPerDegLon;
+    final dyMeters = d * metersPerDegLat;
+    return math.sqrt(dxMeters * dxMeters + dyMeters * dyMeters);
   }
 
   @override
@@ -472,6 +518,7 @@ class MapCalibrationService {
   // ---------------------------------------------------------
   List<MapAnchor> _anchors = [];
   _MapTransformer? _currentTransform;
+  bool _preferTwoPoint = false; // true – только двухточечная схема
 
   int get usedAnchorCount {
     final t = _currentTransform;
@@ -490,11 +537,11 @@ class MapCalibrationService {
   /// ID якорей, используемых в текущем преобразовании
   Set<String>? get activeAnchorIds {
     final t = _currentTransform;
+    if (t is SimilarityTransform) {
+      return t.activeAnchorIds;
+    }
     if (t is _AffineTransformerAdapter) {
       return t._selectedPoints.map((a) => a.id).toSet();
-    }
-    if (t is SimilarityTransform) {
-      return null; // для двух точек не выделяем
     }
     return null;
   }
@@ -509,7 +556,6 @@ class MapCalibrationService {
     if (t is _AffineTransformerAdapter) {
       ids = t._selectedPoints.map((a) => a.id).toSet();
     } else if (t is SimilarityTransform) {
-      // для двухточечной схемы перевычисляем пару
       final pair = selectWorkingPair(_anchors);
       if (pair != null) {
         ids = {pair.latest.id, pair.reference.id};
@@ -520,11 +566,18 @@ class MapCalibrationService {
     final indices = <int>[];
     for (int i = 0; i < _anchors.length; i++) {
       if (ids.contains(_anchors[i].id)) {
-        indices.add(i + 1); // нумерация с 1
+        indices.add(i + 1);
       }
     }
     indices.sort();
     return indices.join(' ');
+  }
+
+  bool get isTwoPointPreferred => _preferTwoPoint;
+
+  void toggleCalibrationScheme() {
+    _preferTwoPoint = !_preferTwoPoint;
+    _buildTransformFromAnchors(); // немедленный пересчёт
   }
 
   void updateAnchors(List<MapAnchor> anchors) {
@@ -533,31 +586,58 @@ class MapCalibrationService {
   }
 
   void _buildTransformFromAnchors() {
-    if (_anchors.length >= 3) {
-      _MapTransformer? transform;
-      try {
-        final adapter = _AffineTransformerAdapter.fromAnchors(_anchors);
-        transform = adapter;
-      } catch (_) {
-        transform = null;
-      }
-      if (transform != null && transform.usedAnchorCount >= 3) {
-        _currentTransform = transform;
-      } else {
-        // Не удалось набрать 3 неколлинеарные точки – используем двухточечную схему
+    // Если включён режим принудительных двух точек – только Similarity
+    if (_preferTwoPoint) {
+      if (_anchors.length >= 2) {
         final pair = selectWorkingPair(_anchors);
         _currentTransform = pair != null
             ? SimilarityTransform.fromPair(pair.latest, pair.reference)
             : null;
+      } else {
+        _currentTransform = null;
       }
-    } else if (_anchors.length == 2) {
+      return;
+    }
+
+    // Обычная логика: пробуем трёхточечную аффинную, иначе две точки
+    if (_anchors.length >= 3) {
+      //print('DEBUG_BUILD: trying three-point affine, anchors=${_anchors.length}',);
+      _MapTransformer? transform;
+      try {
+        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(
+          _anchors,
+        );
+        transform = adapter;
+      } catch (_) {
+        //print('DEBUG_BUILD: exception when building three-point affine');
+        transform = null;
+      }
+      if (transform != null && transform.usedAnchorCount == 3) {
+        //print('DEBUG_BUILD: affine built successfully with 3 points');
+        _currentTransform = transform;
+        return;
+      }
+      //print('DEBUG_BUILD: affine failed, falling back to two points');
+      _buildFallback();
+      return;
+    }
+
+    if (_anchors.length == 2) {
       final pair = selectWorkingPair(_anchors);
       _currentTransform = pair != null
           ? SimilarityTransform.fromPair(pair.latest, pair.reference)
           : null;
-    } else {
-      _currentTransform = null;
+      return;
     }
+
+    _currentTransform = null;
+  }
+
+  void _buildFallback() {
+    final pair = selectWorkingPair(_anchors);
+    _currentTransform = pair != null
+        ? SimilarityTransform.fromPair(pair.latest, pair.reference)
+        : null;
   }
 
   /// Преобразование изображение → гео (использует текущее состояние)

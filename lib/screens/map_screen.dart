@@ -15,7 +15,7 @@ typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 class MapScreen extends StatefulWidget {
   final double magneticDeclination;
   final Function(double lat, double lon, double? distance, String timeStr)?
-      onAnchorAdded;
+  onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
 
@@ -270,8 +270,8 @@ class _MapScreenState extends State<MapScreen> {
                 hereEnabled: !_state.followMode,
                 onTargetPressed: _state.canPlaceTarget && !_state.followMode
                     ? (_state.plannedTarget == null
-                        ? _logic.placePlannedTargetAtCrosshair
-                        : _logic.setTargetAndStartNavigation)
+                          ? _logic.placePlannedTargetAtCrosshair
+                          : _logic.setTargetAndStartNavigation)
                     : null,
                 onTargetLongPressed: null,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
@@ -376,8 +376,9 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterRotate =
-              _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterRotate = _logic.imageToScreen(
+            _gestureStartPivotImage!,
+          );
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterRotate;
           final newTranslation = _gestureStartTranslation + delta;
@@ -397,7 +398,8 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         }
-        _logic.resetRotateModeTimer(); // сбросить таймер после каждого жеста вращения
+        _logic
+            .resetRotateModeTimer(); // сбросить таймер после каждого жеста вращения
       } else {
         final delta = details.focalPoint - _gestureStartFocalPoint;
         final newTranslation = _gestureStartTranslation + delta;
@@ -425,8 +427,9 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterScale =
-              _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterScale = _logic.imageToScreen(
+            _gestureStartPivotImage!,
+          );
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterScale;
           final newTranslation = _gestureStartTranslation + delta;
@@ -457,8 +460,9 @@ class _MapScreenState extends State<MapScreen> {
           );
           final oldTransform = _state.transformState;
           _state.transformState = tempTransform;
-          final pivotScreenAfterRotate =
-              _logic.imageToScreen(_gestureStartPivotImage!);
+          final pivotScreenAfterRotate = _logic.imageToScreen(
+            _gestureStartPivotImage!,
+          );
           _state.transformState = oldTransform;
           final delta = pivotScreen - pivotScreenAfterRotate;
           final newTranslation = _gestureStartTranslation + delta;
@@ -501,8 +505,9 @@ class _MapScreenState extends State<MapScreen> {
         );
         final oldTransform = _state.transformState;
         _state.transformState = tempTransform;
-        final pivotScreenAfterRotate =
-            _logic.imageToScreen(_gestureStartPivotImage!);
+        final pivotScreenAfterRotate = _logic.imageToScreen(
+          _gestureStartPivotImage!,
+        );
         _state.transformState = oldTransform;
         final delta = pivotScreen - pivotScreenAfterRotate;
         final newTranslation = _gestureStartTranslation + delta;
@@ -527,17 +532,18 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildAnchorBadge() {
-    final totalCount = _logic.totalAnchorCount;
-    if (totalCount == 0) return const SizedBox.shrink();
+    final total = _logic.totalAnchorCount;
+    if (total == 0) return const SizedBox.shrink();
+
     final used = _logic.usedAnchorCount;
     final rmse = _logic.rmseMeters;
     final selfError = _logic.selfPointErrorMeters;
     final metersPerPx = _logic.metersPerScreenPixel;
 
     final Color textColor;
-    if (totalCount >= 3) {
+    if (total >= 3) {
       textColor = Colors.green;
-    } else if (totalCount == 2 && used == 2) {
+    } else if (total == 2 && used == 2) {
       textColor = Colors.orange;
     } else {
       textColor = Colors.red;
@@ -563,7 +569,7 @@ class _MapScreenState extends State<MapScreen> {
         500,
         1000,
         2000,
-        5000
+        5000,
       ];
       for (final num in niceNumbers) {
         final w = num / metersPerPx;
@@ -580,62 +586,75 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
-    final topLeftText = '$used/$totalCount';
-    final topRightText = rmse != null && selfError != null
-        ? '${rmse.toStringAsFixed(1)}/${selfError.toStringAsFixed(1)}'
-        : (rmse != null ? '${rmse.toStringAsFixed(1)}m' : '');
+    // Текст для верхней строки
+    final bool showCrosshairDistance =
+        !_logic.followMode && _logic.distanceToCrosshairMeters != null;
+    final String topLeftDisplay;
+    final String topRightDisplay;
+    if (showCrosshairDistance) {
+      final dist = _logic.distanceToCrosshairMeters!;
+      topLeftDisplay = '📏';
+      topRightDisplay = dist >= 1000
+          ? '${(dist / 1000).toStringAsFixed(1)} км'
+          : '${dist.round()} м';
+    } else {
+      topLeftDisplay = '$used/$total';
+      topRightDisplay = rmse != null && selfError != null
+          ? '${rmse.toStringAsFixed(1)}/${selfError.toStringAsFixed(1)}'
+          : (rmse != null ? '${rmse.toStringAsFixed(1)}m' : '');
+    }
 
     // Верхняя строка на ширину отрезка
     Widget topRowFullWidth = const SizedBox.shrink();
     if (metersPerPx != null && segmentWidth > 0) {
-      if (topRightText.isNotEmpty) {
+      if (topRightDisplay.isNotEmpty) {
         topRowFullWidth = SizedBox(
           width: segmentWidth,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [ 
-              Text(topLeftText,
-                  style: TextStyle(
-                      color: textColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(color: Colors.white, blurRadius: 2),
-                        Shadow(color: Colors.white, blurRadius: 4),
-                      ])),
-              Text('◇',
+            children: [
+              Text(
+                topLeftDisplay,
                 style: TextStyle(
-                  color: textColor, 
-                  fontSize: 14, 
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(color: Colors.white, blurRadius: 2), 
-                    Shadow(color: Colors.white, blurRadius: 4)
-                    ])),
-              Text(topRightText,
-                  style: TextStyle(
-                      color: textColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(color: Colors.white, blurRadius: 2),
-                        Shadow(color: Colors.white, blurRadius: 4),
-                      ])),
-            ],
-          ),
-        );
-      } else {
-        topRowFullWidth = SizedBox(
-          width: segmentWidth,
-          child: Text(topLeftText,
-              style: TextStyle(
                   color: textColor,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                   shadows: [
                     Shadow(color: Colors.white, blurRadius: 2),
                     Shadow(color: Colors.white, blurRadius: 4),
-                  ])),
+                  ],
+                ),
+              ),
+              Text(
+                topRightDisplay,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  shadows: [
+                    Shadow(color: Colors.white, blurRadius: 2),
+                    Shadow(color: Colors.white, blurRadius: 4),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        topRowFullWidth = SizedBox(
+          width: segmentWidth,
+          child: Text(
+            topLeftDisplay,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(color: Colors.white, blurRadius: 2),
+                Shadow(color: Colors.white, blurRadius: 4),
+              ],
+            ),
+          ),
         );
       }
     }
@@ -656,13 +675,14 @@ class _MapScreenState extends State<MapScreen> {
             child: Text(
               scaleLabel,
               style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(color: Colors.white, blurRadius: 2),
-                    Shadow(color: Colors.white, blurRadius: 4),
-                  ]),
+                color: Colors.black,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(color: Colors.white, blurRadius: 2),
+                  Shadow(color: Colors.white, blurRadius: 4),
+                ],
+              ),
               textAlign: TextAlign.center,
             ),
           ),
@@ -670,27 +690,40 @@ class _MapScreenState extends State<MapScreen> {
       );
     } else {
       scaleWidget = Text(
-        topLeftText,
+        topLeftDisplay,
         style: TextStyle(
-            color: textColor,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            shadows: [
-              Shadow(color: Colors.white, blurRadius: 2),
-              Shadow(color: Colors.white, blurRadius: 4),
-            ]),
+          color: textColor,
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          shadows: [
+            Shadow(color: Colors.white, blurRadius: 2),
+            Shadow(color: Colors.white, blurRadius: 4),
+          ],
+        ),
       );
     }
 
     return Dismissible(
-      key: ValueKey(totalCount),
+      key: ValueKey(total),
       direction: DismissDirection.horizontal,
       confirmDismiss: (direction) async => true,
       onDismissed: (direction) {
         if (direction == DismissDirection.endToStart) {
           _logic.undoLastAnchor();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Последняя привязка удалена'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
         } else if (direction == DismissDirection.startToEnd) {
           _logic.undoFirstAnchor();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Первая привязка удалена'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
         }
       },
       background: Container(
@@ -712,8 +745,12 @@ class _MapScreenState extends State<MapScreen> {
         child: const Icon(Icons.delete_forever, color: Colors.white),
       ),
       child: Tooltip(
-        message: 'Смахни влево — удалить последнюю, вправо — первую',
-        child: scaleWidget,
+        message:
+            'Смахни влево — удалить последнюю, вправо — первую\nТап по линейке — переключить режим (2/3 точки)',
+        child: GestureDetector(
+          onTap: () => _logic.toggleCalibrationScheme(),
+          child: scaleWidget,
+        ),
       ),
     );
   }

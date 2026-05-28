@@ -1,9 +1,10 @@
 #!/bin/bash
 # Скрипт для сборки релиза APK
 
-flutter clean 
+#flutter clean 
+#flutter pub get
 
-flutter pub get
+rm -rf /home/user/.gradle/daemon/*
 
 flutter build apk --release
 
@@ -14,5 +15,6 @@ du -h --max-depth=1 /home/user/ | sort -rh >> sizes-log.txt
 du -h --max-depth=1 /home/user/.gradle | sort -rh >> sizes-log.txt
 du -h --max-depth=1 /home/user/.gradle/daemon | sort -rh >> sizes-log.txt
 du -h --max-depth=1 /home/user/.gradle/caches | sort -rh >> sizes-log.txt
+du -h --max-depth=1 /home/user/.gradle/caches/8.12 | sort -rh >> sizes-log.txt
 df -h .  >> sizes-log.txt
 
