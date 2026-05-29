@@ -5,6 +5,8 @@ import '../models/map_working_pair.dart';
 import '../utils/geo_utils.dart';
 import 'affine_transform.dart';
 
+enum _CalibrationMode { affine, pairFarthest, pairNearest }
+
 // Простая модель GPS-точки
 class GeoPoint {
   final double latitude;
@@ -518,8 +520,9 @@ class MapCalibrationService {
   // ---------------------------------------------------------
   List<MapAnchor> _anchors = [];
   _MapTransformer? _currentTransform;
-  bool _preferTwoPoint = false; // true – только двухточечная схема
 
+  _CalibrationMode _mode = _CalibrationMode.affine;
+  
   int get usedAnchorCount {
     final t = _currentTransform;
     if (t != null) return t.usedAnchorCount;
@@ -573,11 +576,20 @@ class MapCalibrationService {
     return indices.join(' ');
   }
 
-  bool get isTwoPointPreferred => _preferTwoPoint;
-
-  void toggleCalibrationScheme() {
-    _preferTwoPoint = !_preferTwoPoint;
-    _buildTransformFromAnchors(); // немедленный пересчёт
+    void toggleCalibrationScheme() {
+    // Циклическое переключение: affine → pairFarthest → pairNearest → affine
+    switch (_mode) {
+      case _CalibrationMode.affine:
+        _mode = _CalibrationMode.pairFarthest;
+        break;
+      case _CalibrationMode.pairFarthest:
+        _mode = _CalibrationMode.pairNearest;
+        break;
+      case _CalibrationMode.pairNearest:
+        _mode = _CalibrationMode.affine;
+        break;
+    }
+    _buildTransformFromAnchors();
   }
 
   void updateAnchors(List<MapAnchor> anchors) {
@@ -585,11 +597,16 @@ class MapCalibrationService {
     _buildTransformFromAnchors();
   }
 
-  void _buildTransformFromAnchors() {
-    // Если включён режим принудительных двух точек – только Similarity
-    if (_preferTwoPoint) {
+    void _buildTransformFromAnchors() {
+    // Режимы двухточечных пар
+    if (_mode == _CalibrationMode.pairFarthest || _mode == _CalibrationMode.pairNearest) {
       if (_anchors.length >= 2) {
-        final pair = selectWorkingPair(_anchors);
+        MapWorkingPair? pair;
+        if (_mode == _CalibrationMode.pairFarthest) {
+          pair = selectWorkingPair(_anchors);
+        } else {
+          pair = selectNearestValidPair(_anchors);
+        }
         _currentTransform = pair != null
             ? SimilarityTransform.fromPair(pair.latest, pair.reference)
             : null;
@@ -599,31 +616,25 @@ class MapCalibrationService {
       return;
     }
 
-    // Обычная логика: пробуем трёхточечную аффинную, иначе две точки
+    // Аффинная трёхточечная схема
     if (_anchors.length >= 3) {
-      //print('DEBUG_BUILD: trying three-point affine, anchors=${_anchors.length}',);
       _MapTransformer? transform;
       try {
-        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(
-          _anchors,
-        );
+        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(_anchors);
         transform = adapter;
       } catch (_) {
-        //print('DEBUG_BUILD: exception when building three-point affine');
         transform = null;
       }
       if (transform != null && transform.usedAnchorCount == 3) {
-        //print('DEBUG_BUILD: affine built successfully with 3 points');
         _currentTransform = transform;
         return;
       }
-      //print('DEBUG_BUILD: affine failed, falling back to two points');
       _buildFallback();
       return;
     }
 
     if (_anchors.length == 2) {
-      final pair = selectWorkingPair(_anchors);
+      final pair = selectWorkingPair(_anchors); // по умолчанию farthest
       _currentTransform = pair != null
           ? SimilarityTransform.fromPair(pair.latest, pair.reference)
           : null;
@@ -681,6 +692,21 @@ class MapCalibrationService {
     return MapWorkingPair(latest: latest, reference: farthest);
   }
 
+  /// Ищет ближайшую подходящую предыдущую точку (последнюю с расстоянием ≥50 м).
+  MapWorkingPair? selectNearestValidPair(List<MapAnchor> anchors, {double minDistanceMeters = 50.0}) {
+    if (anchors.length < 2) return null;
+    final latest = anchors.last;
+    // Идём от предпоследней точки назад
+    for (int i = anchors.length - 2; i >= 0; i--) {
+      final candidate = anchors[i];
+      final dist = distanceBetweenAnchorsMeters(latest, candidate);
+      if (dist >= minDistanceMeters) {
+        return MapWorkingPair(latest: latest, reference: candidate);
+      }
+    }
+    // Если ни одна не подошла, возвращаем самую дальнюю (как fallback)
+    return selectWorkingPair(anchors, minDistanceMeters: 0);
+  }
   double? getMapRotation(MapWorkingPair pair) {
     final transform = _buildTransform(pair);
     return transform?.angleRadians;

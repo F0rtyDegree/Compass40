@@ -51,11 +51,10 @@ class MapScreenLogic {
   });
 
   bool get canPlaceTarget => state.canPlaceTarget;
-  bool get isTwoPointPreferred => _calibrationService.isTwoPointPreferred;
-
+  
   void toggleCalibrationScheme() {
     _calibrationService.toggleCalibrationScheme();
-    _recalculateUserImagePoint(); // обновить позицию курсора при смене схемы
+    _recalculateUserImagePoint(); // обновить позицию курсора
     setState(() {});
   }
 

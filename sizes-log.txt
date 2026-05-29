@@ -521,3 +521,56 @@ Filesystem                   Size  Used Avail Use% Mounted on
 4.0K	/home/user/.gradle/caches/8.12/dependencies-accessors
 Filesystem                   Size  Used Avail Use% Mounted on
 /dev/disk/by-id/google-home   15G   13G  1.2G  92% /home
+--- сборка завершена: Fri May 29 05:39:11 AM UTC 2026 ---
+19G	/home/user/
+6.8G	/home/user/.gradle
+5.2G	/home/user/.emu
+2.3G	/home/user/flutter
+2.0G	/home/user/myapp
+745M	/home/user/.pub-cache
+523M	/home/user/.npm
+504M	/home/user/.androidsdkroot
+386M	/home/user/.dartServer
+115M	/home/user/.idx
+102M	/home/user/.codeoss-cloudworkstations
+6.3M	/home/user/.cache
+3.6M	/home/user/.android
+2.9M	/home/user/.monospace-ai-index
+1.7M	/home/user/.dart-tool
+116K	/home/user/.config
+12K	/home/user/.global_modules
+8.0K	/home/user/.kotlin
+8.0K	/home/user/.flutter-devtools
+6.8G	/home/user/.gradle
+6.1G	/home/user/.gradle/caches
+744M	/home/user/.gradle/wrapper
+808K	/home/user/.gradle/native
+576K	/home/user/.gradle/build-scan-data
+488K	/home/user/.gradle/.tmp
+204K	/home/user/.gradle/kotlin-profile
+36K	/home/user/.gradle/daemon
+8.0K	/home/user/.gradle/notifications
+8.0K	/home/user/.gradle/android
+36K	/home/user/.gradle/daemon
+28K	/home/user/.gradle/daemon/8.12
+6.1G	/home/user/.gradle/caches
+3.9G	/home/user/.gradle/caches/8.12
+1.2G	/home/user/.gradle/caches/build-cache-1
+1.1G	/home/user/.gradle/caches/modules-2
+692K	/home/user/.gradle/caches/journal-1
+496K	/home/user/.gradle/caches/jars-9
+3.9G	/home/user/.gradle/caches/8.12
+3.7G	/home/user/.gradle/caches/8.12/transforms
+175M	/home/user/.gradle/caches/8.12/generated-gradle-jars
+38M	/home/user/.gradle/caches/8.12/kotlin-dsl
+6.8M	/home/user/.gradle/caches/8.12/javaCompile
+5.5M	/home/user/.gradle/caches/8.12/fileHashes
+1.6M	/home/user/.gradle/caches/8.12/groovy-dsl
+8.0K	/home/user/.gradle/caches/8.12/md-supplier
+8.0K	/home/user/.gradle/caches/8.12/md-rule
+8.0K	/home/user/.gradle/caches/8.12/fileContent
+8.0K	/home/user/.gradle/caches/8.12/file-changes
+4.0K	/home/user/.gradle/caches/8.12/jvms
+4.0K	/home/user/.gradle/caches/8.12/dependencies-accessors
+Filesystem                   Size  Used Avail Use% Mounted on
+/dev/disk/by-id/google-home   15G   13G  1.1G  93% /home
