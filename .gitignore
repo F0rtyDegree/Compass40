@@ -16,4 +16,4 @@ build/
 android/.gradle/
 android/local.properties
 *.lock
-sizes-log
+sizes-log.txt

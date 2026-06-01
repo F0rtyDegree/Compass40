@@ -5,13 +5,12 @@ import '../models/map_working_pair.dart';
 import '../utils/geo_utils.dart';
 import 'affine_transform.dart';
 
-enum _CalibrationMode { affine, pairFarthest, pairNearest }
+enum CalibrationMode { affine, pairFarthest, pairNearest }
 
 // Простая модель GPS-точки
 class GeoPoint {
   final double latitude;
   final double longitude;
-
   const GeoPoint({required this.latitude, required this.longitude});
 }
 
@@ -19,7 +18,6 @@ class GeoPoint {
 class LocalPoint {
   final double east;
   final double north;
-
   const LocalPoint({required this.east, required this.north});
 }
 
@@ -64,7 +62,6 @@ class SimilarityTransform implements _MapTransformer {
     final originLat = reference.latitude;
     final originLon = reference.longitude;
 
-    // переводим latest в локальные метры относительно reference
     final dLat = (latest.latitude - reference.latitude) * math.pi / 180;
     final dLon = (latest.longitude - reference.longitude) * math.pi / 180;
     final originLatRad = reference.latitude * math.pi / 180;
@@ -102,7 +99,6 @@ class SimilarityTransform implements _MapTransformer {
     final northNeg = scaledDx * sin + scaledDy * cos;
     final north = -northNeg;
 
-    // переводим локальные метры (east, north) в широту/долготу
     final originLatRad = originLat * math.pi / 180;
     final dLat = north / 6371000.0;
     final dLon = east / (6371000.0 * math.cos(originLatRad));
@@ -113,13 +109,10 @@ class SimilarityTransform implements _MapTransformer {
 
   @override
   int get usedAnchorCount => 2;
-
   @override
   double? get rmseMeters => null;
-
   @override
   double? get selfPointErrorMeters => null;
-
   @override
   double? get metersPerImagePixel => scale;
 
@@ -205,18 +198,6 @@ class _AffineTransformerAdapter implements _MapTransformer {
     return math.sqrt(sumSq / points.length);
   }
 
-  /// Алгоритм выбора до 6 опорных точек с максимальным покрытием территории.
-  /// Правила:
-  /// 1. Текущая точка (latest) всегда участвует, позже с большим весом.
-  /// 2. Точки привязки не могут быть ближе 50 метров друг к другу.
-  /// 3. Двухточечная схема (latest + farthest), пока все точки коллинеарны.
-  /// 4. При появлении неколлинеарной точки – поиск треугольника (latest, farthest, X)
-  ///    с максимальной площадью.
-  /// 5. Для 4-х точек: к фиксированному треугольнику добавляется новый latest.
-  /// 6. Для 5-и точек: выбираются 4 точки (кроме latest) с максимальной площадью
-  ///    выпуклой оболочки, и добавляется latest.
-  /// 7. Для 6-и точек: выбираются 5 точек (кроме latest) с максимальной площадью
-  ///    выпуклой оболочки, и добавляется latest.
   static List<MapAnchor> _selectBestPoints(
     List<MapAnchor> anchors, {
     int? forceComboSize,
@@ -224,7 +205,6 @@ class _AffineTransformerAdapter implements _MapTransformer {
     final latest = anchors.last;
     if (anchors.length == 1) return <MapAnchor>[latest];
 
-    // ---------- вспомогательные функции ----------
     double distMeters(MapAnchor a, MapAnchor b) {
       return _haversineDistance(
         a.latitude,
@@ -313,7 +293,6 @@ class _AffineTransformerAdapter implements _MapTransformer {
       return area.abs() / 2;
     }
 
-    // ---------- основной алгоритм ----------
     final others = anchors.sublist(0, anchors.length - 1);
 
     MapAnchor? farthest;
@@ -331,7 +310,6 @@ class _AffineTransformerAdapter implements _MapTransformer {
     if (forceComboSize != null) {
       final comboSize = forceComboSize;
       if (comboSize == 2) {
-        // Ищем третью точку с максимальной площадью треугольника
         MapAnchor? bestThird;
         double bestArea = -1;
         for (final x in others) {
@@ -340,7 +318,6 @@ class _AffineTransformerAdapter implements _MapTransformer {
             continue;
           }
 
-          // Проверяем угол при вершине latest (между farthest и кандидатом)
           final a = distMeters(farthest, x);
           final b = distMeters(latest, x);
           final c = distMeters(latest, farthest);
@@ -349,24 +326,15 @@ class _AffineTransformerAdapter implements _MapTransformer {
           final cosAngle = (b * b + c * c - a * a) / (2 * b * c);
           final angle = math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
 
-          //print('DEBUG_TRIANGLE: candidate=${x.id} sides=(${a.toStringAsFixed(1)},${b.toStringAsFixed(1)},${c.toStringAsFixed(1)}) angleLatest=${angle.toStringAsFixed(1)}',);
-
-          // Отбрасываем слишком вытянутые треугольники (угол при latest < 15° или > 165°)
-          if (angle < 15 || angle > 165) {
-            //print('DEBUG_TRIANGLE: rejected due to small/large angle');
-            continue;
-          }
+          if (angle < 15 || angle > 165) continue;
 
           final area = triangleAreaM2(latest, farthest, x);
-          //print('DEBUG_TRIANGLE: area=${area.toStringAsFixed(1)}');
-
           if (area > bestArea) {
             bestArea = area;
             bestThird = x;
           }
         }
         if (bestArea < 1.0) {
-          // Площадь слишком мала — треугольник почти коллинеарен, возвращаем пустой набор
           return <MapAnchor>[];
         }
         if (bestThird != null) {
@@ -375,10 +343,8 @@ class _AffineTransformerAdapter implements _MapTransformer {
           return <MapAnchor>[];
         }
       }
-      // Для других размеров можно оставить общий перебор, если понадобится
     }
 
-    // Перебираем размеры комбинаций от максимально возможного до 2 (треугольник)
     final int maxCombo = (others.length < 5) ? others.length : 5;
     for (int comboSize = maxCombo; comboSize >= 2; comboSize--) {
       double bestArea = -1;
@@ -386,17 +352,14 @@ class _AffineTransformerAdapter implements _MapTransformer {
 
       void findCombination(int start, List<MapAnchor> current) {
         if (current.length == comboSize) {
-          // проверка минимального расстояния 50 м между всеми точками
           for (int i = 0; i < current.length; i++) {
             for (int j = i + 1; j < current.length; j++) {
               if (distMeters(current[i], current[j]) < 50) return;
             }
           }
-          // также проверяем расстояние от latest до каждой выбранной точки
           for (final p in current) {
             if (distMeters(latest, p) < 50) return;
           }
-          // Для гомографии (4+ точек) обязательно проверяем, что никакие три точки не коллинеарны
           if (comboSize >= 3) {
             final allPoints = [latest, ...current];
             bool hasCollinear = false;
@@ -442,7 +405,6 @@ class _AffineTransformerAdapter implements _MapTransformer {
       }
     }
 
-    // fallback
     return <MapAnchor>[latest, farthest];
   }
 
@@ -482,15 +444,12 @@ class _AffineTransformerAdapter implements _MapTransformer {
   @override
   double? get metersPerImagePixel {
     if (_selectedPoints.isEmpty) return null;
-    // Берём точку latest для оценки локального масштаба
     final p = _selectedPoints.first;
-    final a = _affine.m[0]; // dLon/dx (градусы на пиксель)
-    final d = _affine.m[3]; // dLat/dx (градусы на пиксель)
-    // Переводим градусы в метры с учётом широты
+    final a = _affine.m[0]; // dLon/dx
+    final d = _affine.m[3]; // dLat/dx
     final latRad = p.latitude * math.pi / 180;
     final metersPerDegLon = 111320.0 * math.cos(latRad);
     final metersPerDegLat = 111320.0;
-    // Компоненты масштаба в метрах на пиксель изображения по оси X
     final dxMeters = a * metersPerDegLon;
     final dyMeters = d * metersPerDegLat;
     return math.sqrt(dxMeters * dxMeters + dyMeters * dyMeters);
@@ -498,16 +457,12 @@ class _AffineTransformerAdapter implements _MapTransformer {
 
   @override
   Offset imageToGeo(Offset imagePoint) => _affine.transform(imagePoint);
-
   @override
   Offset geoToImage(Offset geoPoint) => _affine.inverseTransform(geoPoint);
-
   @override
   double? get rmseMeters => _rmse;
-
   @override
   int get usedAnchorCount => _selectedPoints.length;
-
   @override
   double? get selfPointErrorMeters => _selfError;
 }
@@ -515,29 +470,35 @@ class _AffineTransformerAdapter implements _MapTransformer {
 class MapCalibrationService {
   static const double _earthRadius = 6371000.0;
 
-  // ---------------------------------------------------------
-  // Внутреннее состояние (для автоматического режима)
-  // ---------------------------------------------------------
   List<MapAnchor> _anchors = [];
   _MapTransformer? _currentTransform;
+  CalibrationMode _mode = CalibrationMode.affine;
+  final Set<String> _pinnedAnchorIds = {};
 
-  _CalibrationMode _mode = _CalibrationMode.affine;
-  
   int get usedAnchorCount {
     final t = _currentTransform;
     if (t != null) return t.usedAnchorCount;
     return 0;
   }
 
+  String get calibrationModeLetter {
+    if (_pinnedAnchorIds.isNotEmpty) return 'M';
+    switch (_mode) {
+      case CalibrationMode.affine:
+        return 'A';
+      case CalibrationMode.pairFarthest:
+        return 'F';
+      case CalibrationMode.pairNearest:
+        return 'N';
+    }
+  }
+
   int get totalAnchorCount => _anchors.length;
 
   double? get rmseMeters => _currentTransform?.rmseMeters;
-
   double? get selfPointErrorMeters => _currentTransform?.selfPointErrorMeters;
-
   double? get metersPerImagePixel => _currentTransform?.metersPerImagePixel;
 
-  /// ID якорей, используемых в текущем преобразовании
   Set<String>? get activeAnchorIds {
     final t = _currentTransform;
     if (t is SimilarityTransform) {
@@ -549,8 +510,6 @@ class MapCalibrationService {
     return null;
   }
 
-  /// Возвращает строку с номерами (начиная с 1) активных якорей в _anchors,
-  /// разделёнными пробелами. Например: "9 1 3".
   String? get activeAnchorIndices {
     final t = _currentTransform;
     if (t == null) return null;
@@ -576,18 +535,20 @@ class MapCalibrationService {
     return indices.join(' ');
   }
 
-    void toggleCalibrationScheme() {
-    // Циклическое переключение: affine → pairFarthest → pairNearest → affine
-    switch (_mode) {
-      case _CalibrationMode.affine:
-        _mode = _CalibrationMode.pairFarthest;
-        break;
-      case _CalibrationMode.pairFarthest:
-        _mode = _CalibrationMode.pairNearest;
-        break;
-      case _CalibrationMode.pairNearest:
-        _mode = _CalibrationMode.affine;
-        break;
+  List<MapAnchor> get pinnedAnchors =>
+      _anchors.where((a) => _pinnedAnchorIds.contains(a.id)).toList();
+
+  void setCalibrationMode(CalibrationMode mode) {
+    _pinnedAnchorIds.clear();
+    _mode = mode;
+    _buildTransformFromAnchors();
+  }
+
+  void toggleAnchorPinned(String anchorId) {
+    if (_pinnedAnchorIds.contains(anchorId)) {
+      _pinnedAnchorIds.remove(anchorId);
+    } else {
+      _pinnedAnchorIds.add(anchorId);
     }
     _buildTransformFromAnchors();
   }
@@ -597,12 +558,51 @@ class MapCalibrationService {
     _buildTransformFromAnchors();
   }
 
-    void _buildTransformFromAnchors() {
-    // Режимы двухточечных пар
-    if (_mode == _CalibrationMode.pairFarthest || _mode == _CalibrationMode.pairNearest) {
+  void _buildTransformFromAnchors() {
+    // ----- Ручной режим -----
+    if (_pinnedAnchorIds.isNotEmpty) {
+      final latest = _anchors.last;
+      final pinnedList = pinnedAnchors;
+      final combined = <MapAnchor>{...pinnedList, latest}.toList();
+      final idx = combined.indexOf(latest);
+      if (idx > 0) {
+        combined.removeAt(idx);
+        combined.insert(0, latest);
+      }
+      if (combined.length >= 3) {
+        try {
+          final affine = AffineTransform.fromPoints(
+            combined.map((a) => Offset(a.imageX, a.imageY)).toList(),
+            combined.map((a) => Offset(a.longitude, a.latitude)).toList(),
+            weights: _AffineTransformerAdapter._buildWeights(combined.length),
+          );
+          final rmse = _AffineTransformerAdapter._computeRmse(combined, affine);
+          final selfError = _AffineTransformerAdapter._computeSelfError(
+            combined,
+            affine,
+          );
+          _currentTransform = _AffineTransformerAdapter._(
+            affine: affine,
+            selectedPoints: combined,
+            rmse: rmse,
+            selfError: selfError,
+          );
+          return;
+        } catch (_) {}
+      }
+      final pair = selectWorkingPair(_anchors);
+      _currentTransform = pair != null
+          ? SimilarityTransform.fromPair(pair.latest, pair.reference)
+          : null;
+      return;
+    }
+
+    // ----- Автоматический режим -----
+    if (_mode == CalibrationMode.pairFarthest ||
+        _mode == CalibrationMode.pairNearest) {
       if (_anchors.length >= 2) {
         MapWorkingPair? pair;
-        if (_mode == _CalibrationMode.pairFarthest) {
+        if (_mode == CalibrationMode.pairFarthest) {
           pair = selectWorkingPair(_anchors);
         } else {
           pair = selectNearestValidPair(_anchors);
@@ -616,11 +616,12 @@ class MapCalibrationService {
       return;
     }
 
-    // Аффинная трёхточечная схема
     if (_anchors.length >= 3) {
       _MapTransformer? transform;
       try {
-        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(_anchors);
+        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(
+          _anchors,
+        );
         transform = adapter;
       } catch (_) {
         transform = null;
@@ -634,7 +635,7 @@ class MapCalibrationService {
     }
 
     if (_anchors.length == 2) {
-      final pair = selectWorkingPair(_anchors); // по умолчанию farthest
+      final pair = selectWorkingPair(_anchors);
       _currentTransform = pair != null
           ? SimilarityTransform.fromPair(pair.latest, pair.reference)
           : null;
@@ -651,7 +652,6 @@ class MapCalibrationService {
         : null;
   }
 
-  /// Преобразование изображение → гео (использует текущее состояние)
   GeoPoint? imagePointToGeoFromCurrent(Offset imagePoint) {
     final t = _currentTransform;
     if (t == null) return null;
@@ -659,24 +659,18 @@ class MapCalibrationService {
     return GeoPoint(latitude: geo.dy, longitude: geo.dx);
   }
 
-  /// Преобразование гео → изображение (использует текущее состояние)
   Offset? geoToImagePointFromCurrent(double latitude, double longitude) {
     final t = _currentTransform;
     if (t == null) return null;
     return t.geoToImage(Offset(longitude, latitude));
   }
 
-  // ---------------------------------------------------------
-  // Старые методы (работа с явной парой, обратная совместимость)
-  // ---------------------------------------------------------
-
   MapWorkingPair? selectWorkingPair(
     List<MapAnchor> anchors, {
     double minDistanceMeters = 50.0,
   }) {
     if (anchors.length < 2) return null;
-
-    final latest = anchors.last; // последняя добавленная точка
+    final latest = anchors.last;
     MapAnchor? farthest;
     double maxDist = -1;
     for (int i = 0; i < anchors.length - 1; i++) {
@@ -687,16 +681,16 @@ class MapCalibrationService {
         farthest = candidate;
       }
     }
-
     if (farthest == null) return null;
     return MapWorkingPair(latest: latest, reference: farthest);
   }
 
-  /// Ищет ближайшую подходящую предыдущую точку (последнюю с расстоянием ≥50 м).
-  MapWorkingPair? selectNearestValidPair(List<MapAnchor> anchors, {double minDistanceMeters = 50.0}) {
+  MapWorkingPair? selectNearestValidPair(
+    List<MapAnchor> anchors, {
+    double minDistanceMeters = 50.0,
+  }) {
     if (anchors.length < 2) return null;
     final latest = anchors.last;
-    // Идём от предпоследней точки назад
     for (int i = anchors.length - 2; i >= 0; i--) {
       final candidate = anchors[i];
       final dist = distanceBetweenAnchorsMeters(latest, candidate);
@@ -704,9 +698,9 @@ class MapCalibrationService {
         return MapWorkingPair(latest: latest, reference: candidate);
       }
     }
-    // Если ни одна не подошла, возвращаем самую дальнюю (как fallback)
     return selectWorkingPair(anchors, minDistanceMeters: 0);
   }
+
   double? getMapRotation(MapWorkingPair pair) {
     final transform = _buildTransform(pair);
     return transform?.angleRadians;
@@ -725,10 +719,8 @@ class MapCalibrationService {
     final dLat = (latitude - originLat) * math.pi / 180;
     final dLon = (longitude - originLon) * math.pi / 180;
     final originLatRad = originLat * math.pi / 180;
-
     final north = dLat * _earthRadius;
     final east = dLon * _earthRadius * math.cos(originLatRad);
-
     return LocalPoint(east: east, north: north);
   }
 
@@ -738,17 +730,14 @@ class MapCalibrationService {
     required double originLon,
   }) {
     final originLatRad = originLat * math.pi / 180;
-
     final dLat = local.north / _earthRadius;
     final dLon = local.east / (_earthRadius * math.cos(originLatRad));
-
     return GeoPoint(
       latitude: originLat + dLat * 180 / math.pi,
       longitude: originLon + dLon * 180 / math.pi,
     );
   }
 
-  /// Построение двухточечного преобразования по рабочей паре
   SimilarityTransform? _buildTransform(MapWorkingPair pair) {
     try {
       return SimilarityTransform.fromPair(pair.latest, pair.reference);
@@ -763,20 +752,15 @@ class MapCalibrationService {
   }) {
     final t = _buildTransform(pair);
     if (t == null) return null;
-
-    // Используем поля старого класса напрямую (referenceImageX/Y и т.д.)
     final dx = imagePoint.dx - t.referenceImageX;
     final dy = imagePoint.dy - t.referenceImageY;
-
     final scaledDx = dx * t.scale;
     final scaledDy = dy * t.scale;
-
     final cos = math.cos(t.angleRadians);
     final sin = math.sin(t.angleRadians);
     final localEast = scaledDx * cos - scaledDy * sin;
     final localNorthNeg = scaledDx * sin + scaledDy * cos;
     final localNorth = -localNorthNeg;
-
     return localToGeo(
       local: LocalPoint(east: localEast, north: localNorth),
       originLat: t.originLat,
@@ -791,25 +775,20 @@ class MapCalibrationService {
   }) {
     final t = _buildTransform(pair);
     if (t == null) return null;
-
     final local = geoToLocal(
       latitude: latitude,
       longitude: longitude,
       originLat: t.originLat,
       originLon: t.originLon,
     );
-
     final geoX = local.east;
     final geoY = -local.north;
-
     final cos = math.cos(-t.angleRadians);
     final sin = math.sin(-t.angleRadians);
     final rotX = geoX * cos - geoY * sin;
     final rotY = geoX * sin + geoY * cos;
-
     final dx = rotX / t.scale;
     final dy = rotY / t.scale;
-
     return Offset(t.referenceImageX + dx, t.referenceImageY + dy);
   }
 
@@ -825,19 +804,15 @@ class MapCalibrationService {
     required double magneticDeclination,
   }) {
     final dist = calculateDistance(fromLat, fromLon, toLat, toLon);
-
     final phi1 = fromLat * math.pi / 180;
     final phi2 = toLat * math.pi / 180;
     final dLambda = (toLon - fromLon) * math.pi / 180;
-
     final y = math.sin(dLambda) * math.cos(phi2);
     final x =
         math.cos(phi1) * math.sin(phi2) -
         math.sin(phi1) * math.cos(phi2) * math.cos(dLambda);
-
     final trueBearing = (math.atan2(y, x) * 180 / math.pi + 360) % 360;
     final magneticBearing = (trueBearing - magneticDeclination + 360) % 360;
-
     return BearingAndDistance(
       distanceMeters: dist,
       trueBearing: trueBearing,
@@ -850,7 +825,6 @@ class BearingAndDistance {
   final double distanceMeters;
   final double trueBearing;
   final double magneticBearing;
-
   const BearingAndDistance({
     required this.distanceMeters,
     required this.trueBearing,

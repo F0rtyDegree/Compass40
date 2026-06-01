@@ -36,7 +36,6 @@ class _MapScreenState extends State<MapScreen> {
   final MapScreenState _state = MapScreenState();
   late final MapScreenLogic _logic;
 
-  // Жесты
   Offset _gestureStartTranslation = Offset.zero;
   double _gestureStartScale = 1.0;
   double _gestureStartRotation = 0.0;
@@ -89,20 +88,19 @@ class _MapScreenState extends State<MapScreen> {
           title: const Text('Карта'),
           centerTitle: true,
           actions: [
-            if (true) // Кнопка справки должна быть доступна всегда
-              IconButton(
-                icon: const Icon(Icons.help_outline),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const HelpViewerScreen(
-                        helpFilePath: 'assets/help/map_help.md',
-                      ),
+            IconButton(
+              icon: const Icon(Icons.help_outline),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const HelpViewerScreen(
+                      helpFilePath: 'assets/help/map_help.md',
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
+            ),
             if (_state.imagePath != null)
               Tooltip(
                 message: 'Удалить карту (долгое нажатие)',
@@ -178,6 +176,10 @@ class _MapScreenState extends State<MapScreen> {
     return GestureDetector(
       onScaleStart: _onScaleStart,
       onScaleUpdate: _onScaleUpdate,
+      // Двойной тап для ручного выбора точек
+      onDoubleTapDown: (details) {
+        _logic.handleDoubleTap(details.localPosition);
+      },
       child: LayoutBuilder(
         builder: (context, constraints) {
           final viewportSize = Size(
@@ -223,17 +225,6 @@ class _MapScreenState extends State<MapScreen> {
                   magneticDeclination: widget.magneticDeclination,
                 ),
               ),
-              // Новый слой: тап на карте смещает точку под прицел
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTapUp: (details) {
-                    final tapPos = details.localPosition;
-                    _logic.movePointToCrosshair(tapPos);
-                  },
-                  child: Container(color: Colors.transparent),
-                ),
-              ),
               Builder(
                 builder: (context) {
                   final vp = _state.viewportSize;
@@ -261,8 +252,11 @@ class _MapScreenState extends State<MapScreen> {
                   );
                 },
               ),
+
               if (_state.project != null && _state.project!.anchors.isNotEmpty)
                 Positioned(top: 12, right: 12, child: _buildAnchorBadge()),
+              Positioned(top: 12, left: 12, child: _buildModeIndicator()),
+              
               MapZoomButtons(
                 visible: _state.imagePath != null && _state.imageSize != null,
                 onHereNowPressed: _logic.addAnchorFromCurrentGps,
@@ -398,8 +392,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         }
-        _logic
-            .resetRotateModeTimer(); // сбросить таймер после каждого жеста вращения
+        _logic.resetRotateModeTimer();
       } else {
         final delta = details.focalPoint - _gestureStartFocalPoint;
         final newTranslation = _gestureStartTranslation + delta;
@@ -531,25 +524,51 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Widget _buildAnchorBadge() {
-    final total = _logic.totalAnchorCount;
-    if (total == 0) return const SizedBox.shrink();
+    Widget _buildModeIndicator() {
+    final letter = _logic.calibrationModeLetter;
+    return GestureDetector(
+      onTap: () => _logic.showModePicker(context),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black54,
+          boxShadow: [
+            BoxShadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 3),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          letter,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            shadows: [
+              Shadow(color: Colors.black, blurRadius: 2),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
+  Widget _buildAnchorBadge() {
+    final totalCount = _logic.totalAnchorCount;
+    if (totalCount == 0) return const SizedBox.shrink();
     final used = _logic.usedAnchorCount;
-    final rmse = _logic.rmseMeters;
-    final selfError = _logic.selfPointErrorMeters;
     final metersPerPx = _logic.metersPerScreenPixel;
 
     final Color textColor;
-    if (total >= 3) {
+    if (totalCount >= 3) {
       textColor = Colors.green;
-    } else if (total == 2 && used == 2) {
+    } else if (totalCount == 2 && used == 2) {
       textColor = Colors.orange;
     } else {
       textColor = Colors.red;
     }
 
-    // Масштабная линейка
     double segmentWidth = 0;
     String scaleLabel = '';
     if (metersPerPx != null && metersPerPx > 0) {
@@ -586,25 +605,14 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
-    // Текст для верхней строки
-    final bool showCrosshairDistance =
-        !_logic.followMode && _logic.distanceToCrosshairMeters != null;
-    final String topLeftDisplay;
-    final String topRightDisplay;
-    if (showCrosshairDistance) {
-      final dist = _logic.distanceToCrosshairMeters!;
-      topLeftDisplay = '📏';
-      topRightDisplay = dist >= 1000
-          ? '${(dist / 1000).toStringAsFixed(1)} км'
-          : '${dist.round()} м';
-    } else {
-      topLeftDisplay = '$used/$total';
-      topRightDisplay = rmse != null && selfError != null
-          ? '${rmse.toStringAsFixed(1)}/${selfError.toStringAsFixed(1)}'
-          : (rmse != null ? '${rmse.toStringAsFixed(1)}m' : '');
-    }
+    final double? dist = _logic.distanceToCrosshairMeters;
+    final String topLeftDisplay = '📏';
+    final String topRightDisplay = dist != null
+        ? (dist >= 1000
+              ? '${(dist / 1000).toStringAsFixed(1)} км'
+              : '${dist.round()} м')
+        : '---';
 
-    // Верхняя строка на ширину отрезка
     Widget topRowFullWidth = const SizedBox.shrink();
     if (metersPerPx != null && segmentWidth > 0) {
       if (topRightDisplay.isNotEmpty) {
@@ -617,11 +625,12 @@ class _MapScreenState extends State<MapScreen> {
                 topLeftDisplay,
                 style: TextStyle(
                   color: textColor,
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   shadows: [
                     Shadow(color: Colors.white, blurRadius: 2),
                     Shadow(color: Colors.white, blurRadius: 4),
+                    Shadow(color: Colors.white, blurRadius: 6),
                   ],
                 ),
               ),
@@ -629,11 +638,12 @@ class _MapScreenState extends State<MapScreen> {
                 topRightDisplay,
                 style: TextStyle(
                   color: textColor,
-                  fontSize: 14,
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   shadows: [
                     Shadow(color: Colors.white, blurRadius: 2),
                     Shadow(color: Colors.white, blurRadius: 4),
+                    Shadow(color: Colors.white, blurRadius: 6),
                   ],
                 ),
               ),
@@ -647,11 +657,12 @@ class _MapScreenState extends State<MapScreen> {
             topLeftDisplay,
             style: TextStyle(
               color: textColor,
-              fontSize: 14,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               shadows: [
                 Shadow(color: Colors.white, blurRadius: 2),
                 Shadow(color: Colors.white, blurRadius: 4),
+                Shadow(color: Colors.white, blurRadius: 6),
               ],
             ),
           ),
@@ -669,18 +680,28 @@ class _MapScreenState extends State<MapScreen> {
             padding: const EdgeInsets.only(bottom: 2),
             child: topRowFullWidth,
           ),
-          Container(width: segmentWidth, height: 2, color: Colors.black),
+          Container(
+            width: segmentWidth,
+            height: 2,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              boxShadow: [
+                BoxShadow(color: Colors.white, blurRadius: 4, spreadRadius: 0),
+              ],
+            ),
+          ),
           SizedBox(
             width: segmentWidth,
             child: Text(
               scaleLabel,
               style: const TextStyle(
                 color: Colors.black,
-                fontSize: 13,
+                fontSize: 15,
                 fontWeight: FontWeight.bold,
                 shadows: [
                   Shadow(color: Colors.white, blurRadius: 2),
                   Shadow(color: Colors.white, blurRadius: 4),
+                  Shadow(color: Colors.white, blurRadius: 6),
                 ],
               ),
               textAlign: TextAlign.center,
@@ -693,65 +714,17 @@ class _MapScreenState extends State<MapScreen> {
         topLeftDisplay,
         style: TextStyle(
           color: textColor,
-          fontSize: 14,
+          fontSize: 16,
           fontWeight: FontWeight.bold,
           shadows: [
             Shadow(color: Colors.white, blurRadius: 2),
             Shadow(color: Colors.white, blurRadius: 4),
+            Shadow(color: Colors.white, blurRadius: 6),
           ],
         ),
       );
     }
 
-    return Dismissible(
-      key: ValueKey(total),
-      direction: DismissDirection.horizontal,
-      confirmDismiss: (direction) async => true,
-      onDismissed: (direction) {
-        if (direction == DismissDirection.endToStart) {
-          _logic.undoLastAnchor();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Последняя привязка удалена'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        } else if (direction == DismissDirection.startToEnd) {
-          _logic.undoFirstAnchor();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Первая привязка удалена'),
-              backgroundColor: Colors.redAccent,
-            ),
-          );
-        }
-      },
-      background: Container(
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 200 / 255),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        alignment: Alignment.centerLeft,
-        padding: const EdgeInsets.only(left: 8),
-        child: const Icon(Icons.delete_forever, color: Colors.white),
-      ),
-      secondaryBackground: Container(
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 200 / 255),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 8),
-        child: const Icon(Icons.delete_forever, color: Colors.white),
-      ),
-      child: Tooltip(
-        message:
-            'Смахни влево — удалить последнюю, вправо — первую\nТап по линейке — переключить режим (2/3 точки)',
-        child: GestureDetector(
-          onTap: () => _logic.toggleCalibrationScheme(),
-          child: scaleWidget,
-        ),
-      ),
-    );
+    return Tooltip(message: 'Масштабная линейка', child: scaleWidget);
   }
 }

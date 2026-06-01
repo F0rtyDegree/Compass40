@@ -33,7 +33,7 @@ class MapScreenLogic {
   final VoidCallback? onCancelNavigation;
   bool _isAutoRotating = false;
   bool _keepFollowDuringScale = false;
-  int rotateModeTimeoutMs = 1000; // будет загружено из настроек
+  int rotateModeTimeoutMs = 1000;
 
   StreamSubscription<GpsData>? _gpsSub;
   GpsData? _lastGpsData;
@@ -51,17 +51,9 @@ class MapScreenLogic {
   });
 
   bool get canPlaceTarget => state.canPlaceTarget;
-  
-  void toggleCalibrationScheme() {
-    _calibrationService.toggleCalibrationScheme();
-    _recalculateUserImagePoint(); // обновить позицию курсора
-    setState(() {});
-  }
-
   bool get followMode => state.followMode;
+  String get calibrationModeLetter => _calibrationService.calibrationModeLetter;
 
-  /// Расстояние в метрах от текущей позиции до перекрестия прицела.
-  /// Возвращает null, если нет GPS, карты или привязки.
   double? get distanceToCrosshairMeters {
     final gps = _lastGpsData;
     final lat = gps?.latitude;
@@ -70,7 +62,6 @@ class MapScreenLogic {
     final crosshair = state.crosshairImagePoint;
     if (crosshair == null) return null;
     final geo = _calibrationService.imagePointToGeoFromCurrent(crosshair);
-    //print('DEBUG_DIST: lat=$lat, lon=$lon, crosshair=$crosshair, geo=$geo');
     if (geo == null) return null;
     return _calibrationService.distanceBetweenAnchorsMeters(
       MapAnchor(
@@ -101,7 +92,6 @@ class MapScreenLogic {
 
   double? get metersPerScreenPixel {
     final imageScale = _calibrationService.metersPerImagePixel;
-
     if (imageScale == null || state.transformState.scale == 0) return null;
     return imageScale / state.transformState.scale;
   }
@@ -134,14 +124,10 @@ class MapScreenLogic {
 
   Future<void> _loadLastProject() async {
     final projectId = await storageService.getCurrentProjectId();
-    if (projectId == null) {
-      return;
-    }
+    if (projectId == null) return;
 
     final project = await storageService.loadProject(projectId);
-    if (project == null) {
-      return;
-    }
+    if (project == null) return;
 
     final savedTransform = await storageService.loadTransform(projectId);
 
@@ -167,13 +153,9 @@ class MapScreenLogic {
   }
 
   Future<void> _loadImageSize() async {
-    if (state.imagePath == null) {
-      return;
-    }
+    if (state.imagePath == null) return;
     final file = File(state.imagePath!);
-    if (!await file.exists()) {
-      return;
-    }
+    if (!await file.exists()) return;
 
     final bytes = await file.readAsBytes();
     final decoded = await decodeImageFromList(bytes);
@@ -205,9 +187,7 @@ class MapScreenLogic {
 
   void _fitImageToViewport(double imgW, double imgH) {
     final vp = state.viewportSize;
-    if (vp == null || imgW == 0 || imgH == 0) {
-      return;
-    }
+    if (vp == null || imgW == 0 || imgH == 0) return;
 
     final fitScale = math.min(vp.width / imgW, vp.height / imgH) * 0.92;
 
@@ -230,13 +210,10 @@ class MapScreenLogic {
     try {
       final picker = ImagePicker();
       final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      if (image == null) {
-        return;
-      }
+      if (image == null) return;
 
       final savedPath = await storageService.saveImageToAppStorage(image.path);
 
-      // Удаляем временный файл, который создал ImagePicker
       try {
         final tempFile = File(image.path);
         if (await tempFile.exists()) {
@@ -282,7 +259,6 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> closeMap() async {
-    // Удаляем файл изображения, если он существует
     if (state.imagePath != null) {
       final file = File(state.imagePath!);
       if (await file.exists()) {
@@ -290,7 +266,6 @@ class MapScreenLogic {
       }
     }
 
-    // Удаляем проект и все его данные из хранилища
     if (state.project != null) {
       await storageService.deleteProject(state.project!.id);
     } else {
@@ -334,9 +309,7 @@ class MapScreenLogic {
   }
 
   void updateViewportSize(Size size) {
-    if (state.viewportSize == size) {
-      return;
-    }
+    if (state.viewportSize == size) return;
     setState(() {
       state.viewportSize = size;
     });
@@ -344,7 +317,6 @@ class MapScreenLogic {
     _recalculateUserScreenPoint();
   }
 
-  /// Увеличение масштаба кнопкой
   void zoomIn() {
     _keepFollowDuringScale = true;
     final current = state.transformState;
@@ -353,7 +325,6 @@ class MapScreenLogic {
     _keepFollowDuringScale = false;
   }
 
-  /// Уменьшение масштаба кнопкой
   void zoomOut() {
     _keepFollowDuringScale = true;
     final current = state.transformState;
@@ -363,9 +334,7 @@ class MapScreenLogic {
   }
 
   void _scaleAroundCrosshair(MapTransformState current, double newScale) {
-    if (state.viewportSize == null || state.imageSize == null) {
-      return;
-    }
+    if (state.viewportSize == null || state.imageSize == null) return;
     final pivotScreen = getCrosshairScreenPoint();
     final pivotImage = screenToImage(pivotScreen);
     final tempTransform = MapTransformState(
@@ -376,7 +345,6 @@ class MapScreenLogic {
     _applyTransformWithPivot(current, tempTransform, pivotImage);
   }
 
-  /// Вспомогательный метод: применяет новый трансформ так, чтобы точка на изображении осталась под перекрестием
   void _applyTransformWithPivot(
     MapTransformState oldTransform,
     MapTransformState tempTransform,
@@ -400,9 +368,7 @@ class MapScreenLogic {
   Offset getCrosshairScreenPoint() => _getCrosshairScreenPoint();
 
   Future<void> copyCrosshairCoordinatesToClipboard() async {
-    if (state.crosshairImagePoint == null) {
-      return;
-    }
+    if (state.crosshairImagePoint == null) return;
 
     final geo = _calibrationService.imagePointToGeoFromCurrent(
       state.crosshairImagePoint!,
@@ -423,9 +389,7 @@ class MapScreenLogic {
   }
 
   Offset _getCrosshairScreenPoint() {
-    if (state.viewportSize == null) {
-      return Offset.zero;
-    }
+    if (state.viewportSize == null) return Offset.zero;
     final vp = state.viewportSize!;
     if (state.crosshairInCenter) {
       return Offset(vp.width / 2, vp.height / 2);
@@ -435,9 +399,7 @@ class MapScreenLogic {
   }
 
   void _recalculateCrosshairImagePoint() {
-    if (state.imageSize == null || state.viewportSize == null) {
-      return;
-    }
+    if (state.imageSize == null || state.viewportSize == null) return;
 
     final screenPoint = _getCrosshairScreenPoint();
     final imagePoint = screenToImage(screenPoint);
@@ -568,9 +530,7 @@ class MapScreenLogic {
     required double longitude,
   }) async {
     final project = state.project;
-    if (project == null) {
-      return;
-    }
+    if (project == null) return;
 
     final newPathJumpIndices = [...project.pathJumpIndices];
     if (project.userPath.isNotEmpty) {
@@ -640,75 +600,76 @@ class MapScreenLogic {
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
-  Future<void> undoFirstAnchor() async {
-    final project = state.project;
-    if (project == null || project.anchors.isEmpty) {
-      return;
-    }
+  // --------------------------------------------------------
+  // Ручной выбор точек (двойной тап)
+  // --------------------------------------------------------
 
-    final updatedAnchors = project.anchors.sublist(1); // удаляем первую точку
-    // Путь и индексы прыжков остаются валидными (координаты изображения не меняются)
-    final updatedUserPath = project.userPath;
-    final updatedPathJumpIndices = project.pathJumpIndices;
+  void handleDoubleTap(Offset screenPosition) {
+    if (state.project == null || state.imageSize == null) return;
+    final imagePoint = screenToImage(screenPosition);
+    final anchors = state.project!.anchors;
+    if (anchors.isEmpty) return;
 
-    final updatedProject = project.copyWith(
-      anchors: updatedAnchors,
-      userPath: updatedUserPath,
-      pathJumpIndices: updatedPathJumpIndices,
-    );
-
-    await storageService.saveProject(updatedProject);
-    await logService.removeFirstMapAnchorLog();
-
-    setState(() {
-      state.project = updatedProject;
-    });
-
-    _calibrationService.updateAnchors(updatedAnchors);
-    _recalculateWorkingPairAndRotation();
-    _recalculateCanPlaceTarget();
-    _recalculateUserImagePoint();
-    await recalculateTargetsAfterNewAnchor(restartNavigation: true);
-  }
-
-  Future<void> undoLastAnchor() async {
-    final project = state.project;
-    if (project == null || project.anchors.isEmpty) {
-      return;
-    }
-
-    final updatedAnchors = project.anchors.sublist(
-      0,
-      project.anchors.length - 1,
-    );
-    List<int> updatedPathJumpIndices = [...project.pathJumpIndices];
-    List<Offset> updatedUserPath = [...project.userPath];
-
-    if (updatedPathJumpIndices.isNotEmpty) {
-      final lastJumpIndex = updatedPathJumpIndices.removeLast();
-      if (updatedUserPath.length >= lastJumpIndex) {
-        updatedUserPath = updatedUserPath.sublist(0, lastJumpIndex);
+    // Ищем ближайший якорь в радиусе 20 пикселей (на изображении)
+    const double tapRadius = 20.0;
+    MapAnchor? closest;
+    double closestDist = double.infinity;
+    for (final anchor in anchors) {
+      final dx = anchor.imageX - imagePoint.dx;
+      final dy = anchor.imageY - imagePoint.dy;
+      final dist = math.sqrt(dx * dx + dy * dy);
+      if (dist < tapRadius && dist < closestDist) {
+        closestDist = dist;
+        closest = anchor;
       }
     }
 
-    final updatedProject = project.copyWith(
-      anchors: updatedAnchors,
-      userPath: updatedUserPath,
-      pathJumpIndices: updatedPathJumpIndices,
+    if (closest != null) {
+      _calibrationService.toggleAnchorPinned(closest.id);
+      setState(() {}); // перерисовать карту и инфопанель
+    }
+  }
+
+  void showModePicker(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Режим привязки'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              _calibrationService.setCalibrationMode(CalibrationMode.affine);
+              Navigator.pop(ctx);
+              _recalculateUserImagePoint();
+              setState(() {});
+            },
+            child: const Text('(A)-Affine афинная'),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              _calibrationService.setCalibrationMode(
+                CalibrationMode.pairFarthest,
+              );
+              Navigator.pop(ctx);
+              _recalculateUserImagePoint();
+              setState(() {});
+            },
+            child: const Text('(F)-Farthest дальняя'),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              _calibrationService.setCalibrationMode(
+                CalibrationMode.pairNearest,
+              );
+              Navigator.pop(ctx);
+              _recalculateUserImagePoint();
+              setState(() {});
+            },
+            child: const Text('(N)-Nearest ближайшая'),
+          ),
+        ],
+      ),
     );
-
-    await storageService.saveProject(updatedProject);
-    await logService.removeLastMapAnchorLog();
-
-    setState(() {
-      state.project = updatedProject;
-    });
-
-    _calibrationService.updateAnchors(updatedAnchors);
-    _recalculateWorkingPairAndRotation();
-    _recalculateCanPlaceTarget();
-    _recalculateUserImagePoint();
-    await recalculateTargetsAfterNewAnchor(restartNavigation: true);
   }
 
   // --------------------------------------------------------
@@ -716,12 +677,8 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void placePlannedTargetAtCrosshair() {
-    if (!state.canPlaceTarget) {
-      return;
-    }
-    if (state.crosshairImagePoint == null) {
-      return;
-    }
+    if (!state.canPlaceTarget) return;
+    if (state.crosshairImagePoint == null) return;
 
     final geo = _calibrationService.imagePointToGeoFromCurrent(
       state.crosshairImagePoint!,
@@ -748,8 +705,6 @@ class MapScreenLogic {
     });
   }
 
-  // activatePlannedTarget удалён – его функциональность (копирование координат) больше не нужна
-
   Future<void> setTargetAndStartNavigation() async {
     final planned = state.plannedTarget;
     if (planned == null ||
@@ -767,14 +722,10 @@ class MapScreenLogic {
 
   Future<void> _persistAndSetActiveTarget({required bool copyCoords}) async {
     final planned = state.plannedTarget;
-    if (planned == null) {
-      return;
-    }
+    if (planned == null) return;
 
     final project = state.project;
-    if (project == null) {
-      return;
-    }
+    if (project == null) return;
 
     if (planned.latitude == null || planned.longitude == null) {
       showSnackBar('Координаты цели не определены — добавьте привязку');
@@ -812,14 +763,10 @@ class MapScreenLogic {
 
   void markActiveTargetAsPassed() async {
     final active = state.activeTarget;
-    if (active == null) {
-      return;
-    }
+    if (active == null) return;
 
     final project = state.project;
-    if (project == null) {
-      return;
-    }
+    if (project == null) return;
 
     final updatedTargets = project.targets.map((t) {
       if (t.id == active.id) {
@@ -863,18 +810,12 @@ class MapScreenLogic {
 
   void _recalculateUserImagePoint() {
     final gps = _lastGpsData;
-    if (gps == null) {
-      return;
-    }
+    if (gps == null) return;
     final lat = gps.latitude;
     final lon = gps.longitude;
-    if (lat == null || lon == null || state.project == null) {
-      return;
-    }
+    if (lat == null || lon == null || state.project == null) return;
 
-    //print('DEBUG_RECALC: gps=($lat, $lon)');
     final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
-    //print('DEBUG_RECALC: imagePoint after geoToImage=$imagePoint');
 
     if (imagePoint == null || (imagePoint.dx == 0.0 && imagePoint.dy == 0.0)) {
       return;
@@ -892,9 +833,7 @@ class MapScreenLogic {
 
   void _recalculateUserScreenPoint() {
     final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null) {
-      return;
-    }
+    if (imagePoint == null) return;
 
     setState(() {
       state.currentUserScreenPoint = imageToScreen(imagePoint);
@@ -931,17 +870,13 @@ class MapScreenLogic {
     bool restartNavigation = false,
   }) async {
     final project = state.project;
-    if (project == null) {
-      return;
-    }
+    if (project == null) return;
 
     final updatedTargets = project.targets.map((t) {
       final geo = _calibrationService.imagePointToGeoFromCurrent(
         Offset(t.imageX, t.imageY),
       );
-      if (geo == null) {
-        return t;
-      }
+      if (geo == null) return t;
       return t.copyWith(latitude: geo.latitude, longitude: geo.longitude);
     }).toList();
 
@@ -987,7 +922,7 @@ class MapScreenLogic {
     state.followRestoreTimer?.cancel();
     setState(() {
       state.followMode = true;
-      state.crosshairInCenter = false; // смещаем прицел вниз для ведения
+      state.crosshairInCenter = false;
     });
     _recalculateCrosshairImagePoint();
     _recalculateUserScreenPoint();
@@ -999,7 +934,7 @@ class MapScreenLogic {
     state.followRestoreTimer?.cancel();
     setState(() {
       state.followMode = false;
-      state.crosshairInCenter = true; // возвращаем прицел в центр
+      state.crosshairInCenter = true;
     });
     _recalculateCrosshairImagePoint();
     _recalculateUserScreenPoint();
@@ -1019,9 +954,7 @@ class MapScreenLogic {
 
   void _centerMapOnUser() {
     final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null || state.viewportSize == null) {
-      return;
-    }
+    if (imagePoint == null || state.viewportSize == null) return;
 
     final crosshairScreen = _getCrosshairScreenPoint();
     final vp = state.viewportSize!;
@@ -1030,9 +963,7 @@ class MapScreenLogic {
 
     final t = state.transformState;
     final imageSize = state.imageSize;
-    if (imageSize == null) {
-      return;
-    }
+    if (imageSize == null) return;
 
     final local =
         imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
@@ -1055,13 +986,11 @@ class MapScreenLogic {
     _recalculateUserScreenPoint();
   }
 
-  /// Загружает настройку таймаута режима вращения
   Future<void> _loadRotateModeTimeout() async {
     final prefs = await SharedPreferences.getInstance();
     rotateModeTimeoutMs = prefs.getInt('rotateModeTimeoutMs') ?? 1000;
   }
 
-  /// Включает режим вращения, запускает таймер автоотключения
   void enableRotateMode() {
     setState(() {
       state.rotateMode = true;
@@ -1069,7 +998,6 @@ class MapScreenLogic {
     _resetRotateModeTimer();
   }
 
-  /// Выключает режим вращения, отменяет таймер
   void disableRotateMode() {
     state.rotateModeTimer?.cancel();
     setState(() {
@@ -1077,30 +1005,22 @@ class MapScreenLogic {
     });
   }
 
-  /// Перезапускает таймер (вызывать при каждом повороте)
   void resetRotateModeTimer() {
     _resetRotateModeTimer();
   }
 
   void _resetRotateModeTimer() {
     state.rotateModeTimer?.cancel();
-    if (!state.rotateMode) {
-      return;
-    }
-    if (rotateModeTimeoutMs <= 0) {
-      return; // 0 = никогда не отключать автоматически
-    }
+    if (!state.rotateMode) return;
+    if (rotateModeTimeoutMs <= 0) return;
     state.rotateModeTimer = Timer(
       Duration(milliseconds: rotateModeTimeoutMs),
       () {
-        if (state.isDisposed) {
-          return;
-        }
+        if (state.isDisposed) return;
         setState(() {
           state.rotateMode = false;
           state.rotateModeTimer = null;
         });
-        // При желании покажите сообщение: showSnackBar("Режим вращения отключён");
       },
     );
   }
@@ -1184,26 +1104,5 @@ class MapScreenLogic {
     );
 
     _isAutoRotating = false;
-  }
-
-  /// Перемещает карту так, чтобы точка [tapScreenPoint] оказалась под прицелом.
-  void movePointToCrosshair(Offset tapScreenPoint) {
-    if (state.viewportSize == null) {
-      return;
-    }
-
-    // Выключаем режим следования, если он был включен
-    if (state.followMode) {
-      disableFollowMode();
-    }
-
-    final crosshairPos = _getCrosshairScreenPoint();
-    final delta = crosshairPos - tapScreenPoint;
-
-    final newTransform = state.transformState.copyWith(
-      translation: state.transformState.translation + delta,
-    );
-
-    updateTransform(newTransform);
   }
 }

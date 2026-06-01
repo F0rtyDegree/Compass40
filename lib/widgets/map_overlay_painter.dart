@@ -80,14 +80,14 @@ class MapOverlayPainter extends CustomPainter {
     if (userPath.length < 2) return;
 
     final solidPathPaint = Paint()
-      ..color = Colors.blue.withValues(alpha: 204/255)
+      ..color = Colors.blue.withValues(alpha: 204 / 255)
       ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
 
     final dashedPathPaint = Paint()
-      ..color = Colors.blue.withValues(alpha: 150/255)
+      ..color = Colors.blue.withValues(alpha: 150 / 255)
       ..strokeWidth = 2.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -108,7 +108,8 @@ class MapOverlayPainter extends CustomPainter {
 
   Offset imageToScreen(Offset imagePoint) {
     final center = Offset(viewportSize.width / 2, viewportSize.height / 2);
-    final local = imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
+    final local =
+        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
     final scaled = local * transformState.scale;
     final angle = transformState.rotationRadians;
     final cos = math.cos(angle);
@@ -148,9 +149,15 @@ class MapOverlayPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     canvas.drawLine(
-        screen + const Offset(-5, 0), screen + const Offset(5, 0), linePaint);
+      screen + const Offset(-5, 0),
+      screen + const Offset(5, 0),
+      linePaint,
+    );
     canvas.drawLine(
-        screen + const Offset(0, -8), screen + const Offset(0, 5), linePaint);
+      screen + const Offset(0, -8),
+      screen + const Offset(0, 5),
+      linePaint,
+    );
 
     final path = Path()
       ..moveTo(screen.dx - 5, screen.dy + 5)
@@ -167,7 +174,7 @@ class MapOverlayPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
 
     final innerShadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 128/255)
+      ..color = Colors.black.withValues(alpha: 128 / 255)
       ..strokeWidth = 0.75
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
@@ -230,7 +237,7 @@ class MapOverlayPainter extends CustomPainter {
 
   void _drawLine(Canvas canvas, Offset from, Offset to) {
     final paint = Paint()
-      ..color = Colors.red.withValues(alpha: 180/255)
+      ..color = Colors.red.withValues(alpha: 180 / 255)
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -252,7 +259,11 @@ class MapOverlayPainter extends CustomPainter {
       final segLen = drawing ? dashLength : gapLength;
       final end = math.min(drawn + segLen, totalLength);
       if (drawing) {
-        canvas.drawLine(from + direction * drawn, from + direction * end, paint);
+        canvas.drawLine(
+          from + direction * drawn,
+          from + direction * end,
+          paint,
+        );
       }
       drawn = end;
       drawing = !drawing;
@@ -362,7 +373,8 @@ class MapOverlayPainter extends CustomPainter {
     if (oldDelegate.anchors.length != anchors.length) return true;
     if (oldDelegate.targets.length != targets.length) return true;
     if (oldDelegate.userPath.length != userPath.length) return true;
-    if (oldDelegate.pathJumpIndices.length != pathJumpIndices.length) return true;
+    if (oldDelegate.pathJumpIndices.length != pathJumpIndices.length)
+      {return true;}
 
     // Если добавилась новая точка пути – перерисовать
     if (userPath.isNotEmpty && oldDelegate.userPath.isNotEmpty) {

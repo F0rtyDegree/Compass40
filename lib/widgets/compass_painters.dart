@@ -132,7 +132,7 @@ class WindRosePainter extends CustomPainter {
           style: TextStyle(
             color: textColor,
             fontWeight: FontWeight.bold,
-            fontSize: 14,
+            fontSize: 16,
           ),
         ),
         textDirection: TextDirection.ltr,

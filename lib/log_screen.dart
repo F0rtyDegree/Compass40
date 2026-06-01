@@ -168,7 +168,7 @@ class _LogScreenState extends State<LogScreen> {
       );
       final copiedStyle = TextStyle(
         fontFamily: 'monospace',
-        fontSize: 14,
+        fontSize: 16,
         color: invertedTextColor,
         fontWeight: FontWeight.bold,
       );
