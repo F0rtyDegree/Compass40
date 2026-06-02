@@ -176,9 +176,11 @@ class _MapScreenState extends State<MapScreen> {
     return GestureDetector(
       onScaleStart: _onScaleStart,
       onScaleUpdate: _onScaleUpdate,
-      // Двойной тап для ручного выбора точек
-      onDoubleTapDown: (details) {
-        _logic.handleDoubleTap(details.localPosition);
+      onTapUp: (details) {
+        _logic.handleTapOnMap(details.localPosition);
+      },
+      onLongPressStart: (details) {
+        _logic.handleLongPressOnMap(context, details.localPosition);
       },
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -209,7 +211,7 @@ class _MapScreenState extends State<MapScreen> {
                     if (_state.plannedTarget != null) _state.plannedTarget!,
                   ],
                   activeAnchorIds: _logic.activeAnchorIds ?? {},
-                  userPath: _state.project?.userPath ?? [],
+                  userPath: _logic.usedAnchorCount > 0 ? (_state.project?.userPath ?? []) : [],
                   pathJumpIndices: _state.project?.pathJumpIndices ?? [],
                   currentUserImagePoint: _state.currentUserImagePoint,
                   activeTargetImagePoint: _state.activeTarget != null
@@ -256,7 +258,7 @@ class _MapScreenState extends State<MapScreen> {
               if (_state.project != null && _state.project!.anchors.isNotEmpty)
                 Positioned(top: 12, right: 12, child: _buildAnchorBadge()),
               Positioned(top: 12, left: 12, child: _buildModeIndicator()),
-              
+
               MapZoomButtons(
                 visible: _state.imagePath != null && _state.imageSize != null,
                 onHereNowPressed: _logic.addAnchorFromCurrentGps,
@@ -524,7 +526,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-    Widget _buildModeIndicator() {
+  Widget _buildModeIndicator() {
     final letter = _logic.calibrationModeLetter;
     return GestureDetector(
       onTap: () => _logic.showModePicker(context),
@@ -535,7 +537,10 @@ class _MapScreenState extends State<MapScreen> {
           shape: BoxShape.circle,
           color: Colors.black54,
           boxShadow: [
-            BoxShadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 3),
+            BoxShadow(
+              color: Colors.white.withValues(alpha: 0.8),
+              blurRadius: 3,
+            ),
           ],
         ),
         alignment: Alignment.center,
@@ -545,9 +550,7 @@ class _MapScreenState extends State<MapScreen> {
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            shadows: [
-              Shadow(color: Colors.black, blurRadius: 2),
-            ],
+            shadows: [Shadow(color: Colors.black, blurRadius: 2)],
           ),
         ),
       ),

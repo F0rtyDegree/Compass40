@@ -7,21 +7,18 @@ import 'affine_transform.dart';
 
 enum CalibrationMode { affine, pairFarthest, pairNearest }
 
-// Простая модель GPS-точки
 class GeoPoint {
   final double latitude;
   final double longitude;
   const GeoPoint({required this.latitude, required this.longitude});
 }
 
-// Локальная метрическая точка (East / North в метрах)
 class LocalPoint {
   final double east;
   final double north;
   const LocalPoint({required this.east, required this.north});
 }
 
-/// Общий интерфейс для всех типов привязки
 abstract class _MapTransformer {
   Offset imageToGeo(Offset imagePoint);
   Offset geoToImage(Offset geoPoint);
@@ -31,13 +28,12 @@ abstract class _MapTransformer {
   double? get metersPerImagePixel => null;
 }
 
-/// Двухточечное подобие (перенос + поворот + равномерный масштаб)
 class SimilarityTransform implements _MapTransformer {
   final double originLat;
   final double originLon;
   final double referenceImageX;
   final double referenceImageY;
-  final double scale; // метров на пиксель (локальных)
+  final double scale;
   final double angleRadians;
   final String latestId;
   final String referenceId;
@@ -141,7 +137,6 @@ class SimilarityTransform implements _MapTransformer {
   Set<String>? get activeAnchorIds => {latestId, referenceId};
 }
 
-/// Адаптер для аффинного преобразования (3+ точек)
 class _AffineTransformerAdapter implements _MapTransformer {
   final AffineTransform _affine;
   final List<MapAnchor> _selectedPoints;
@@ -158,7 +153,6 @@ class _AffineTransformerAdapter implements _MapTransformer {
        _rmse = rmse,
        _selfError = selfError;
 
-  /// Создаёт адаптер, гарантированно использующий только треугольник (3 точки).
   factory _AffineTransformerAdapter.fromAnchorsThreePoints(
     List<MapAnchor> anchors,
   ) {
@@ -445,8 +439,8 @@ class _AffineTransformerAdapter implements _MapTransformer {
   double? get metersPerImagePixel {
     if (_selectedPoints.isEmpty) return null;
     final p = _selectedPoints.first;
-    final a = _affine.m[0]; // dLon/dx
-    final d = _affine.m[3]; // dLat/dx
+    final a = _affine.m[0];
+    final d = _affine.m[3];
     final latRad = p.latitude * math.pi / 180;
     final metersPerDegLon = 111320.0 * math.cos(latRad);
     final metersPerDegLat = 111320.0;
@@ -474,23 +468,12 @@ class MapCalibrationService {
   _MapTransformer? _currentTransform;
   CalibrationMode _mode = CalibrationMode.affine;
   final Set<String> _pinnedAnchorIds = {};
+    bool _manualMode = false; // true, если пользователь хоть раз коснулся якоря
 
   int get usedAnchorCount {
     final t = _currentTransform;
     if (t != null) return t.usedAnchorCount;
     return 0;
-  }
-
-  String get calibrationModeLetter {
-    if (_pinnedAnchorIds.isNotEmpty) return 'M';
-    switch (_mode) {
-      case CalibrationMode.affine:
-        return 'A';
-      case CalibrationMode.pairFarthest:
-        return 'F';
-      case CalibrationMode.pairNearest:
-        return 'N';
-    }
   }
 
   int get totalAnchorCount => _anchors.length;
@@ -500,6 +483,10 @@ class MapCalibrationService {
   double? get metersPerImagePixel => _currentTransform?.metersPerImagePixel;
 
   Set<String>? get activeAnchorIds {
+    // В ручном режиме показываем все выбранные точки, даже если привязка не построена
+    if (_manualMode) {
+      return _pinnedAnchorIds.toSet();
+    }
     final t = _currentTransform;
     if (t is SimilarityTransform) {
       return t.activeAnchorIds;
@@ -538,18 +525,45 @@ class MapCalibrationService {
   List<MapAnchor> get pinnedAnchors =>
       _anchors.where((a) => _pinnedAnchorIds.contains(a.id)).toList();
 
+  String get calibrationModeLetter {
+    if (_manualMode) {
+      print('>>> calibrationModeLetter: manual mode, count=${_pinnedAnchorIds.length}');
+      return '${_pinnedAnchorIds.length}';
+    }
+    switch (_mode) {
+      case CalibrationMode.affine:
+        return 'A';
+      case CalibrationMode.pairFarthest:
+        return 'F';
+      case CalibrationMode.pairNearest:
+        return 'N';
+    }
+  }
+
   void setCalibrationMode(CalibrationMode mode) {
+    print('>>> setCalibrationMode: mode=$mode, clearing manual');
     _pinnedAnchorIds.clear();
+    _manualMode = false;
     _mode = mode;
     _buildTransformFromAnchors();
   }
 
-  void toggleAnchorPinned(String anchorId) {
+    void toggleAnchorPinned(String anchorId) {
     if (_pinnedAnchorIds.contains(anchorId)) {
       _pinnedAnchorIds.remove(anchorId);
+      print('>>> toggleAnchorPinned: REMOVED $anchorId, pinned count=${_pinnedAnchorIds.length}');
     } else {
       _pinnedAnchorIds.add(anchorId);
+      print('>>> toggleAnchorPinned: ADDED $anchorId, pinned count=${_pinnedAnchorIds.length}');
     }
+    _manualMode = true;
+    print('>>> toggleAnchorPinned: _manualMode set to TRUE');
+    _buildTransformFromAnchors();
+  }
+
+  void removeAnchor(String anchorId) {
+    _anchors.removeWhere((a) => a.id == anchorId);
+    _pinnedAnchorIds.remove(anchorId);
     _buildTransformFromAnchors();
   }
 
@@ -559,47 +573,38 @@ class MapCalibrationService {
   }
 
   void _buildTransformFromAnchors() {
-    // ----- Ручной режим -----
-    if (_pinnedAnchorIds.isNotEmpty) {
-      final latest = _anchors.last;
+    print('>>> _buildTransform: _manualMode=$_manualMode, pinned=${_pinnedAnchorIds.length}, mode=$_mode');
+    if (_manualMode) {
       final pinnedList = pinnedAnchors;
-      final combined = <MapAnchor>{...pinnedList, latest}.toList();
-      final idx = combined.indexOf(latest);
-      if (idx > 0) {
-        combined.removeAt(idx);
-        combined.insert(0, latest);
-      }
-      if (combined.length >= 3) {
+      print('>>> _buildTransform: manual mode, pinnedList length=${pinnedList.length}');
+      if (pinnedList.length >= 3) {
         try {
           final affine = AffineTransform.fromPoints(
-            combined.map((a) => Offset(a.imageX, a.imageY)).toList(),
-            combined.map((a) => Offset(a.longitude, a.latitude)).toList(),
-            weights: _AffineTransformerAdapter._buildWeights(combined.length),
+            pinnedList.map((a) => Offset(a.imageX, a.imageY)).toList(),
+            pinnedList.map((a) => Offset(a.longitude, a.latitude)).toList(),
+            weights: _AffineTransformerAdapter._buildWeights(pinnedList.length),
           );
-          final rmse = _AffineTransformerAdapter._computeRmse(combined, affine);
-          final selfError = _AffineTransformerAdapter._computeSelfError(
-            combined,
-            affine,
-          );
+          final rmse = _AffineTransformerAdapter._computeRmse(pinnedList, affine);
+          final selfError = _AffineTransformerAdapter._computeSelfError(pinnedList, affine);
           _currentTransform = _AffineTransformerAdapter._(
             affine: affine,
-            selectedPoints: combined,
+            selectedPoints: pinnedList,
             rmse: rmse,
             selfError: selfError,
           );
           return;
         } catch (_) {}
+      } else if (pinnedList.length == 2) {
+        _currentTransform = SimilarityTransform.fromPair(pinnedList[0], pinnedList[1]);
+        return;
       }
-      final pair = selectWorkingPair(_anchors);
-      _currentTransform = pair != null
-          ? SimilarityTransform.fromPair(pair.latest, pair.reference)
-          : null;
+      // недостаточно точек – привязка отсутствует
+      _currentTransform = null;
       return;
     }
 
     // ----- Автоматический режим -----
-    if (_mode == CalibrationMode.pairFarthest ||
-        _mode == CalibrationMode.pairNearest) {
+    if (_mode == CalibrationMode.pairFarthest || _mode == CalibrationMode.pairNearest) {
       if (_anchors.length >= 2) {
         MapWorkingPair? pair;
         if (_mode == CalibrationMode.pairFarthest) {
@@ -619,9 +624,7 @@ class MapCalibrationService {
     if (_anchors.length >= 3) {
       _MapTransformer? transform;
       try {
-        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(
-          _anchors,
-        );
+        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(_anchors);
         transform = adapter;
       } catch (_) {
         transform = null;

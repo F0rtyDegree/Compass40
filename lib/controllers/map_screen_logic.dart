@@ -52,7 +52,6 @@ class MapScreenLogic {
 
   bool get canPlaceTarget => state.canPlaceTarget;
   bool get followMode => state.followMode;
-  String get calibrationModeLetter => _calibrationService.calibrationModeLetter;
 
   double? get distanceToCrosshairMeters {
     final gps = _lastGpsData;
@@ -87,8 +86,8 @@ class MapScreenLogic {
   int get totalAnchorCount => _calibrationService.totalAnchorCount;
   double? get rmseMeters => _calibrationService.rmseMeters;
   double? get selfPointErrorMeters => _calibrationService.selfPointErrorMeters;
-
   Set<String>? get activeAnchorIds => _calibrationService.activeAnchorIds;
+  String get calibrationModeLetter => _calibrationService.calibrationModeLetter;
 
   double? get metersPerScreenPixel {
     final imageScale = _calibrationService.metersPerImagePixel;
@@ -601,34 +600,70 @@ class MapScreenLogic {
   }
 
   // --------------------------------------------------------
-  // Ручной выбор точек (двойной тап)
+  // Ручной выбор и удаление якорей
   // --------------------------------------------------------
 
-  void handleDoubleTap(Offset screenPosition) {
-    if (state.project == null || state.imageSize == null) return;
-    final imagePoint = screenToImage(screenPosition);
-    final anchors = state.project!.anchors;
-    if (anchors.isEmpty) return;
-
-    // Ищем ближайший якорь в радиусе 20 пикселей (на изображении)
-    const double tapRadius = 20.0;
-    MapAnchor? closest;
-    double closestDist = double.infinity;
-    for (final anchor in anchors) {
-      final dx = anchor.imageX - imagePoint.dx;
-      final dy = anchor.imageY - imagePoint.dy;
-      final dist = math.sqrt(dx * dx + dy * dy);
-      if (dist < tapRadius && dist < closestDist) {
-        closestDist = dist;
-        closest = anchor;
-      }
-    }
-
-    if (closest != null) {
-      _calibrationService.toggleAnchorPinned(closest.id);
-      setState(() {}); // перерисовать карту и инфопанель
+    void handleTapOnMap(Offset screenPosition) {
+    final anchor = _findClosestAnchor(screenPosition);
+    if (anchor != null) {
+      _calibrationService.toggleAnchorPinned(anchor.id);
+      setState(() {});
     }
   }
+
+   void handleLongPressOnMap(BuildContext context, Offset screenPosition) {
+    final anchor = _findClosestAnchor(screenPosition);
+    if (anchor != null) {
+      _confirmDeleteAnchor(context, anchor);
+    }
+  }
+
+  void _confirmDeleteAnchor(BuildContext context, MapAnchor anchor) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Удалить якорь?'),
+        content: Text('Точка привязки будет безвозвратно удалена.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              deleteAnchorAndUpdate(anchor.id);
+            },
+            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void deleteAnchorAndUpdate(String anchorId) async {
+    final project = state.project;
+    if (project == null) return;
+
+    final updatedAnchors = project.anchors
+        .where((a) => a.id != anchorId)
+        .toList();
+    final updatedProject = project.copyWith(anchors: updatedAnchors);
+    await storageService.saveProject(updatedProject);
+
+    setState(() {
+      state.project = updatedProject;
+    });
+
+    _calibrationService.removeAnchor(anchorId);
+    _recalculateWorkingPairAndRotation();
+    _recalculateCanPlaceTarget();
+    _recalculateUserImagePoint();
+  }
+
+  // --------------------------------------------------------
+  // Смена режима (меню)
+  // --------------------------------------------------------
 
   void showModePicker(BuildContext context) {
     showDialog(
@@ -643,7 +678,7 @@ class MapScreenLogic {
               _recalculateUserImagePoint();
               setState(() {});
             },
-            child: const Text('(A)-Affine афинная'),
+            child: const Text('Affine (A)'),
           ),
           SimpleDialogOption(
             onPressed: () {
@@ -654,7 +689,7 @@ class MapScreenLogic {
               _recalculateUserImagePoint();
               setState(() {});
             },
-            child: const Text('(F)-Farthest дальняя'),
+            child: const Text('Farthest (F)'),
           ),
           SimpleDialogOption(
             onPressed: () {
@@ -665,7 +700,7 @@ class MapScreenLogic {
               _recalculateUserImagePoint();
               setState(() {});
             },
-            child: const Text('(N)-Nearest ближайшая'),
+            child: const Text('Nearest (N)'),
           ),
         ],
       ),
@@ -809,6 +844,16 @@ class MapScreenLogic {
   }
 
   void _recalculateUserImagePoint() {
+    // Если привязка отсутствует, скрываем маркер
+    if (_calibrationService.usedAnchorCount == 0) {
+      if (state.currentUserImagePoint != null) {
+        setState(() {
+          state.currentUserImagePoint = null;
+        });
+      }
+      return;
+    }
+
     final gps = _lastGpsData;
     if (gps == null) return;
     final lat = gps.latitude;
@@ -1104,5 +1149,31 @@ class MapScreenLogic {
     );
 
     _isAutoRotating = false;
+  }
+
+    static const double _tapRadiusScreen = 24.0; // комфортный радиус в экранных пикселях
+
+  MapAnchor? _findClosestAnchor(Offset screenPosition) {
+    final project = state.project;
+    final imageSize = state.imageSize;
+    final scale = state.transformState.scale;
+    if (project == null || imageSize == null || scale <= 0) return null;
+
+    // Переводим радиус из экранных пикселей в пиксели изображения
+    final double tapRadiusImage = _tapRadiusScreen / scale;
+    final Offset imagePoint = screenToImage(screenPosition);
+
+    MapAnchor? closest;
+    double closestDist = double.infinity;
+    for (final anchor in project.anchors) {
+      final double dx = anchor.imageX - imagePoint.dx;
+      final double dy = anchor.imageY - imagePoint.dy;
+      final double dist = math.sqrt(dx * dx + dy * dy);
+      if (dist < tapRadiusImage && dist < closestDist) {
+        closestDist = dist;
+        closest = anchor;
+      }
+    }
+    return closest;
   }
 }
