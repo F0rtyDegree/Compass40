@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:async';
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:xml/xml.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gps_info/gps_info.dart';
@@ -38,6 +40,7 @@ class MapScreenLogic {
   StreamSubscription<GpsData>? _gpsSub;
   GpsData? _lastGpsData;
   late SensorSettings _sensorSettings;
+  List<Map<String, String>>? _cachedGpxPoints;
 
   MapScreenLogic({
     required this.state,
@@ -284,6 +287,7 @@ class MapScreenLogic {
       state.currentUserScreenPoint = null;
     });
     _calibrationService.updateAnchors([]);
+    _cachedGpxPoints = null;
   }
 
   // --------------------------------------------------------
@@ -523,6 +527,126 @@ class MapScreenLogic {
     );
   }
 
+  void showHereOptions(BuildContext context) {
+    final hasCache = _cachedGpxPoints != null;
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Добавить точку'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              addAnchorFromClipboard();
+            },
+            child: const Text('Вставить из буфера'),
+          ),
+          if (hasCache)
+            ..._cachedGpxPoints!.map((p) {
+              return SimpleDialogOption(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  final lat = double.tryParse(p['lat']!);
+                  final lon = double.tryParse(p['lon']!);
+                  if (lat != null && lon != null) {
+                    _addAnchor(
+                      imagePoint: state.crosshairImagePoint ?? Offset.zero,
+                      latitude: lat,
+                      longitude: lon,
+                    );
+                  } else {
+                    showSnackBar('Неверные координаты');
+                  }
+                },
+                child: Text(p['name']!),
+              );
+            }),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              pickGpxFile(context);
+            },
+            child: Text(hasCache ? 'Загрузить другой GPX' : 'Выбрать из GPX'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> pickGpxFile(BuildContext context) async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['gpx', 'xml'],
+      );
+      if (result == null || result.files.isEmpty) return;
+
+      final file = File(result.files.single.path!);
+      final content = await file.readAsString();
+      final points = _parseGpxPoints(content);
+
+      if (points.isEmpty) {
+        showSnackBar('Файл не содержит точек');
+        return;
+      }
+
+      if (!context.mounted) return;
+      _showGpxPointsList(context, points);
+      _cachedGpxPoints = points;
+    } catch (e) {
+      showSnackBar('Ошибка чтения GPX: $e');
+    }
+  }
+
+  List<Map<String, String>> _parseGpxPoints(String xmlString) {
+    final points = <Map<String, String>>[];
+    try {
+      final document = XmlDocument.parse(xmlString);
+      final wpts = document.findAllElements('wpt');
+      for (final wpt in wpts) {
+        final lat = wpt.getAttribute('lat');
+        final lon = wpt.getAttribute('lon');
+        final name =
+            wpt.findElements('name').firstOrNull?.innerText ?? 'Без имени';
+        if (lat != null && lon != null) {
+          points.add({'name': name, 'lat': lat, 'lon': lon});
+        }
+      }
+    } catch (_) {}
+    return points;
+  }
+
+  void _showGpxPointsList(
+    BuildContext context,
+    List<Map<String, String>> points,
+  ) {
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Точки из GPX'),
+        children: points.map((p) {
+          return SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              final lat = double.tryParse(p['lat']!);
+              final lon = double.tryParse(p['lon']!);
+              if (lat != null && lon != null) {
+                _addAnchor(
+                  imagePoint: state.crosshairImagePoint ?? Offset.zero,
+                  latitude: lat,
+                  longitude: lon,
+                );
+              } else {
+                showSnackBar('Неверные координаты');
+              }
+            },
+            child: Text(p['name']!),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Future<void> _addAnchor({
     required Offset imagePoint,
     required double latitude,
@@ -603,7 +727,7 @@ class MapScreenLogic {
   // Ручной выбор и удаление якорей
   // --------------------------------------------------------
 
-    void handleTapOnMap(Offset screenPosition) {
+  void handleTapOnMap(Offset screenPosition) {
     final anchor = _findClosestAnchor(screenPosition);
     if (anchor != null) {
       _calibrationService.toggleAnchorPinned(anchor.id);
@@ -611,7 +735,7 @@ class MapScreenLogic {
     }
   }
 
-   void handleLongPressOnMap(BuildContext context, Offset screenPosition) {
+  void handleLongPressOnMap(BuildContext context, Offset screenPosition) {
     final anchor = _findClosestAnchor(screenPosition);
     if (anchor != null) {
       _confirmDeleteAnchor(context, anchor);
@@ -1151,7 +1275,8 @@ class MapScreenLogic {
     _isAutoRotating = false;
   }
 
-    static const double _tapRadiusScreen = 24.0; // комфортный радиус в экранных пикселях
+  static const double _tapRadiusScreen =
+      24.0; // комфортный радиус в экранных пикселях
 
   MapAnchor? _findClosestAnchor(Offset screenPosition) {
     final project = state.project;

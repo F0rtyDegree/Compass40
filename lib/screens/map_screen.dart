@@ -262,7 +262,7 @@ class _MapScreenState extends State<MapScreen> {
               MapZoomButtons(
                 visible: _state.imagePath != null && _state.imageSize != null,
                 onHereNowPressed: _logic.addAnchorFromCurrentGps,
-                onHereFromClipboard: _logic.addAnchorFromClipboard,
+                onHereFromClipboard: () => _logic.showHereOptions(context),
                 hereEnabled: !_state.followMode,
                 onTargetPressed: _state.canPlaceTarget && !_state.followMode
                     ? (_state.plannedTarget == null
