@@ -211,7 +211,9 @@ class _MapScreenState extends State<MapScreen> {
                     if (_state.plannedTarget != null) _state.plannedTarget!,
                   ],
                   activeAnchorIds: _logic.activeAnchorIds ?? {},
-                  userPath: _logic.usedAnchorCount > 0 ? (_state.project?.userPath ?? []) : [],
+                  userPath: _logic.usedAnchorCount > 0
+                      ? (_state.project?.userPath ?? [])
+                      : [],
                   pathJumpIndices: _state.project?.pathJumpIndices ?? [],
                   currentUserImagePoint: _state.currentUserImagePoint,
                   activeTargetImagePoint: _state.activeTarget != null
@@ -240,7 +242,7 @@ class _MapScreenState extends State<MapScreen> {
                         width: 80,
                         height: 80,
                         child: GestureDetector(
-                          onTap: _logic.toggleFollowMode,
+                          onDoubleTap: _logic.toggleFollowMode,
                           onLongPress: () =>
                               _logic.copyCrosshairCoordinatesToClipboard(),
                           child: Container(color: Colors.transparent),

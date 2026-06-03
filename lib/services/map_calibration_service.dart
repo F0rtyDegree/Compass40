@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import '../models/map_anchor.dart';
@@ -468,7 +469,7 @@ class MapCalibrationService {
   _MapTransformer? _currentTransform;
   CalibrationMode _mode = CalibrationMode.affine;
   final Set<String> _pinnedAnchorIds = {};
-    bool _manualMode = false; // true, если пользователь хоть раз коснулся якоря
+  bool _manualMode = false; // true, если пользователь хоть раз коснулся якоря
 
   int get usedAnchorCount {
     final t = _currentTransform;
@@ -527,7 +528,7 @@ class MapCalibrationService {
 
   String get calibrationModeLetter {
     if (_manualMode) {
-      print('>>> calibrationModeLetter: manual mode, count=${_pinnedAnchorIds.length}');
+
       return '${_pinnedAnchorIds.length}';
     }
     switch (_mode) {
@@ -541,24 +542,67 @@ class MapCalibrationService {
   }
 
   void setCalibrationMode(CalibrationMode mode) {
-    print('>>> setCalibrationMode: mode=$mode, clearing manual');
-    _pinnedAnchorIds.clear();
+  
     _manualMode = false;
     _mode = mode;
     _buildTransformFromAnchors();
   }
 
-    void toggleAnchorPinned(String anchorId) {
+  void enableManualMode() {
+    _manualMode = true;
+    _buildTransformFromAnchors();
+  }
+
+  CalibrationMode get currentMode => _mode;
+  bool get isManualMode => _manualMode;
+
+  void restoreState({
+    required CalibrationMode mode,
+    required bool manual,
+    required List<String> pinnedIds,
+  }) {
+    _mode = mode;
+    _manualMode = manual;
+    _pinnedAnchorIds.clear();
+    _pinnedAnchorIds.addAll(pinnedIds);
+    _buildTransformFromAnchors();
+  }
+
+  List<String> get pinnedAnchorIdsList => _pinnedAnchorIds.toList();
+
+  void setPinnedAnchorIds(List<String> ids) {
+    _pinnedAnchorIds.clear();
+    _pinnedAnchorIds.addAll(ids);
+    _manualMode = ids.isNotEmpty;
+    _buildTransformFromAnchors();
+  }
+
+   void toggleAnchorPinned(String anchorId) {
+    // Если сейчас не ручной режим — запоминаем текущий автоматический набор
+    if (!_manualMode) {
+      _captureCurrentAutomaticSet();
+    }
+
+    // Переключаем точку в наборе
     if (_pinnedAnchorIds.contains(anchorId)) {
       _pinnedAnchorIds.remove(anchorId);
-      print('>>> toggleAnchorPinned: REMOVED $anchorId, pinned count=${_pinnedAnchorIds.length}');
     } else {
       _pinnedAnchorIds.add(anchorId);
-      print('>>> toggleAnchorPinned: ADDED $anchorId, pinned count=${_pinnedAnchorIds.length}');
     }
+
     _manualMode = true;
-    print('>>> toggleAnchorPinned: _manualMode set to TRUE');
     _buildTransformFromAnchors();
+  }
+
+  void _captureCurrentAutomaticSet() {
+    _pinnedAnchorIds.clear();
+    final t = _currentTransform;
+    if (t is SimilarityTransform) {
+      _pinnedAnchorIds.addAll({t.latestId, t.referenceId});
+    } else if (t is _AffineTransformerAdapter) {
+      _pinnedAnchorIds.addAll(t._selectedPoints.map((a) => a.id));
+    }
+    // Если трансформер отсутствует, набор остаётся пустым
   }
 
   void removeAnchor(String anchorId) {
@@ -573,10 +617,10 @@ class MapCalibrationService {
   }
 
   void _buildTransformFromAnchors() {
-    print('>>> _buildTransform: _manualMode=$_manualMode, pinned=${_pinnedAnchorIds.length}, mode=$_mode');
+   
     if (_manualMode) {
       final pinnedList = pinnedAnchors;
-      print('>>> _buildTransform: manual mode, pinnedList length=${pinnedList.length}');
+    
       if (pinnedList.length >= 3) {
         try {
           final affine = AffineTransform.fromPoints(
@@ -584,8 +628,14 @@ class MapCalibrationService {
             pinnedList.map((a) => Offset(a.longitude, a.latitude)).toList(),
             weights: _AffineTransformerAdapter._buildWeights(pinnedList.length),
           );
-          final rmse = _AffineTransformerAdapter._computeRmse(pinnedList, affine);
-          final selfError = _AffineTransformerAdapter._computeSelfError(pinnedList, affine);
+          final rmse = _AffineTransformerAdapter._computeRmse(
+            pinnedList,
+            affine,
+          );
+          final selfError = _AffineTransformerAdapter._computeSelfError(
+            pinnedList,
+            affine,
+          );
           _currentTransform = _AffineTransformerAdapter._(
             affine: affine,
             selectedPoints: pinnedList,
@@ -595,7 +645,10 @@ class MapCalibrationService {
           return;
         } catch (_) {}
       } else if (pinnedList.length == 2) {
-        _currentTransform = SimilarityTransform.fromPair(pinnedList[0], pinnedList[1]);
+        _currentTransform = SimilarityTransform.fromPair(
+          pinnedList[0],
+          pinnedList[1],
+        );
         return;
       }
       // недостаточно точек – привязка отсутствует
@@ -604,7 +657,8 @@ class MapCalibrationService {
     }
 
     // ----- Автоматический режим -----
-    if (_mode == CalibrationMode.pairFarthest || _mode == CalibrationMode.pairNearest) {
+    if (_mode == CalibrationMode.pairFarthest ||
+        _mode == CalibrationMode.pairNearest) {
       if (_anchors.length >= 2) {
         MapWorkingPair? pair;
         if (_mode == CalibrationMode.pairFarthest) {
@@ -624,7 +678,9 @@ class MapCalibrationService {
     if (_anchors.length >= 3) {
       _MapTransformer? transform;
       try {
-        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(_anchors);
+        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(
+          _anchors,
+        );
         transform = adapter;
       } catch (_) {
         transform = null;

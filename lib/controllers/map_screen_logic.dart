@@ -149,6 +149,15 @@ class MapScreenLogic {
     });
 
     _calibrationService.updateAnchors(project.anchors);
+    _calibrationService.setPinnedAnchorIds(project.pinnedAnchorIds);
+    _calibrationService.restoreState(
+      mode: CalibrationMode.values.firstWhere(
+        (m) => m.name == project.calibrationMode,
+        orElse: () => CalibrationMode.affine,
+      ),
+      manual: project.manualMode,
+      pinnedIds: project.pinnedAnchorIds,
+    );
     await _loadImageSize();
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
@@ -689,6 +698,9 @@ class MapScreenLogic {
     final updatedProject = project.copyWith(
       anchors: updatedAnchors,
       pathJumpIndices: newPathJumpIndices,
+      manualMode: _calibrationService.isManualMode,
+      calibrationMode: _calibrationService.currentMode.name,
+      pinnedAnchorIds: _calibrationService.pinnedAnchorIdsList,
     );
 
     await storageService.saveProject(updatedProject);
@@ -731,7 +743,7 @@ class MapScreenLogic {
     final anchor = _findClosestAnchor(screenPosition);
     if (anchor != null) {
       _calibrationService.toggleAnchorPinned(anchor.id);
-      setState(() {});
+      _saveCalibrationState();
     }
   }
 
@@ -772,7 +784,12 @@ class MapScreenLogic {
     final updatedAnchors = project.anchors
         .where((a) => a.id != anchorId)
         .toList();
-    final updatedProject = project.copyWith(anchors: updatedAnchors);
+    final updatedProject = project.copyWith(
+      anchors: updatedAnchors,
+      manualMode: _calibrationService.isManualMode,
+      calibrationMode: _calibrationService.currentMode.name,
+      pinnedAnchorIds: _calibrationService.pinnedAnchorIdsList,
+    );
     await storageService.saveProject(updatedProject);
 
     setState(() {
@@ -797,9 +814,20 @@ class MapScreenLogic {
         children: [
           SimpleDialogOption(
             onPressed: () {
+              _calibrationService.enableManualMode();
+              Navigator.pop(ctx);
+              _recalculateUserImagePoint();
+              _saveCalibrationState();
+              setState(() {});
+            },
+            child: const Text('Ручной (M)'),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
               _calibrationService.setCalibrationMode(CalibrationMode.affine);
               Navigator.pop(ctx);
               _recalculateUserImagePoint();
+              _saveCalibrationState();
               setState(() {});
             },
             child: const Text('Affine (A)'),
@@ -811,6 +839,7 @@ class MapScreenLogic {
               );
               Navigator.pop(ctx);
               _recalculateUserImagePoint();
+              _saveCalibrationState();
               setState(() {});
             },
             child: const Text('Farthest (F)'),
@@ -822,6 +851,7 @@ class MapScreenLogic {
               );
               Navigator.pop(ctx);
               _recalculateUserImagePoint();
+              _saveCalibrationState();
               setState(() {});
             },
             child: const Text('Nearest (N)'),
@@ -1237,6 +1267,21 @@ class MapScreenLogic {
   // --------------------------------------------------------
   // Вспомогательные
   // --------------------------------------------------------
+
+  void _saveCalibrationState() {
+    final project = state.project;
+    if (project != null) {
+      final updated = project.copyWith(
+        manualMode: _calibrationService.isManualMode,
+        calibrationMode: _calibrationService.currentMode.name,
+        pinnedAnchorIds: _calibrationService.pinnedAnchorIdsList,
+      );
+      storageService.saveProject(updated);
+      setState(() {
+        state.project = updated;
+      });
+    }
+  }
 
   void _applyHeadingRotation() {
     if (!state.followMode ||

@@ -10,6 +10,9 @@ class MapProject extends Equatable {
   final List<MapTarget> targets;
   final List<Offset> userPath; // Путь пользователя
   final List<int> pathJumpIndices; // Индексы, где были "скачки" пути
+  final List<String> pinnedAnchorIds;
+  final bool manualMode;
+  final String calibrationMode;
 
   const MapProject({
     required this.id,
@@ -18,6 +21,9 @@ class MapProject extends Equatable {
     required this.targets,
     this.userPath = const [],
     this.pathJumpIndices = const [],
+    this.pinnedAnchorIds = const [],
+    this.manualMode = false,
+    this.calibrationMode = 'affine',
   });
 
   MapProject copyWith({
@@ -27,6 +33,9 @@ class MapProject extends Equatable {
     List<MapTarget>? targets,
     List<Offset>? userPath,
     List<int>? pathJumpIndices,
+    List<String>? pinnedAnchorIds,
+    bool? manualMode,
+    String? calibrationMode,
   }) {
     return MapProject(
       id: id ?? this.id,
@@ -35,6 +44,9 @@ class MapProject extends Equatable {
       targets: targets ?? this.targets,
       userPath: userPath ?? this.userPath,
       pathJumpIndices: pathJumpIndices ?? this.pathJumpIndices,
+      pinnedAnchorIds: pinnedAnchorIds ?? this.pinnedAnchorIds,
+      manualMode: manualMode ?? this.manualMode,
+      calibrationMode: calibrationMode ?? this.calibrationMode,
     );
   }
 
@@ -53,7 +65,16 @@ class MapProject extends Equatable {
       userPath: ((json['userPath'] as List?) ?? [])
           .map((p) => Offset(p['dx'] as double, p['dy'] as double))
           .toList(),
-      pathJumpIndices: ((json['pathJumpIndices'] as List?) ?? []).cast<int>().toList(),
+      pathJumpIndices: ((json['pathJumpIndices'] as List?) ?? [])
+          .cast<int>()
+          .toList(),
+      pinnedAnchorIds:
+          (json['pinnedAnchorIds'] as List<dynamic>?)
+              ?.map((e) => e as String)
+              .toList() ??
+          [],
+      manualMode: json['manualMode'] as bool? ?? false,
+      calibrationMode: json['calibrationMode'] as String? ?? 'affine',
     );
   }
 
@@ -65,10 +86,22 @@ class MapProject extends Equatable {
       'targets': targets.map((t) => t.toJson()).toList(),
       'userPath': userPath.map((p) => {'dx': p.dx, 'dy': p.dy}).toList(),
       'pathJumpIndices': pathJumpIndices,
+      'pinnedAnchorIds': pinnedAnchorIds,
+      'manualMode': manualMode,
+      'calibrationMode': calibrationMode,
     };
   }
 
-
   @override
-  List<Object?> get props => [id, imagePath, anchors, targets, userPath, pathJumpIndices];
+  List<Object?> get props => [
+    id,
+    imagePath,
+    anchors,
+    targets,
+    userPath,
+    pathJumpIndices,
+    pinnedAnchorIds,
+    manualMode,
+    calibrationMode,
+  ];
 }
