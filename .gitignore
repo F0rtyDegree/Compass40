@@ -2,7 +2,7 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
-.packages
+.packages/
 .pub-cache/
 *.iml
 *.ipr
@@ -12,7 +12,7 @@ build/
 *.log
 .idea/
 .vscode/
-.diff
 android/.gradle/
 android/local.properties
 *.loc
+*.diff

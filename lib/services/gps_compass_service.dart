@@ -53,10 +53,16 @@ class GpsCompassService {
   void _onGpsData(GpsData data) {
     final speedKmh = (data.speed ?? 0) * 3.6;
     final bearing = data.gpsBearing;
-    if (bearing != null && speedKmh >= (_settings?.autoSwitchSpeedKmh ?? 3.0)) {
+    final threshold = _settings?.autoSwitchSpeedKmh ?? 3.0;
+
+    if (bearing != null && speedKmh >= threshold) {
       _samples.add(bearing);
       if (_samples.length > _maxSamples) _samples.removeAt(0);
       _processSamples();
+    } else {
+      // Скорость упала ниже порога: GPS-курс ненадежен.
+      // Сбрасываем флаг, чтобы в режиме АВТО переключиться на магнитный компас.
+      isActiveNotifier.value = false;
     }
   }
 
