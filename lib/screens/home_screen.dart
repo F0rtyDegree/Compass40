@@ -130,6 +130,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   MaterialPageRoute(
                     builder: (_) => MapScreen(
                       magneticDeclination: _state.magneticDeclination,
+                      headingNotifier: _state.headingNotifier,
                       onAnchorAdded: (lat, lon, distance, timeStr) async {
                         final items = await _logService.addMapAnchorLogEntry(
                           currentLogItems: _state.logItems,

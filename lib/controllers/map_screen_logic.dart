@@ -26,6 +26,7 @@ class MapScreenLogic {
   final void Function(String message) showSnackBar;
   final MapStorageService storageService;
   final double magneticDeclination;
+  final ValueNotifier<double> headingNotifier;
   final MapCalibrationService _calibrationService = MapCalibrationService();
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
@@ -48,6 +49,7 @@ class MapScreenLogic {
     required this.showSnackBar,
     required this.storageService,
     required this.magneticDeclination,
+    required this.headingNotifier,
     this.onAnchorAdded,
     this.onStartNavigation,
     this.onCancelNavigation,
@@ -104,11 +106,18 @@ class MapScreenLogic {
     await _loadLastProject();
     _startGpsCompassService();
     _startGpsSubscription();
+    headingNotifier.addListener(_onHeadingChanged);
+    _onHeadingChanged();
+    GpsCompassService.instance.isActiveNotifier.addListener(
+      _onGpsActiveChanged,
+    );
+    _onGpsActiveChanged(); // Инициализируем начальное состояние
   }
 
   void dispose() {
-    GpsCompassService.instance.bearingNotifier.removeListener(
-      _onGpsBearingChanged,
+    headingNotifier.removeListener(_onHeadingChanged);
+    GpsCompassService.instance.isActiveNotifier.removeListener(
+      _onGpsActiveChanged,
     );
     if (state.project != null) {
       storageService.saveProject(state.project!);
@@ -1233,9 +1242,6 @@ class MapScreenLogic {
   }
 
   void _startGpsSubscription() {
-    GpsCompassService.instance.bearingNotifier.addListener(
-      _onGpsBearingChanged,
-    );
     _gpsSub = sensorService.subscribeToGps(
       intervalSeconds: _sensorSettings.gpsInterval,
       onData: (gpsData) {
@@ -1251,16 +1257,12 @@ class MapScreenLogic {
     );
   }
 
-  void _onGpsBearingChanged() {
-    final bearing = GpsCompassService.instance.bearingNotifier.value;
-    final isActive = GpsCompassService.instance.isActiveNotifier.value;
-    if (bearing != null && isActive) {
-      setState(() {
-        state.heading = (bearing - magneticDeclination + 360) % 360;
-      });
-      if (state.followMode) {
-        _applyHeadingRotation();
-      }
+  void _onHeadingChanged() {
+    setState(() {
+      state.heading = headingNotifier.value;
+    });
+    if (state.followMode) {
+      _applyHeadingRotation();
     }
   }
 
@@ -1345,5 +1347,11 @@ class MapScreenLogic {
       }
     }
     return closest;
+  }
+
+  void _onGpsActiveChanged() {
+    setState(() {
+      state.isGpsActive = GpsCompassService.instance.isActiveNotifier.value;
+    });
   }
 }

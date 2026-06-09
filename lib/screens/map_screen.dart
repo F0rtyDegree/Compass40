@@ -14,14 +14,16 @@ typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
 class MapScreen extends StatefulWidget {
   final double magneticDeclination;
+  final ValueNotifier<double> headingNotifier;
   final Function(double lat, double lon, double? distance, String timeStr)?
   onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
-
+  
   const MapScreen({
     super.key,
     this.magneticDeclination = 0.0,
+    required this.headingNotifier,
     this.onAnchorAdded,
     this.onStartNavigation,
     this.onCancelNavigation,
@@ -61,6 +63,7 @@ class _MapScreenState extends State<MapScreen> {
       },
       storageService: _storageService,
       magneticDeclination: widget.magneticDeclination,
+      headingNotifier: widget.headingNotifier,
       onAnchorAdded: widget.onAnchorAdded,
       onStartNavigation: widget.onStartNavigation,
       onCancelNavigation: widget.onCancelNavigation,
@@ -225,6 +228,7 @@ class _MapScreenState extends State<MapScreen> {
                   previewDistanceMeters: _state.previewDistanceMeters,
                   previewBearingDegrees: _state.previewBearingDegrees,
                   heading: _state.heading,
+                  isGpsActive: _state.isGpsActive,
                   mapRotation: _state.mapRotation,
                   magneticDeclination: widget.magneticDeclination,
                 ),

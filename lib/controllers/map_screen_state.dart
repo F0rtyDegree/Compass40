@@ -43,6 +43,7 @@ class MapScreenState {
   Offset? currentUserImagePoint;
   Offset? currentUserScreenPoint;
   double? heading; // Азимут
+  bool isGpsActive = false;
 
   // Предпросмотр расстояния/азимута (до точки под прицелом или до цели)
   double? previewDistanceMeters;

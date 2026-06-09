@@ -21,6 +21,7 @@ class MapOverlayPainter extends CustomPainter {
   final double? previewDistanceMeters;
   final double? previewBearingDegrees;
   final double? heading;
+  final bool isGpsActive;
   final double mapRotation;
   final double magneticDeclination;
 
@@ -38,6 +39,7 @@ class MapOverlayPainter extends CustomPainter {
     this.previewDistanceMeters,
     this.previewBearingDegrees,
     this.heading,
+    this.isGpsActive = false,
     this.mapRotation = 0.0,
     this.magneticDeclination = 0.0,
   });
@@ -167,6 +169,24 @@ class MapOverlayPainter extends CustomPainter {
   }
 
   void _drawCurrentPosition(Canvas canvas, Offset screen) {
+    if (!isGpsActive) {
+      final outlinePaint = Paint()
+        ..color = Colors.blue.shade500
+        ..strokeWidth = 2.0
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.round;
+
+      final innerShadowPaint = Paint()
+        ..color = Colors.black.withValues(alpha: 128 / 255)
+        ..strokeWidth = 0.75
+        ..style = PaintingStyle.stroke
+        ..strokeJoin = StrokeJoin.round;
+
+      canvas.drawCircle(screen, 12, innerShadowPaint);
+      canvas.drawCircle(screen, 12, outlinePaint);
+      return;
+    }
+
     final outlinePaint = Paint()
       ..color = Colors.blue.shade500
       ..strokeWidth = 2.0
