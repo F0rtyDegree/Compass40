@@ -377,45 +377,79 @@ class MapOverlayPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant MapOverlayPainter oldDelegate) {
-    // Быстрые проверки простых полей
+    // Базовые размеры
+    if (oldDelegate.imageSize != imageSize ||
+        oldDelegate.viewportSize != viewportSize) {
+      return true;
+    }
+
+    // Трансформация и навигация
     if (oldDelegate.transformState != transformState ||
         oldDelegate.heading != heading ||
         oldDelegate.mapRotation != mapRotation ||
-        oldDelegate.magneticDeclination != magneticDeclination ||
-        oldDelegate.previewDistanceMeters != previewDistanceMeters ||
+        oldDelegate.magneticDeclination != magneticDeclination) {
+      return true;
+    }
+
+    // Превью и состояние GPS
+    if (oldDelegate.previewDistanceMeters != previewDistanceMeters ||
         oldDelegate.previewBearingDegrees != previewBearingDegrees ||
-        oldDelegate.currentUserImagePoint != currentUserImagePoint ||
+        oldDelegate.isGpsActive != isGpsActive) {
+      return true;
+    }
+
+    // Текущая позиция и цель
+    if (oldDelegate.currentUserImagePoint != currentUserImagePoint ||
         oldDelegate.activeTargetImagePoint != activeTargetImagePoint) {
       return true;
     }
 
-    // Проверка списков: размер и последний элемент для userPath
-    if (oldDelegate.anchors.length != anchors.length) return true;
-    if (oldDelegate.targets.length != targets.length) return true;
-    if (oldDelegate.userPath.length != userPath.length) return true;
-    if (oldDelegate.pathJumpIndices.length != pathJumpIndices.length)
-      {return true;}
+    // Активные якоря
+    if (!_setEquals(oldDelegate.activeAnchorIds, activeAnchorIds)) {
+      return true;
+    }
 
-    // Если добавилась новая точка пути – перерисовать
+    // Списки: проверка длины
+    if (oldDelegate.anchors.length != anchors.length ||
+        oldDelegate.targets.length != targets.length ||
+        oldDelegate.userPath.length != userPath.length ||
+        oldDelegate.pathJumpIndices.length != pathJumpIndices.length) {
+      return true;
+    }
+
+    // Пользовательский путь: проверка последней точки
     if (userPath.isNotEmpty && oldDelegate.userPath.isNotEmpty) {
       if (userPath.last != oldDelegate.userPath.last) return true;
     } else if (userPath.isNotEmpty != oldDelegate.userPath.isNotEmpty) {
       return true;
     }
 
-    // Для якорей и целей – сравнение последних ID (обычно добавляются в конец)
+    // Якоря: проверка последнего ID
     if (anchors.isNotEmpty && oldDelegate.anchors.isNotEmpty) {
       if (anchors.last.id != oldDelegate.anchors.last.id) return true;
     } else if (anchors.isNotEmpty != oldDelegate.anchors.isNotEmpty) {
       return true;
     }
 
+    // Цели: проверка последнего ID и статуса
     if (targets.isNotEmpty && oldDelegate.targets.isNotEmpty) {
-      if (targets.last.id != oldDelegate.targets.last.id) return true;
+      if (targets.last.id != oldDelegate.targets.last.id ||
+          targets.last.status != oldDelegate.targets.last.status) {
+        return true;
+      }
     } else if (targets.isNotEmpty != oldDelegate.targets.isNotEmpty) {
       return true;
     }
 
     return false;
+  }
+
+  // Вспомогательный метод для сравнения Set
+  bool _setEquals(Set<String> a, Set<String> b) {
+    if (a.length != b.length) return false;
+    for (final item in a) {
+      if (!b.contains(item)) return false;
+    }
+    return true;
   }
 }
