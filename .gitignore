@@ -15,4 +15,3 @@ build/
 android/.gradle/
 android/local.properties
 *.loc
-*.diff

@@ -229,22 +229,15 @@ class HomeLogic {
       return;
     }
 
-    state.distanceToWaypoint.value = calculateDistance(
-      state.waypoint!.latitude!,
-      state.waypoint!.longitude!,
-      nowData.latitude!,
-      nowData.longitude!,
+    final navData = calculateNavigationData(
+      fromLat: state.waypoint!.latitude!,
+      fromLon: state.waypoint!.longitude!,
+      toLat: nowData.latitude!,
+      toLon: nowData.longitude!,
+      magneticDeclination: state.magneticDeclination,
     );
-
-    final trueBearing = calculateTrueBearing(
-      state.waypoint!.latitude!,
-      state.waypoint!.longitude!,
-      nowData.latitude!,
-      nowData.longitude!,
-    );
-
-    state.bearingToWaypoint.value =
-        (trueBearing - state.magneticDeclination + 360) % 360;
+    state.distanceToWaypoint.value = navData.distanceMeters;
+    state.bearingToWaypoint.value = navData.magneticBearing;
   }
 
   void _calculateTargetData() {
@@ -255,22 +248,15 @@ class HomeLogic {
       return;
     }
 
-    state.distanceToTarget.value = calculateDistance(
-      nowData.latitude!,
-      nowData.longitude!,
-      state.target!['latitude']!,
-      state.target!['longitude']!,
+    final navData = calculateNavigationData(
+      fromLat: nowData.latitude!,
+      fromLon: nowData.longitude!,
+      toLat: state.target!['latitude']!,
+      toLon: state.target!['longitude']!,
+      magneticDeclination: state.magneticDeclination,
     );
-
-    final trueBearing = calculateTrueBearing(
-      nowData.latitude!,
-      nowData.longitude!,
-      state.target!['latitude']!,
-      state.target!['longitude']!,
-    );
-
-    state.bearingToTarget.value =
-        (trueBearing - state.magneticDeclination + 360) % 360;
+    state.distanceToTarget.value = navData.distanceMeters;
+    state.bearingToTarget.value = navData.magneticBearing;
   }
 
   // ----------------------------------------------------------------------

@@ -99,4 +99,36 @@ Map<String, double> calculateTargetCoordinates({
   };
 }
 
+/// Результат навигационных расчетов: дистанция, истинный и магнитный азимуты.
+class NavigationData {
+  final double distanceMeters;
+  final double trueBearing;
+  final double magneticBearing;
+  
+  const NavigationData({
+    required this.distanceMeters,
+    required this.trueBearing,
+    required this.magneticBearing,
+  });
+}
+
+/// Вычисляет дистанцию, истинный и магнитный азимуты между двумя точками.
+NavigationData calculateNavigationData({
+  required double fromLat,
+  required double fromLon,
+  required double toLat,
+  required double toLon,
+  required double magneticDeclination,
+}) {
+  final distance = calculateDistance(fromLat, fromLon, toLat, toLon);
+  final trueBearing = calculateTrueBearing(fromLat, fromLon, toLat, toLon);
+  final magneticBearing = (trueBearing - magneticDeclination + 360) % 360;
+  
+  return NavigationData(
+    distanceMeters: distance,
+    trueBearing: trueBearing,
+    magneticBearing: magneticBearing,
+  );
+}
+
 double _toRadians(double degrees) => degrees * (pi / 180);

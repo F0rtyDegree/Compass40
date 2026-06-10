@@ -124,22 +124,15 @@ class LogService {
           as LogEntry?;
 
       if (lastIncompleteEntry != null) {
-        final distance = calculateDistance(
-          lastIncompleteEntry.latitude,
-          lastIncompleteEntry.longitude,
-          currentGpsData.latitude!,
-          currentGpsData.longitude!,
+        final navData = calculateNavigationData(
+          fromLat: lastIncompleteEntry.latitude,
+          fromLon: lastIncompleteEntry.longitude,
+          toLat: currentGpsData.latitude!,
+          toLon: currentGpsData.longitude!,
+          magneticDeclination: magneticDeclination,
         );
-
-        final bearing = calculateTrueBearing(
-          lastIncompleteEntry.latitude,
-          lastIncompleteEntry.longitude,
-          currentGpsData.latitude!,
-          currentGpsData.longitude!,
-        );
-
-        lastIncompleteEntry.distance = distance;
-        lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
+        lastIncompleteEntry.distance = navData.distanceMeters;
+        lastIncompleteEntry.bearing = navData.magneticBearing;
       }
 
       final existingTrackEntries = logItems.whereType<LogEntry>();
@@ -188,22 +181,15 @@ class LogService {
         );
       }
 
-      final distance = calculateDistance(
-        lastIncompleteEntry.latitude,
-        lastIncompleteEntry.longitude,
-        currentGpsData.latitude!,
-        currentGpsData.longitude!,
+            final navData = calculateNavigationData(
+        fromLat: lastIncompleteEntry.latitude,
+        fromLon: lastIncompleteEntry.longitude,
+        toLat: currentGpsData.latitude!,
+        toLon: currentGpsData.longitude!,
+        magneticDeclination: magneticDeclination,
       );
-
-      final bearing = calculateTrueBearing(
-        lastIncompleteEntry.latitude,
-        lastIncompleteEntry.longitude,
-        currentGpsData.latitude!,
-        currentGpsData.longitude!,
-      );
-
-      lastIncompleteEntry.distance = distance;
-      lastIncompleteEntry.bearing = (bearing - magneticDeclination + 360) % 360;
+      lastIncompleteEntry.distance = navData.distanceMeters;
+      lastIncompleteEntry.bearing = navData.magneticBearing;
 
       await saveLogEntries(logItems);
 
