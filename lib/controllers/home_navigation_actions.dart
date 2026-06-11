@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../about_screen.dart';
-import '../log_screen.dart';
-import '../settings_screen.dart';
-import '../target_screen.dart';
+import '../screens/about_screen.dart';
+import '../screens/log_screen.dart';
+import '../screens/settings_screen.dart';
+import '../screens/target_screen.dart';
 import '../utils/geo_utils.dart';
 import 'home_logic.dart';
 import 'home_state.dart';

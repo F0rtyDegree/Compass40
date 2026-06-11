@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'log_entry.dart';
+import '../log_entry.dart';
 
 class LogScreen extends StatefulWidget {
   final List<LogItem> logItems;

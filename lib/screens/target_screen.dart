@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'screens/help_viewer_screen.dart';
+import 'help_viewer_screen.dart';
 
 class TargetScreen extends StatefulWidget {
   const TargetScreen({super.key});
