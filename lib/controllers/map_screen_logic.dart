@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/map_anchor.dart';
 import '../models/map_project.dart';
 import '../models/map_target.dart';
@@ -18,6 +17,8 @@ import '../services/gps_compass_service.dart';
 import 'map_screen_state.dart';
 import '../services/sensor_service.dart';
 import 'map_anchor_manager.dart';
+import 'map_target_manager.dart';
+import 'map_follow_controller.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -33,15 +34,13 @@ class MapScreenLogic {
   onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
-  bool _isAutoRotating = false;
-  bool _keepFollowDuringScale = false;
-  int rotateModeTimeoutMs = 1000;
 
   StreamSubscription<GpsData>? _gpsSub;
   GpsData? _lastGpsData;
   late SensorSettings _sensorSettings;
-
   late final MapAnchorManager anchorManager;
+  late final MapTargetManager targetManager;
+  late final MapFollowController followController;
 
   MapScreenLogic({
     required this.state,
@@ -112,8 +111,26 @@ class MapScreenLogic {
       screenToImage: screenToImage,
       onAnchorAdded: onAnchorAdded,
     );
+    targetManager = MapTargetManager(
+      state: state,
+      setState: setState,
+      showSnackBar: showSnackBar,
+      storageService: storageService,
+      calibrationService: _calibrationService,
+      onStartNavigation: onStartNavigation,
+      onRecalculatePreview: _recalculatePreview,
+    );
+    followController = MapFollowController(
+      state: state,
+      setState: setState,
+      showSnackBar: showSnackBar,
+      magneticDeclination: magneticDeclination,
+      screenToImage: screenToImage,
+      imageToScreen: imageToScreen,
+      updateTransform: updateTransform,
+    );
+    await followController.loadRotateModeTimeout();
     _sensorSettings = await sensorService.loadSettings();
-    await _loadRotateModeTimeout();
     await _loadLastProject();
     _startGpsCompassService();
     _startGpsSubscription();
@@ -327,7 +344,9 @@ class MapScreenLogic {
       state.transformState = newTransform;
     });
 
-    if (state.followMode && !_isAutoRotating && !_keepFollowDuringScale) {
+    if (state.followMode &&
+        !followController.isAutoRotating &&
+        !followController.keepFollowDuringScale) {
       disableFollowMode();
     }
 
@@ -349,19 +368,19 @@ class MapScreenLogic {
   }
 
   void zoomIn() {
-    _keepFollowDuringScale = true;
+    followController.keepFollowDuringScale = true;
     final current = state.transformState;
     final newScale = (current.scale * 1.5).clamp(0.05, 20.0);
     _scaleAroundCrosshair(current, newScale);
-    _keepFollowDuringScale = false;
+    followController.keepFollowDuringScale = false;
   }
 
   void zoomOut() {
-    _keepFollowDuringScale = true;
+    followController.keepFollowDuringScale = true;
     final current = state.transformState;
     final newScale = (current.scale / 1.5).clamp(0.05, 20.0);
     _scaleAroundCrosshair(current, newScale);
-    _keepFollowDuringScale = false;
+    followController.keepFollowDuringScale = false;
   }
 
   void _scaleAroundCrosshair(MapTransformState current, double newScale) {
@@ -543,111 +562,19 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void placePlannedTargetAtCrosshair() {
-    if (!state.canPlaceTarget) return;
-    if (state.crosshairImagePoint == null) return;
-
-    final geo = _calibrationService.imagePointToGeoFromCurrent(
-      state.crosshairImagePoint!,
-    );
-
-    final target = MapTarget(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      imageX: state.crosshairImagePoint!.dx,
-      imageY: state.crosshairImagePoint!.dy,
-      latitude: geo?.latitude,
-      longitude: geo?.longitude,
-      status: MapTargetStatus.planned,
-      createdAt: DateTime.now(),
-    );
-
-    setState(() {
-      state.plannedTarget = target;
-    });
+    targetManager.placePlannedTargetAtCrosshair();
   }
 
   void cancelPlannedTarget() {
-    setState(() {
-      state.plannedTarget = null;
-    });
+    targetManager.cancelPlannedTarget();
   }
 
   Future<void> setTargetAndStartNavigation() async {
-    final planned = state.plannedTarget;
-    if (planned == null ||
-        planned.latitude == null ||
-        planned.longitude == null) {
-      return;
-    }
-    await _persistAndSetActiveTarget(copyCoords: false);
-
-    if (onStartNavigation != null) {
-      await onStartNavigation!(planned.latitude!, planned.longitude!);
-      showSnackBar('Ведение на цель в компасе запущено');
-    }
-  }
-
-  Future<void> _persistAndSetActiveTarget({required bool copyCoords}) async {
-    final planned = state.plannedTarget;
-    if (planned == null) return;
-
-    final project = state.project;
-    if (project == null) return;
-
-    if (planned.latitude == null || planned.longitude == null) {
-      showSnackBar('Координаты цели не определены — добавьте привязку');
-      return;
-    }
-
-    if (copyCoords) {
-      final lat = planned.latitude!.toStringAsFixed(6);
-      final lon = planned.longitude!.toStringAsFixed(6);
-      await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
-      showSnackBar('Координаты цели скопированы в буфер обмена');
-    }
-
-    final updatedTargets = project.targets.map((t) {
-      if (t.status == MapTargetStatus.active) {
-        return t.copyWith(status: MapTargetStatus.passed);
-      }
-      return t;
-    }).toList();
-
-    final activeTarget = planned.copyWith(status: MapTargetStatus.active);
-    updatedTargets.add(activeTarget);
-
-    final updatedProject = project.copyWith(targets: updatedTargets);
-    await storageService.saveProject(updatedProject);
-
-    setState(() {
-      state.project = updatedProject;
-      state.activeTarget = activeTarget;
-      state.plannedTarget = null;
-    });
-
-    _recalculatePreview();
+    await targetManager.setTargetAndStartNavigation();
   }
 
   void markActiveTargetAsPassed() async {
-    final active = state.activeTarget;
-    if (active == null) return;
-
-    final project = state.project;
-    if (project == null) return;
-
-    final updatedTargets = project.targets.map((t) {
-      if (t.id == active.id) {
-        return t.copyWith(status: MapTargetStatus.passed);
-      }
-      return t;
-    }).toList();
-
-    final updatedProject = project.copyWith(targets: updatedTargets);
-    await storageService.saveProject(updatedProject);
-
-    setState(() {
-      state.project = updatedProject;
-      state.activeTarget = null;
-    });
+    await targetManager.markActiveTargetAsPassed();
   }
 
   // --------------------------------------------------------
@@ -789,116 +716,27 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void enableFollowMode() {
-    if (state.workingPair == null) {
-      showSnackBar(
-        'Режим сопровождения доступен только после привязки карты (добавьте минимум 2 точки привязки)',
-      );
-      return;
-    }
-    state.followRestoreTimer?.cancel();
-    setState(() {
-      state.followMode = true;
-      state.crosshairInCenter = false;
-    });
-    _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
-    _centerMapOnUser();
-    _applyHeadingRotation();
+    followController.enableFollowMode();
   }
 
   void disableFollowMode() {
-    state.followRestoreTimer?.cancel();
-    setState(() {
-      state.followMode = false;
-      state.crosshairInCenter = true;
-    });
-    _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
+    followController.disableFollowMode();
   }
 
   void toggleFollowMode() {
-    if (!state.followMode && state.workingPair == null) {
-      showSnackBar('Режим сопровождения доступен только после привязки карты');
-      return;
-    }
-    if (state.followMode) {
-      disableFollowMode();
-    } else {
-      enableFollowMode();
-    }
-  }
-
-  void _centerMapOnUser() {
-    final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null || state.viewportSize == null) return;
-
-    final crosshairScreen = _getCrosshairScreenPoint();
-    final vp = state.viewportSize!;
-    final vpCenter = Offset(vp.width / 2, vp.height / 2);
-    final targetTranslation = crosshairScreen - vpCenter;
-
-    final t = state.transformState;
-    final imageSize = state.imageSize;
-    if (imageSize == null) return;
-
-    final local =
-        imagePoint - Offset(imageSize.width / 2, imageSize.height / 2);
-    final scaled = local * t.scale;
-
-    final angle = t.rotationRadians;
-    final cos = math.cos(angle);
-    final sin = math.sin(angle);
-    final rotated = Offset(
-      scaled.dx * cos - scaled.dy * sin,
-      scaled.dx * sin + scaled.dy * cos,
-    );
-
-    final newTranslation = targetTranslation - rotated;
-
-    setState(() {
-      state.transformState = t.copyWith(translation: newTranslation);
-    });
-
-    _recalculateUserScreenPoint();
-  }
-
-  Future<void> _loadRotateModeTimeout() async {
-    final prefs = await SharedPreferences.getInstance();
-    rotateModeTimeoutMs = prefs.getInt('rotateModeTimeoutMs') ?? 1000;
+    followController.toggleFollowMode();
   }
 
   void enableRotateMode() {
-    setState(() {
-      state.rotateMode = true;
-    });
-    _resetRotateModeTimer();
+    followController.enableRotateMode();
   }
 
   void disableRotateMode() {
-    state.rotateModeTimer?.cancel();
-    setState(() {
-      state.rotateMode = false;
-    });
+    followController.disableRotateMode();
   }
 
   void resetRotateModeTimer() {
-    _resetRotateModeTimer();
-  }
-
-  void _resetRotateModeTimer() {
-    state.rotateModeTimer?.cancel();
-    if (!state.rotateMode) return;
-    if (rotateModeTimeoutMs <= 0) return;
-    state.rotateModeTimer = Timer(
-      Duration(milliseconds: rotateModeTimeoutMs),
-      () {
-        if (state.isDisposed) return;
-        setState(() {
-          state.rotateMode = false;
-          state.rotateModeTimer = null;
-        });
-      },
-    );
+    followController.resetRotateModeTimer();
   }
 
   // --------------------------------------------------------
@@ -918,7 +756,7 @@ class MapScreenLogic {
 
         if (state.followMode) {
           _recalculateUserImagePoint();
-          _centerMapOnUser();
+          followController.centerMapOnUser();
         } else {
           _recalculateUserImagePoint();
         }
@@ -931,50 +769,13 @@ class MapScreenLogic {
       state.heading = headingNotifier.value;
     });
     if (state.followMode) {
-      _applyHeadingRotation();
+      followController.applyHeadingRotation();
     }
   }
 
   // --------------------------------------------------------
   // Вспомогательные
   // --------------------------------------------------------
-
-  void _applyHeadingRotation() {
-    if (!state.followMode ||
-        state.heading == null ||
-        state.workingPair == null) {
-      return;
-    }
-
-    _isAutoRotating = true;
-
-    final magneticHeadingRad = (state.heading!) * (math.pi / 180);
-    final declinationRad = magneticDeclination * (math.pi / 180);
-    final trueHeadingRad = magneticHeadingRad + declinationRad;
-
-    final targetRotation = -trueHeadingRad + state.mapRotation;
-
-    final current = state.transformState;
-    final pivotImage = screenToImage(_getCrosshairScreenPoint());
-
-    final tempTransform = current.copyWith(rotationRadians: targetRotation);
-    final oldTransform = state.transformState;
-    state.transformState = tempTransform;
-    final pivotScreenAfterRotate = imageToScreen(pivotImage);
-    state.transformState = oldTransform;
-
-    final delta = _getCrosshairScreenPoint() - pivotScreenAfterRotate;
-    final newTranslation = current.translation + delta;
-
-    updateTransform(
-      current.copyWith(
-        rotationRadians: targetRotation,
-        translation: newTranslation,
-      ),
-    );
-
-    _isAutoRotating = false;
-  }
 
   void _onGpsActiveChanged() {
     setState(() {

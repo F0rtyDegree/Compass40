@@ -1,7 +1,8 @@
 git add . 
 git commit -m "
-ver. 4.2.6 Рефакторинг - extract MapAnchorManager from MapScreenLogic
+ver. 4.2.7 Рефакторинг - extract MapTargetManager, MapFollowController
 "
+ver. 4.2.6 Рефакторинг - extract MapAnchorManager from MapScreenLogic
 ver. 4.2.5 Рефакторинг - MapOverlayPainter shouldRepaint checks
 ver. 4.2.4 QW тесты. Рефакторинг - единый расчет азимутов и дистанций
 ver. 4.2.3 QW Карта и Компас - единый механизм поворота.
