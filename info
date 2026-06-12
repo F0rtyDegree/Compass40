@@ -1,7 +1,8 @@
 git add . 
 git commit -m "
-ver. 4.2.8 QW Счетчик точек очищается при удалении карты
+ver. 4.2.9 DS Исправляем проверку коллинеарности. Тесты коллинеарности. - мертвый код
 "
+ver. 4.2.8 QW Счетчик точек очищается при удалении карты
 ver. 4.2.6 QW Рефакторинг - extract MapAnchorManager from MapScreenLogic
 ver. 4.2.5 QW Рефакторинг - MapOverlayPainter shouldRepaint checks
 ver. 4.2.4 QW тесты. Рефакторинг - единый расчет азимутов и дистанций

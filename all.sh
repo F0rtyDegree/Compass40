@@ -26,7 +26,8 @@ done < <(find packages -type f \( -name "*.dart" -o -name "*.kt" \) | sort)
 for file in "${files[@]}"; do
     if [ -f "$file" ]; then
         echo "============= $file ==="
-        cat -n "$file"
+#        cat -n "$file"
+        cat "$file"
         echo ""
     else
         echo "=== $file (ФАЙЛ НЕ НАЙДЕН) ==="

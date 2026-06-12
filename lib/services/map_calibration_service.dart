@@ -157,7 +157,7 @@ class _AffineTransformerAdapter implements _MapTransformer {
   factory _AffineTransformerAdapter.fromAnchorsThreePoints(
     List<MapAnchor> anchors,
   ) {
-    final selected = _selectBestPoints(anchors, forceComboSize: 2);
+    final selected = _selectBestPoints(anchors);
     if (selected.length < 3) {
       throw ArgumentError('Could not find valid triangle');
     }
@@ -193,215 +193,74 @@ class _AffineTransformerAdapter implements _MapTransformer {
     return math.sqrt(sumSq / points.length);
   }
 
-  static List<MapAnchor> _selectBestPoints(
-    List<MapAnchor> anchors, {
-    int? forceComboSize,
-  }) {
-    final latest = anchors.last;
-    if (anchors.length == 1) return <MapAnchor>[latest];
+  static List<MapAnchor> _selectBestPoints(List<MapAnchor> anchors) {
+  final latest = anchors.last;
+  if (anchors.length == 1) return <MapAnchor>[latest];
 
-    double distMeters(MapAnchor a, MapAnchor b) {
-      return _haversineDistance(
-        a.latitude,
-        a.longitude,
-        b.latitude,
-        b.longitude,
-      );
-    }
-
-    double triangleAreaM2(MapAnchor a, MapAnchor b, MapAnchor c) {
-      final ab = distMeters(a, b);
-      final bc = distMeters(b, c);
-      final ca = distMeters(c, a);
-      final s = (ab + bc + ca) / 2;
-      if (s - ab <= 0 || s - bc <= 0 || s - ca <= 0) return 0;
-      return math.sqrt(s * (s - ab) * (s - bc) * (s - ca));
-    }
-
-    double convexHullAreaM2(List<MapAnchor> points) {
-      if (points.length < 3) return 0;
-      double sumLat = 0, sumLon = 0;
-      for (final p in points) {
-        sumLat += p.latitude;
-        sumLon += p.longitude;
-      }
-      final centerLat = sumLat / points.length;
-      final centerLon = sumLon / points.length;
-      const metersPerDegLat = 111320.0;
-      final metersPerDegLon = 111320.0 * math.cos(centerLat * math.pi / 180);
-
-      final local = points.map((p) {
-        final dx = (p.longitude - centerLon) * metersPerDegLon;
-        final dy = (p.latitude - centerLat) * metersPerDegLat;
-        return Offset(dx, dy);
-      }).toList();
-
-      int start = 0;
-      for (int i = 1; i < local.length; i++) {
-        if (local[i].dy < local[start].dy ||
-            (local[i].dy == local[start].dy && local[i].dx < local[start].dx)) {
-          start = i;
-        }
-      }
-      final pivot = local[start];
-      final sorted = <Offset>[];
-      for (int i = 0; i < local.length; i++) {
-        if (i == start) continue;
-        sorted.add(local[i]);
-      }
-      sorted.sort((a, b) {
-        final cross =
-            (a.dx - pivot.dx) * (b.dy - pivot.dy) -
-            (a.dy - pivot.dy) * (b.dx - pivot.dx);
-        if (cross != 0) return cross < 0 ? 1 : -1;
-        final distA =
-            (a.dx - pivot.dx) * (a.dx - pivot.dx) +
-            (a.dy - pivot.dy) * (a.dy - pivot.dy);
-        final distB =
-            (b.dx - pivot.dx) * (b.dx - pivot.dx) +
-            (b.dy - pivot.dy) * (b.dy - pivot.dy);
-        return distA.compareTo(distB);
-      });
-
-      final hull = <Offset>[pivot];
-      for (final p in sorted) {
-        while (hull.length >= 2) {
-          final a = hull[hull.length - 2];
-          final b = hull.last;
-          final cross =
-              (b.dx - a.dx) * (p.dy - a.dy) - (b.dy - a.dy) * (p.dx - a.dx);
-          if (cross <= 0) {
-            hull.removeLast();
-          } else {
-            break;
-          }
-        }
-        hull.add(p);
-      }
-
-      double area = 0;
-      for (int i = 0; i < hull.length; i++) {
-        final j = (i + 1) % hull.length;
-        area += hull[i].dx * hull[j].dy;
-        area -= hull[j].dx * hull[i].dy;
-      }
-      return area.abs() / 2;
-    }
-
-    final others = anchors.sublist(0, anchors.length - 1);
-
-    MapAnchor? farthest;
-    double maxDist = -1;
-    for (final a in others) {
-      final d = distMeters(latest, a);
-      if (d >= 50 && d > maxDist) {
-        maxDist = d;
-        farthest = a;
-      }
-    }
-    if (farthest == null) return <MapAnchor>[latest];
-    if (others.length == 1) return <MapAnchor>[latest, farthest];
-
-    if (forceComboSize != null) {
-      final comboSize = forceComboSize;
-      if (comboSize == 2) {
-        MapAnchor? bestThird;
-        double bestArea = -1;
-        for (final x in others) {
-          if (x == farthest) continue;
-          if (distMeters(latest, x) < 50 || distMeters(farthest, x) < 50) {
-            continue;
-          }
-
-          final a = distMeters(farthest, x);
-          final b = distMeters(latest, x);
-          final c = distMeters(latest, farthest);
-          if (a < 1 || b < 1 || c < 1) continue;
-
-          final cosAngle = (b * b + c * c - a * a) / (2 * b * c);
-          final angle = math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
-
-          if (angle < 15 || angle > 165) continue;
-
-          final area = triangleAreaM2(latest, farthest, x);
-          if (area > bestArea) {
-            bestArea = area;
-            bestThird = x;
-          }
-        }
-        if (bestArea < 1.0) {
-          return <MapAnchor>[];
-        }
-        if (bestThird != null) {
-          return <MapAnchor>[latest, farthest, bestThird];
-        } else {
-          return <MapAnchor>[];
-        }
-      }
-    }
-
-    final int maxCombo = (others.length < 5) ? others.length : 5;
-    for (int comboSize = maxCombo; comboSize >= 2; comboSize--) {
-      double bestArea = -1;
-      List<MapAnchor>? bestSet;
-
-      void findCombination(int start, List<MapAnchor> current) {
-        if (current.length == comboSize) {
-          for (int i = 0; i < current.length; i++) {
-            for (int j = i + 1; j < current.length; j++) {
-              if (distMeters(current[i], current[j]) < 50) return;
-            }
-          }
-          for (final p in current) {
-            if (distMeters(latest, p) < 50) return;
-          }
-          if (comboSize >= 3) {
-            final allPoints = [latest, ...current];
-            bool hasCollinear = false;
-            for (int i = 0; i < allPoints.length && !hasCollinear; i++) {
-              for (int j = i + 1; j < allPoints.length && !hasCollinear; j++) {
-                for (int k = j + 1; k < allPoints.length; k++) {
-                  if (triangleAreaM2(allPoints[i], allPoints[j], allPoints[k]) <
-                      1.0) {
-                    hasCollinear = true;
-                    break;
-                  }
-                }
-              }
-            }
-            if (hasCollinear) return;
-          }
-          double area;
-          if (comboSize == 2) {
-            area = triangleAreaM2(latest, current[0], current[1]);
-          } else {
-            area = convexHullAreaM2([latest, ...current]);
-          }
-          if (area > bestArea) {
-            bestArea = area;
-            bestSet = List.from(current);
-          }
-          return;
-        }
-        for (
-          int i = start;
-          i <= others.length - (comboSize - current.length);
-          i++
-        ) {
-          current.add(others[i]);
-          findCombination(i + 1, current);
-          current.removeLast();
-        }
-      }
-
-      findCombination(0, []);
-      if (bestSet != null && bestArea > 0) {
-        return [latest, ...bestSet!];
-      }
-    }
-
-    return <MapAnchor>[latest, farthest];
+  double distMeters(MapAnchor a, MapAnchor b) {
+    return _haversineDistance(
+      a.latitude,
+      a.longitude,
+      b.latitude,
+      b.longitude,
+    );
   }
+
+  double triangleAreaM2(MapAnchor a, MapAnchor b, MapAnchor c) {
+    final ab = distMeters(a, b);
+    final bc = distMeters(b, c);
+    final ca = distMeters(c, a);
+    final s = (ab + bc + ca) / 2;
+    if (s - ab <= 0 || s - bc <= 0 || s - ca <= 0) return 0;
+    return math.sqrt(s * (s - ab) * (s - bc) * (s - ca));
+  }
+
+  final others = anchors.sublist(0, anchors.length - 1);
+
+  MapAnchor? farthest;
+  double maxDist = -1;
+  for (final a in others) {
+    final d = distMeters(latest, a);
+    if (d >= 50 && d > maxDist) {
+      maxDist = d;
+      farthest = a;
+    }
+  }
+  if (farthest == null) return <MapAnchor>[latest];
+  if (others.length == 1) return <MapAnchor>[latest, farthest];
+
+  // Ищем лучшую третью точку
+  MapAnchor? bestThird;
+  double bestArea = -1;
+  for (final x in others) {
+    if (x == farthest) continue;
+    if (distMeters(latest, x) < 50 || distMeters(farthest, x) < 50) {
+      continue;
+    }
+
+    final a = distMeters(farthest, x);
+    final b = distMeters(latest, x);
+    final c = distMeters(latest, farthest);
+    if (a < 1 || b < 1 || c < 1) continue;
+
+    final cosAngle = (b * b + c * c - a * a) / (2 * b * c);
+    final angle = math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
+
+    if (angle < 15 || angle > 165) continue;
+
+    final area = triangleAreaM2(latest, farthest, x);
+    if (area > bestArea) {
+      bestArea = area;
+      bestThird = x;
+    }
+  }
+  
+  if (bestArea < 1.0 || bestThird == null) {
+    return <MapAnchor>[];
+  }
+  
+  return <MapAnchor>[latest, farthest, bestThird];
+}
 
   static double _computeSelfError(
     List<MapAnchor> points,
@@ -528,7 +387,6 @@ class MapCalibrationService {
 
   String get calibrationModeLetter {
     if (_manualMode) {
-
       return '${_pinnedAnchorIds.length}';
     }
     switch (_mode) {
@@ -542,7 +400,6 @@ class MapCalibrationService {
   }
 
   void setCalibrationMode(CalibrationMode mode) {
-  
     _manualMode = false;
     _mode = mode;
     _buildTransformFromAnchors();
@@ -577,8 +434,8 @@ class MapCalibrationService {
     _buildTransformFromAnchors();
   }
 
-   void toggleAnchorPinned(String anchorId) {
-    // Если сейчас не ручной режим — запоминаем текущий автоматический набор
+  void toggleAnchorPinned(String anchorId) {
+    // Если не в ручном режиме, захватываем текущий автоматический набор
     if (!_manualMode) {
       _captureCurrentAutomaticSet();
     }
@@ -586,12 +443,74 @@ class MapCalibrationService {
     // Переключаем точку в наборе
     if (_pinnedAnchorIds.contains(anchorId)) {
       _pinnedAnchorIds.remove(anchorId);
+      _manualMode = _pinnedAnchorIds.isNotEmpty;
+      _buildTransformFromAnchors();
     } else {
       _pinnedAnchorIds.add(anchorId);
+      _manualMode = true;
+      // НЕ вызываем _buildTransformFromAnchors() здесь — подождём проверки коллинеарности
+      // Запускаем таймер для проверки и последующего перестроения
+      Future.delayed(const Duration(seconds: 1), () {
+        _checkAndApplyManualSet(anchorId);
+      });
+    }
+  }
+
+  void _checkAndApplyManualSet(String addedAnchorId) {
+    // Если точка уже была удалена пользователем до срабатывания таймера — ничего не делаем
+    if (!_pinnedAnchorIds.contains(addedAnchorId)) {
+      _buildTransformFromAnchors();
+      return;
     }
 
-    _manualMode = true;
+    // Проверяем коллинеарность всего ручного набора
+    final pinned = pinnedAnchors;
+    if (pinned.length >= 3 && _isCollinear(pinned)) {
+      // Набор коллинеарен — удаляем последнюю добавленную точку
+      _pinnedAnchorIds.remove(addedAnchorId);
+      _manualMode = _pinnedAnchorIds.isNotEmpty;
+    }
+    // Применяем результат
     _buildTransformFromAnchors();
+  }
+
+  bool _isCollinear(List<MapAnchor> points) {
+    if (points.length < 3) return false;
+    // Находим минимальный угол среди всех троек
+    double minAngle = double.infinity;
+    for (int i = 0; i < points.length; i++) {
+      for (int j = i + 1; j < points.length; j++) {
+        for (int k = j + 1; k < points.length; k++) {
+          double angle = _triangleMinAngle(points[i], points[j], points[k]);
+          if (angle < minAngle) minAngle = angle;
+        }
+      }
+    }
+    return minAngle < 15.0; // порог 15°
+  }
+
+  double _triangleMinAngle(MapAnchor a, MapAnchor b, MapAnchor c) {
+    double distAB = _distanceBetweenAnchorsMeters(a, b);
+    double distBC = _distanceBetweenAnchorsMeters(b, c);
+    double distCA = _distanceBetweenAnchorsMeters(c, a);
+    if (distAB < 1 || distBC < 1 || distCA < 1) return 0;
+
+    double angleA = _angleFromSides(distBC, distCA, distAB);
+    double angleB = _angleFromSides(distCA, distAB, distBC);
+    double angleC = _angleFromSides(distAB, distBC, distCA);
+    return math.min(angleA, math.min(angleB, angleC));
+  }
+
+  double _angleFromSides(double opposite, double side1, double side2) {
+    double cosAngle =
+        (side1 * side1 + side2 * side2 - opposite * opposite) /
+        (2 * side1 * side2);
+    cosAngle = cosAngle.clamp(-1.0, 1.0);
+    return math.acos(cosAngle) * 180 / math.pi;
+  }
+
+  double _distanceBetweenAnchorsMeters(MapAnchor a, MapAnchor b) {
+    return distanceBetweenAnchorsMeters(a, b);
   }
 
   void _captureCurrentAutomaticSet() {
@@ -617,10 +536,9 @@ class MapCalibrationService {
   }
 
   void _buildTransformFromAnchors() {
-   
     if (_manualMode) {
       final pinnedList = pinnedAnchors;
-    
+
       if (pinnedList.length >= 3) {
         try {
           final affine = AffineTransform.fromPoints(
