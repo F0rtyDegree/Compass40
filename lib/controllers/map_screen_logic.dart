@@ -333,6 +333,7 @@ class MapScreenLogic {
       state.currentUserScreenPoint = null;
     });
     _calibrationService.updateAnchors([]);
+    _calibrationService.setPinnedAnchorIds([]);
   }
 
   // --------------------------------------------------------
