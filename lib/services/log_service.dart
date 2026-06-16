@@ -57,32 +57,6 @@ class LogService {
     });
   }
 
-  Future<void> removeFirstMapAnchorLog() async {
-    await _synchronized(() async {
-      final logItems = await loadLogEntries();
-
-      // Найти первую запись типа MapAnchorLogEntry (самую старую)
-      final int indexToRemove = logItems.indexWhere((item) => item is MapAnchorLogEntry);
-      if (indexToRemove != -1) {
-        logItems.removeAt(indexToRemove);
-        await saveLogEntries(logItems);
-      }
-    });
-  }
-
-  Future<void> removeLastMapAnchorLog() async {
-    await _synchronized(() async {
-      final logItems = await loadLogEntries();
-
-      // Найти последнюю запись типа MapAnchorLogEntry
-      final int indexToRemove = logItems.lastIndexWhere((item) => item is MapAnchorLogEntry);
-      if (indexToRemove != -1) {
-        logItems.removeAt(indexToRemove);
-        await saveLogEntries(logItems);
-      }
-    });
-  }
-
   Future<List<LogItem>> loadLogEntries() async {
     final prefs = await SharedPreferences.getInstance();
     final String? logJson = prefs.getString('log_items');

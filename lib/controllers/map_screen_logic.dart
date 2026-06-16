@@ -416,7 +416,7 @@ class MapScreenLogic {
   // Прицел
   // --------------------------------------------------------
 
-  Offset getCrosshairScreenPoint() => _getCrosshairScreenPoint();
+  Offset getCrosshairScreenPoint() => state.crosshairScreenPoint;
 
   Future<void> copyCrosshairCoordinatesToClipboard() async {
     if (state.crosshairImagePoint == null) return;
@@ -439,24 +439,13 @@ class MapScreenLogic {
     }
   }
 
-  Offset _getCrosshairScreenPoint() {
-    if (state.viewportSize == null) return Offset.zero;
-    final vp = state.viewportSize!;
-    if (state.crosshairInCenter) {
-      return Offset(vp.width / 2, vp.height / 2);
-    } else {
-      return Offset(vp.width / 2, vp.height * 3 / 4);
-    }
-  }
-
   void _recalculateCrosshairImagePoint() {
     if (state.imageSize == null || state.viewportSize == null) return;
 
-    final screenPoint = _getCrosshairScreenPoint();
+    final screenPoint = state.crosshairScreenPoint;
     final imagePoint = screenToImage(screenPoint);
 
     setState(() {
-      state.crosshairScreenPoint = screenPoint;
       state.crosshairImagePoint = imagePoint;
     });
   }

@@ -33,7 +33,6 @@ class MapScreenState {
   bool canPlaceTarget = false;
 
   // Позиция прицела
-  Offset? crosshairScreenPoint;
   Offset? crosshairImagePoint;
 
   // Обратная связь при копировании
@@ -55,12 +54,22 @@ class MapScreenState {
 
   // Таймер восстановления режима сопровождения
   Timer? followRestoreTimer;
-  Timer? rotateModeTimer; // Таймер для автоматического отключения режима вращения
+  Timer?
+  rotateModeTimer; // Таймер для автоматического отключения режима вращения
 
   // Флаг для предотвращения утечек
   bool isDisposed = false;
 
   // Удобные геттеры
+  Offset get crosshairScreenPoint {
+    if (viewportSize == null) return Offset.zero;
+    final vp = viewportSize!;
+    if (crosshairInCenter) {
+      return Offset(vp.width / 2, vp.height / 2);
+    } else {
+      return Offset(vp.width / 2, vp.height * 3 / 4);
+    }
+  }
 
   List<MapTarget> get passedTargets =>
       project?.targets

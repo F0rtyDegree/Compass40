@@ -78,7 +78,7 @@ class MapFollowController {
     final imagePoint = state.currentUserImagePoint;
     if (imagePoint == null || state.viewportSize == null) return;
 
-    final crosshairScreen = _getCrosshairScreenPoint();
+    final crosshairScreen = state.crosshairScreenPoint;
     final vp = state.viewportSize!;
     final vpCenter = Offset(vp.width / 2, vp.height / 2);
     final targetTranslation = crosshairScreen - vpCenter;
@@ -158,7 +158,7 @@ class MapFollowController {
     final targetRotation = -trueHeadingRad + state.mapRotation;
 
     final current = state.transformState;
-    final pivotImage = screenToImage(_getCrosshairScreenPoint());
+    final pivotImage = screenToImage(state.crosshairScreenPoint);
 
     final tempTransform = current.copyWith(rotationRadians: targetRotation);
     final oldTransform = state.transformState;
@@ -166,7 +166,7 @@ class MapFollowController {
     final pivotScreenAfterRotate = imageToScreen(pivotImage);
     state.transformState = oldTransform;
 
-    final delta = _getCrosshairScreenPoint() - pivotScreenAfterRotate;
+    final delta = state.crosshairScreenPoint - pivotScreenAfterRotate;
     final newTranslation = current.translation + delta;
 
     updateTransform(
@@ -178,25 +178,14 @@ class MapFollowController {
 
     isAutoRotating = false;
   }
-
-  Offset _getCrosshairScreenPoint() {
-    if (state.viewportSize == null) return Offset.zero;
-    final vp = state.viewportSize!;
-    if (state.crosshairInCenter) {
-      return Offset(vp.width / 2, vp.height / 2);
-    } else {
-      return Offset(vp.width / 2, vp.height * 3 / 4);
-    }
-  }
-
   void _recalculateCrosshairImagePoint() {
     if (state.imageSize == null || state.viewportSize == null) return;
 
-    final screenPoint = _getCrosshairScreenPoint();
+    final screenPoint = state.crosshairScreenPoint;
     final imagePoint = screenToImage(screenPoint);
 
     setState(() {
-      state.crosshairScreenPoint = screenPoint;
+      
       state.crosshairImagePoint = imagePoint;
     });
   }

@@ -22,6 +22,11 @@ while IFS= read -r file; do
     files+=("$file")
 done < <(find packages -type f \( -name "*.dart" -o -name "*.kt" \) | sort)
 
+# Добавить все Dart файлы из test/
+while IFS= read -r file; do
+    files+=("$file")
+done < <(find test -type f -name "*.dart" | sort)
+
 # Вывести все файлы
 for file in "${files[@]}"; do
     if [ -f "$file" ]; then
