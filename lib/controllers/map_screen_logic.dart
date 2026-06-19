@@ -336,6 +336,31 @@ class MapScreenLogic {
     _calibrationService.setPinnedAnchorIds([]);
   }
 
+  Future<void> clearAllAnchors() async {
+    final project = state.project;
+    if (project == null) return;
+    final updatedProject = project.copyWith(anchors: []);
+    await storageService.saveProject(updatedProject);
+    setState(() {
+      state.project = updatedProject;
+      state.workingPair = null;
+      state.canPlaceTarget = false;
+    });
+    _calibrationService.updateAnchors([]);
+    showSnackBar('Все якоря удалены');
+  }
+
+  Future<void> clearUserPath() async {
+    final project = state.project;
+    if (project == null) return;
+    final updatedProject = project.copyWith(userPath: [], pathJumpIndices: []);
+    await storageService.saveProject(updatedProject);
+    setState(() {
+      state.project = updatedProject;
+    });
+    showSnackBar('Путь пользователя удалён');
+  }
+  
   // --------------------------------------------------------
   // Трансформация карты
   // --------------------------------------------------------

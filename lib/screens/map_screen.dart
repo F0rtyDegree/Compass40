@@ -19,7 +19,7 @@ class MapScreen extends StatefulWidget {
   onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
-  
+
   const MapScreen({
     super.key,
     this.magneticDeclination = 0.0,
@@ -109,29 +109,7 @@ class _MapScreenState extends State<MapScreen> {
                 message: 'Удалить карту (долгое нажатие)',
                 child: InkWell(
                   customBorder: const CircleBorder(),
-                  onLongPress: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Удалить карту?'),
-                        content: const Text('Привязки и цели будут удалены.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Отмена'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text(
-                              'Удалить',
-                              style: TextStyle(color: Colors.red),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) await _logic.closeMap();
-                  },
+                  onLongPress: () => _showMapActionsDialog(context),
                   child: const Padding(
                     padding: EdgeInsets.all(12.0),
                     child: Icon(Icons.delete_forever),
@@ -530,6 +508,83 @@ class _MapScreenState extends State<MapScreen> {
       }
       return;
     }
+  }
+
+  Future<void> _showMapActionsDialog(BuildContext context) async {
+    showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Действия с картой'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (c) => AlertDialog(
+                  title: const Text('Удалить карту?'),
+                  content: const Text('Привязки, цели и путь будут удалены.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text('Отмена'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text(
+                        'Удалить',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) await _logic.closeMap();
+            },
+            child: const Text(
+              'Удалить карту',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (c) => AlertDialog(
+                  title: const Text('Удалить все якоря?'),
+                  content: const Text(
+                    'Привязка карты будет потеряна, цели сохранятся.',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, false),
+                      child: const Text('Отмена'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(c, true),
+                      child: const Text(
+                        'Удалить',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true) await _logic.clearAllAnchors();
+            },
+            child: const Text('Удалить все якоря'),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _logic.clearUserPath();
+            },
+            child: const Text('Удалить путь пользователя'),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildModeIndicator() {
