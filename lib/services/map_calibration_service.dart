@@ -100,14 +100,21 @@ class MapCalibrationService {
   double? get metersPerImagePixel => _currentTransform?.metersPerImagePixel;
 
   Set<String>? get activeAnchorIds {
-    // В ручном режиме показываем все выбранные точки, даже если привязка не построена
+    // В ручном режиме показываем все выбранные точки
     if (_manualMode) {
       return _pinnedAnchorIds.toSet();
     }
+    
     final t = _currentTransform;
     if (t is _AffineTransformerAdapter) {
       return t._selectedPoints.map((a) => a.id).toSet();
     }
+    
+    // ✅ ИСПРАВЛЕНИЕ: Для двухточечных режимов (F и N) берем ID из SimilarityTransform
+    if (t is SimilarityTransform) {
+      return t.activeAnchorIds; // Возвращает {latestId, referenceId}
+    }
+    
     return null;
   }
 
@@ -222,17 +229,18 @@ class MapCalibrationService {
 
   bool _isCollinear(List<MapAnchor> points) {
     if (points.length < 3) return false;
-    // Находим минимальный угол среди всех троек
-    double minAngle = double.infinity;
+    // Ищем хотя бы одну неколлинеарную тройку
     for (int i = 0; i < points.length; i++) {
       for (int j = i + 1; j < points.length; j++) {
         for (int k = j + 1; k < points.length; k++) {
           double angle = _triangleMinAngle(points[i], points[j], points[k]);
-          if (angle < minAngle) minAngle = angle;
+          if (angle >= 15.0) {
+            return false; // нашли неколлинеарную тройку — набор допустим
+          }
         }
       }
     }
-    return minAngle < 15.0; // порог 15°
+    return true; // все тройки вырождены
   }
 
   double _triangleMinAngle(MapAnchor a, MapAnchor b, MapAnchor c) {
@@ -264,6 +272,13 @@ class MapCalibrationService {
     final t = _currentTransform;
     if (t is _AffineTransformerAdapter) {
       _pinnedAnchorIds.addAll(t._selectedPoints.map((a) => a.id));
+    } 
+    // ✅ ИСПРАВЛЕНИЕ: Захватываем рабочую пару из режимов F и N
+    else if (t is SimilarityTransform) {
+      final ids = t.activeAnchorIds;
+      if (ids != null) {
+        _pinnedAnchorIds.addAll(ids);
+      }
     }
   }
 
@@ -281,7 +296,6 @@ class MapCalibrationService {
   void _buildTransformFromAnchors() {
     if (_manualMode) {
       final pinnedList = pinnedAnchors;
-
       if (pinnedList.length >= 3) {
         try {
           final affine = AffineTransform.fromPoints(
@@ -305,7 +319,8 @@ class MapCalibrationService {
     }
 
     // ----- Автоматический режим -----
-        if (_mode == CalibrationMode.pairFarthest || _mode == CalibrationMode.pairNearest) {
+    if (_mode == CalibrationMode.pairFarthest ||
+        _mode == CalibrationMode.pairNearest) {
       if (_anchors.length >= 2) {
         MapWorkingPair? pair;
         if (_mode == CalibrationMode.pairFarthest) {
@@ -321,21 +336,34 @@ class MapCalibrationService {
       }
       return;
     }
-    
-    if (_anchors.length >= 3) {
-      try {
-        final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(
-          _anchors,
-        );
-        if (adapter.usedAnchorCount == 3) {
-          _currentTransform = adapter;
+
+    if (_mode == CalibrationMode.affine) {
+      if (_anchors.length >= 2) {
+        // Пытаемся построить аффинную тройку, если точек достаточно
+        if (_anchors.length >= 3) {
+          try {
+            final adapter = _AffineTransformerAdapter.fromAnchorsThreePoints(
+              _anchors,
+            );
+            if (adapter.usedAnchorCount == 3) {
+              _currentTransform = adapter;
+              return;
+            }
+          } catch (_) {}
+        }
+        // Fallback: двухточечная привязка (farthest pair) для 2+ якорей
+        final pair = selectWorkingPair(_anchors, minDistanceMeters: 50.0);
+        if (pair != null) {
+          _currentTransform =
+              SimilarityTransform.fromPair(pair.latest, pair.reference);
           return;
         }
-      } catch (_) {
-        // fallback to null
       }
+      _currentTransform = null;
+      return;
     }
 
+    // Если режим не распознан — сброс
     _currentTransform = null;
   }
 
@@ -405,7 +433,7 @@ class MapCalibrationService {
     return MapWorkingPair(latest: latest, reference: farthest);
   }
 
-   BearingAndDistance bearingAndDistance({
+  BearingAndDistance bearingAndDistance({
     required double fromLat,
     required double fromLon,
     required double toLat,
