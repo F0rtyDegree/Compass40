@@ -18,10 +18,11 @@ class MapAnchorManager {
   final void Function(String message) showSnackBar;
   final Function(double lat, double lon, double? distance, String timeStr)?
   onAnchorAdded;
+  final VoidCallback? onStartPhotoSever;
 
   GpsData? lastGpsData;
   List<Map<String, String>>? cachedGpxPoints;
-
+  
   final VoidCallback onAnchorsChanged;
   final Future<void> Function({bool restartNavigation}) onRecalculateTargets;
   final Offset Function(Offset screenPoint) screenToImage;
@@ -37,7 +38,17 @@ class MapAnchorManager {
     required this.screenToImage,
     this.onAnchorAdded,
     this.lastGpsData,
+    this.onStartPhotoSever,
   });
+  Future<void> _saveGpxCacheToProject(List<Map<String, String>> points) async {
+    final project = state.project;
+    if (project == null) return;
+    final updated = project.copyWith(cachedGpxPoints: points);
+    await storageService.saveProject(updated);
+    setState(() {
+      state.project = updated;
+    });
+  }
 
   Future<void> addAnchorFromCurrentGps() async {
     final gpsData = lastGpsData;
@@ -137,6 +148,13 @@ class MapAnchorManager {
             },
             child: Text(hasCache ? 'Загрузить другой GPX' : 'Выбрать из GPX'),
           ),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onStartPhotoSever?.call();
+            },
+            child: const Text('ФотоСевер'),
+          ),
         ],
       ),
     );
@@ -160,6 +178,7 @@ class MapAnchorManager {
       }
 
       if (!context.mounted) return;
+      _saveGpxCacheToProject(points);
       _showGpxPointsList(context, points);
       cachedGpxPoints = points;
     } catch (e) {
@@ -265,11 +284,13 @@ class MapAnchorManager {
 
     await storageService.saveProject(updatedProject);
 
+    // Если ФотоСевер уже обновил проект, не перезаписываем его
     setState(() {
       state.project = updatedProject;
     });
+    // else: проект уже обновлён внутри блока ФотоСевера, ничего не делаем
 
-    calibrationService.updateAnchors(updatedAnchors);
+    calibrationService.updateAnchors(state.project!.anchors);
     onAnchorsChanged();
     await onRecalculateTargets(restartNavigation: true);
 

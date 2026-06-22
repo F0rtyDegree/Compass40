@@ -3,6 +3,7 @@
 
 # flutter clean 
 # flutter pub get
+flutter test
 
 flutter build apk --release
 mv /home/user/myapp/build/app/outputs/flutter-apk/app-release.apk Compass40.apk

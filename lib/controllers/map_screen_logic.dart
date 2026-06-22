@@ -39,6 +39,7 @@ class MapScreenLogic {
   GpsData? _lastGpsData;
   late SensorSettings _sensorSettings;
   late final MapAnchorManager anchorManager;
+  final Future<double?> Function() askDistanceDialog;
   late final MapTargetManager targetManager;
   late final MapFollowController followController;
 
@@ -52,6 +53,7 @@ class MapScreenLogic {
     this.onAnchorAdded,
     this.onStartNavigation,
     this.onCancelNavigation,
+    required this.askDistanceDialog,
   });
 
   bool get canPlaceTarget => state.canPlaceTarget;
@@ -110,7 +112,9 @@ class MapScreenLogic {
       onRecalculateTargets: recalculateTargetsAfterNewAnchor,
       screenToImage: screenToImage,
       onAnchorAdded: onAnchorAdded,
+      onStartPhotoSever: () => startPhotoSeverMode(),
     );
+        anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     targetManager = MapTargetManager(
       state: state,
       setState: setState,
@@ -133,6 +137,7 @@ class MapScreenLogic {
     _sensorSettings = await sensorService.loadSettings();
     await _loadLastProject();
     _startGpsCompassService();
+        anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     _startGpsSubscription();
     headingNotifier.addListener(_onHeadingChanged);
     _onHeadingChanged();
@@ -360,7 +365,7 @@ class MapScreenLogic {
     });
     showSnackBar('Путь пользователя удалён');
   }
-  
+
   // --------------------------------------------------------
   // Трансформация карты
   // --------------------------------------------------------
@@ -682,6 +687,97 @@ class MapScreenLogic {
       state.previewDistanceMeters = bd.distanceMeters;
       state.previewBearingDegrees = bd.magneticBearing;
     });
+  }
+
+  void startPhotoSeverMode() {
+    setState(() {
+      state.photoSeverMode = true;
+      state.photoSeverPoints.clear();
+    });
+    showSnackBar('Укажите первую точку (юг)');
+  }
+
+  void handlePhotoSeverTap(Offset imagePoint) {
+    if (!state.photoSeverMode) return;
+
+    setState(() {
+      state.photoSeverPoints.add(imagePoint);
+    });
+
+    switch (state.photoSeverPoints.length) {
+      case 1:
+        showSnackBar('Укажите вторую точку (север)');
+        break;
+      case 2:
+        showSnackBar('Укажите третью точку (масштаб)');
+        // Автоматически разворачиваем карту севером вверх
+        _applyPhotoSeverNorthRotation();
+        break;
+      case 3:
+        _finishPhotoSever();
+        break;
+    }
+  }
+
+  void _applyPhotoSeverNorthRotation() {
+    final p1 = state.photoSeverPoints[0];
+    final p2 = state.photoSeverPoints[1];
+    final imageVec = p2 - p1;
+    const northVec = Offset(0, -1);
+    final targetAngle = math.atan2(northVec.dy, northVec.dx);
+    final vecAngle = math.atan2(imageVec.dy, imageVec.dx);
+    final neededRotation = targetAngle - vecAngle;
+
+    final current = state.transformState;
+    final pivotImage = p2; // вторая точка должна остаться под прицелом
+
+    // Временно применяем новый поворот, чтобы вычислить смещение
+    final tempTransform = current.copyWith(rotationRadians: neededRotation);
+    final saved = state.transformState;
+    state.transformState = tempTransform;
+    final pivotScreenAfter = imageToScreen(pivotImage);
+    state.transformState = saved;
+
+    final pivotScreen = imageToScreen(pivotImage); // текущее положение точки на экране
+    final delta = pivotScreen - pivotScreenAfter;
+    final newTranslation = current.translation + delta;
+
+    updateTransform(current.copyWith(
+      rotationRadians: neededRotation,
+      translation: newTranslation,
+    ));
+
+    setState(() {
+      state.photoSeverNorthRotation = neededRotation;
+    });
+  }
+  
+  Future<void> _finishPhotoSever() async {
+    final dist = await askDistanceDialog();
+    if (dist == null) {
+      setState(() {
+        state.photoSeverMode = false;
+        state.photoSeverPoints.clear();
+      });
+      showSnackBar('ФотоСевер отменён');
+      return;
+    }
+
+    final project = state.project;
+    if (project == null) return;
+
+    final updatedProject = project.copyWith(
+      photoSeverPoints: List.from(state.photoSeverPoints),
+      photoSeverDistance: dist,
+      photoSeverNorthRotation: state.photoSeverNorthRotation,
+    );
+    await storageService.saveProject(updatedProject);
+    setState(() {
+      state.project = updatedProject;
+      state.photoSeverMode = false;
+      state.photoSeverPoints.clear();
+    });
+    showSnackBar('Калибровка ФотоСевер сохранена');
   }
 
   Future<void> recalculateTargetsAfterNewAnchor({

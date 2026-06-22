@@ -25,6 +25,10 @@ class MapScreenState {
   bool rotateMapByHeading = false;
   bool crosshairInCenter = true;
   bool rotateMode = false;
+  // Режим "ФотоСевер"
+  bool photoSeverMode = false;
+  final List<Offset> photoSeverPoints = [];
+  double photoSeverNorthRotation = 0.0;  // запомненный угол «север вверх»
 
   // Текущая рабочая пара привязок
   MapWorkingPair? workingPair;

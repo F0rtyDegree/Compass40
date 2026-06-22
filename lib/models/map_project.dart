@@ -10,6 +10,10 @@ class MapProject extends Equatable {
   final List<MapTarget> targets;
   final List<Offset> userPath; // Путь пользователя
   final List<int> pathJumpIndices; // Индексы, где были "скачки" пути
+  final List<Offset> photoSeverPoints;
+  final List<Map<String, String>>? cachedGpxPoints;
+  final double photoSeverDistance;
+  final double photoSeverNorthRotation;
   final List<String> pinnedAnchorIds;
   final bool manualMode;
   final String calibrationMode;
@@ -21,6 +25,10 @@ class MapProject extends Equatable {
     required this.targets,
     this.userPath = const [],
     this.pathJumpIndices = const [],
+    this.photoSeverPoints = const [],
+    this.photoSeverDistance = 0.0,
+    this.photoSeverNorthRotation = 0.0,
+    this.cachedGpxPoints,
     this.pinnedAnchorIds = const [],
     this.manualMode = false,
     this.calibrationMode = 'affine',
@@ -33,6 +41,10 @@ class MapProject extends Equatable {
     List<MapTarget>? targets,
     List<Offset>? userPath,
     List<int>? pathJumpIndices,
+    List<Offset>? photoSeverPoints,
+    double? photoSeverDistance,
+    double? photoSeverNorthRotation,
+    List<Map<String, String>>? cachedGpxPoints,
     List<String>? pinnedAnchorIds,
     bool? manualMode,
     String? calibrationMode,
@@ -44,6 +56,11 @@ class MapProject extends Equatable {
       targets: targets ?? this.targets,
       userPath: userPath ?? this.userPath,
       pathJumpIndices: pathJumpIndices ?? this.pathJumpIndices,
+      photoSeverPoints: photoSeverPoints ?? this.photoSeverPoints,
+      photoSeverDistance: photoSeverDistance ?? this.photoSeverDistance,
+      photoSeverNorthRotation:
+          photoSeverNorthRotation ?? this.photoSeverNorthRotation,
+      cachedGpxPoints: cachedGpxPoints ?? this.cachedGpxPoints,
       pinnedAnchorIds: pinnedAnchorIds ?? this.pinnedAnchorIds,
       manualMode: manualMode ?? this.manualMode,
       calibrationMode: calibrationMode ?? this.calibrationMode,
@@ -75,6 +92,23 @@ class MapProject extends Equatable {
           [],
       manualMode: json['manualMode'] as bool? ?? false,
       calibrationMode: json['calibrationMode'] as String? ?? 'affine',
+      photoSeverPoints:
+          (json['photoSeverPoints'] as List<dynamic>?)
+              ?.map(
+                (e) => Offset(
+                  (e['dx'] as num).toDouble(),
+                  (e['dy'] as num).toDouble(),
+                ),
+              )
+              .toList() ??
+          const [],
+      photoSeverDistance:
+          (json['photoSeverDistance'] as num?)?.toDouble() ?? 0.0,
+      photoSeverNorthRotation:
+          (json['photoSeverNorthRotation'] as num?)?.toDouble() ?? 0.0,
+      cachedGpxPoints: (json['cachedGpxPoints'] as List<dynamic>?)
+          ?.map((e) => Map<String, String>.from(e as Map))
+          .toList(),
     );
   }
 
@@ -89,6 +123,12 @@ class MapProject extends Equatable {
       'pinnedAnchorIds': pinnedAnchorIds,
       'manualMode': manualMode,
       'calibrationMode': calibrationMode,
+      'photoSeverPoints': photoSeverPoints
+          .map((p) => {'dx': p.dx, 'dy': p.dy})
+          .toList(),
+      'photoSeverDistance': photoSeverDistance,
+      'photoSeverNorthRotation': photoSeverNorthRotation,
+      'cachedGpxPoints': cachedGpxPoints,
     };
   }
 
@@ -100,6 +140,10 @@ class MapProject extends Equatable {
     targets,
     userPath,
     pathJumpIndices,
+    photoSeverPoints,
+    photoSeverDistance,
+    photoSeverNorthRotation,
+    cachedGpxPoints,
     pinnedAnchorIds,
     manualMode,
     calibrationMode,

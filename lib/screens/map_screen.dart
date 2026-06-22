@@ -9,6 +9,7 @@ import '../widgets/map_image_painter.dart';
 import '../widgets/map_overlay_painter.dart';
 import '../widgets/map_zoom_buttons.dart';
 import 'help_viewer_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
@@ -67,6 +68,7 @@ class _MapScreenState extends State<MapScreen> {
       onAnchorAdded: widget.onAnchorAdded,
       onStartNavigation: widget.onStartNavigation,
       onCancelNavigation: widget.onCancelNavigation,
+      askDistanceDialog: _showPhotoSeverDistanceDialog,
     );
     _logic.init();
   }
@@ -224,6 +226,13 @@ class _MapScreenState extends State<MapScreen> {
                         width: 80,
                         height: 80,
                         child: GestureDetector(
+                          onTap: () {
+                            if (_state.photoSeverMode) {
+                              _logic.handlePhotoSeverTap(
+                                _state.crosshairImagePoint!,
+                              );
+                            }
+                          },
                           onDoubleTap: _logic.toggleFollowMode,
                           onLongPress: () =>
                               _logic.copyCrosshairCoordinatesToClipboard(),
@@ -277,7 +286,7 @@ class _MapScreenState extends State<MapScreen> {
 
   void _resetRotation() {
     final current = _state.transformState;
-    const newRotation = 0.0;
+    final newRotation = _state.photoSeverNorthRotation;
     if (_state.viewportSize != null && _state.imageSize != null) {
       final pivotScreen = _logic.getCrosshairScreenPoint();
       final pivotImage = _logic.screenToImage(pivotScreen);
@@ -585,6 +594,50 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
     );
+  }
+
+  Future<double?> _showPhotoSeverDistanceDialog() async {
+    const defaultDistance = 250.0;
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return null;
+    final savedDistance =
+        prefs.getDouble('photoSeverDistance') ?? defaultDistance;
+
+    final controller = TextEditingController(
+      text: savedDistance.toStringAsFixed(0),
+    );
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Расстояние до линии'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            hintText: 'Метры',
+            labelText: 'Расстояние от 3-й точки до линии север-юг',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              final val = double.tryParse(controller.text);
+              if (val != null && val > 0) {
+                prefs.setDouble('photoSeverDistance', val);
+              }
+              Navigator.pop(ctx, val);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return null;
+    return result;
   }
 
   Widget _buildModeIndicator() {
