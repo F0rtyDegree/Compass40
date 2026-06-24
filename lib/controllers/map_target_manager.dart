@@ -52,6 +52,60 @@ class MapTargetManager {
     });
   }
 
+  Future<void> placeTargetFromClipboard() async {
+    if (!state.canPlaceTarget) {
+      showSnackBar('Сначала привяжите карту');
+      return;
+    }
+
+    ClipboardData? clipboardData;
+    try {
+      clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    } catch (_) {
+      showSnackBar('Ошибка чтения буфера обмена');
+      return;
+    }
+
+    if (clipboardData?.text == null || clipboardData!.text!.trim().isEmpty) {
+      showSnackBar('Буфер обмена пуст');
+      return;
+    }
+
+    final parts = clipboardData.text!.split(',');
+    if (parts.length != 2) {
+      showSnackBar('Неверный формат. Ожидается: широта,долгота');
+      return;
+    }
+
+    final lat = double.tryParse(parts[0].trim());
+    final lon = double.tryParse(parts[1].trim());
+    if (lat == null || lon == null) {
+      showSnackBar('Не удалось распознать координаты');
+      return;
+    }
+
+    final imagePoint = calibrationService.geoToImagePointFromCurrent(lat, lon);
+    if (imagePoint == null) {
+      showSnackBar('Не удалось разместить цель на карте');
+      return;
+    }
+
+    final target = MapTarget(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      imageX: imagePoint.dx,
+      imageY: imagePoint.dy,
+      latitude: lat,
+      longitude: lon,
+      status: MapTargetStatus.planned,
+      createdAt: DateTime.now(),
+    );
+
+    setState(() {
+      state.plannedTarget = target;
+    });
+    showSnackBar('Цель установлена из буфера обмена');
+  }
+
   Future<void> setTargetAndStartNavigation() async {
     final planned = state.plannedTarget;
     if (planned == null || planned.latitude == null || planned.longitude == null) {

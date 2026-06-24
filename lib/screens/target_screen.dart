@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import 'help_viewer_screen.dart';
 
 class TargetScreen extends StatefulWidget {
@@ -13,71 +12,50 @@ class TargetScreen extends StatefulWidget {
 class _TargetScreenState extends State<TargetScreen> {
   final _azimuthController = TextEditingController();
   final _distanceController = TextEditingController();
+  final _coordsController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  // Обычное нажатие: использует текущее местоположение как базу.
   void _setTarget() {
     if (_formKey.currentState!.validate()) {
       double azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
       final distance = double.tryParse(_distanceController.text) ?? 0.0;
-
-      // Нормализация азимута к диапазону 0-360
       azimuth = (azimuth % 360 + 360) % 360;
 
+      // Проверяем, есть ли координаты в поле
+      final coordsText = _coordsController.text.trim();
+      if (coordsText.isNotEmpty) {
+        final parts = coordsText.split(',');
+        if (parts.length == 2) {
+          final lat = double.tryParse(parts[0].trim());
+          final lon = double.tryParse(parts[1].trim());
+          if (lat != null && lon != null) {
+            Navigator.pop(context, {
+              'base_latitude': lat,
+              'base_longitude': lon,
+              'azimuth': azimuth,
+              'distance': distance,
+              'useClipboardAsBase': true,
+            });
+            return;
+          }
+        }
+        // Если координаты есть, но формат неверный - предупреждаем
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Неверный формат координат. Ожидается: широта,долгота',
+            ),
+          ),
+        );
+        return;
+      }
+
+      // Если поле пустое - используем текущее местоположение
       Navigator.pop(context, {
         'azimuth': azimuth,
         'distance': distance,
-        'useClipboardAsBase': false, // Явно указываем, что база - не из буфера
+        'useClipboardAsBase': false,
       });
-    }
-  }
-
-  // Долгое нажатие: использует координаты из буфера как базу для расчета.
-  Future<void> _setTargetWithClipboardBase() async {
-    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-    if (!mounted) return;
-
-    if (clipboardData == null || clipboardData.text == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Буфер обмена пуст')));
-      return;
-    }
-
-    final coords = clipboardData.text!.split(',');
-    if (coords.length == 2) {
-      final lat = double.tryParse(coords[0].trim());
-      final lon = double.tryParse(coords[1].trim());
-
-      if (lat != null && lon != null) {
-        // Берем азимут и дистанцию из полей, если пустые - то 0.
-        double azimuth = double.tryParse(_azimuthController.text) ?? 0.0;
-        final distance = double.tryParse(_distanceController.text) ?? 0.0;
-
-        // Нормализация азимута к диапазону 0-360
-        azimuth = (azimuth % 360 + 360) % 360;
-
-        // Возвращаем все данные для расчета на главный экран
-        Navigator.pop(context, {
-          'base_latitude': lat,
-          'base_longitude': lon,
-          'azimuth': azimuth,
-          'distance': distance,
-          'useClipboardAsBase': true, // Явно указываем, что база из буфера
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Неверный формат координат в буфере обмена'),
-          ),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Неверный формат координат в буфере обмена'),
-        ),
-      );
     }
   }
 
@@ -85,6 +63,7 @@ class _TargetScreenState extends State<TargetScreen> {
   void dispose() {
     _azimuthController.dispose();
     _distanceController.dispose();
+    _coordsController.dispose();
     super.dispose();
   }
 
@@ -147,11 +126,11 @@ class _TargetScreenState extends State<TargetScreen> {
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
-                  signed: true, // Разрешаем отрицательные числа
+                  signed: true,
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return null; // Пустое поле валидно (будет 0)
+                    return null;
                   }
                   final n = double.tryParse(value);
                   if (n == null) {
@@ -160,17 +139,59 @@ class _TargetScreenState extends State<TargetScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 32),
-              GestureDetector(
-                onLongPress: _setTargetWithClipboardBase, // Долгое нажатие
-                child: ElevatedButton(
-                  onPressed: _setTarget, // Обычное нажатие
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    textStyle: const TextStyle(fontSize: 18),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: _coordsController,
+                      decoration: const InputDecoration(
+                        labelText: 'Координаты (опционально)',
+                        border: OutlineInputBorder(),
+                        hintText: 'широта,долгота',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                        signed: true,
+                      ),
+                    ),
                   ),
-                  child: const Text('Начать ведение к Цели'),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.paste),
+                    tooltip: 'Вставить из буфера обмена',
+                    onPressed: () async {
+                      final clipboardData = await Clipboard.getData(
+                        Clipboard.kTextPlain,
+                      );
+                      if (clipboardData?.text != null) {
+                        _coordsController.text = clipboardData!.text!;
+                      } else {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Буфер обмена пуст')),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Если поле "Координаты" пустое, расчет будет от текущего местоположения',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey[600],
                 ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _setTarget,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  textStyle: const TextStyle(fontSize: 18),
+                ),
+                child: const Text('Начать ведение к Цели'),
               ),
             ],
           ),

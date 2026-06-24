@@ -93,10 +93,10 @@ Map<String, double> calculateTargetCoordinates({
     cos(d) - sin(lat1) * sin(lat2)
   );
 
-  return {
-    'lat': lat2 * (180 / pi),
-    'lon': lon2 * (180 / pi),
-  };
+return {
+  'latitude': lat2 * (180 / pi),
+  'longitude': lon2 * (180 / pi),
+};
 }
 
 /// Результат навигационных расчетов: дистанция, истинный и магнитный азимуты.

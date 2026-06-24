@@ -589,6 +589,10 @@ class MapScreenLogic {
     targetManager.cancelPlannedTarget();
   }
 
+  Future<void> placeTargetFromClipboard() async {
+    await targetManager.placeTargetFromClipboard();
+  }
+
   Future<void> setTargetAndStartNavigation() async {
     await targetManager.setTargetAndStartNavigation();
   }
