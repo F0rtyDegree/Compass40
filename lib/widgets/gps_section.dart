@@ -186,7 +186,7 @@ class _GpsSectionState extends State<GpsSection> {
               final distText = dist > 1000
                   ? '${(dist / 1000).toStringAsFixed(2)} km'
                   : '${dist.round()} m';
-              final text = 'ДО ЦЕЛИ: -> $distText, ${bear.round().toString()}°';
+              final text = 'ДО ЦЕЛИ: -> $distText, ${bear.round() % 360}°';
               return Container(
                 height: minH,
                 alignment: Alignment.center,
@@ -231,7 +231,7 @@ class _GpsSectionState extends State<GpsSection> {
               final distText = dist > 1000
                   ? '${(dist / 1000).toStringAsFixed(2)} km'
                   : '${dist.round()} m';
-              final text = 'ОТ КП$n: -> $distText, ${bear.round()}°';
+              final text = 'ОТ КП$n: -> $distText, ${bear.round() % 360}°';
               return Container(
                 height: minH,
                 alignment: Alignment.center,

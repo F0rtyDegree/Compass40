@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../log_entry.dart';
 import '../widgets/compass_painters.dart';
+import '../utils/angle_utils.dart';
 
 class CompassSection extends StatelessWidget {
   final ValueNotifier<double> headingNotifier;
@@ -109,7 +110,7 @@ class CompassSection extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${heading.round()}°',
+                      formatBearing(heading),
                       style: const TextStyle(
                         fontSize: 60,
                         fontWeight: FontWeight.bold,

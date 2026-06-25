@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
-import '../utils/geo_utils.dart';
+import '../utils/angle_utils.dart';
 
 class GpsCompassService {
   static final GpsCompassService instance = GpsCompassService._();
@@ -78,9 +78,18 @@ class GpsCompassService {
     final recent = _samples.sublist(_samples.length - windowSize);
     final median = calculateCircularMedian(List.from(recent));
     final smoothing = _settings?.smoothingFactor ?? 0.5;
+    
+    // Корректный расчет разницы для круговых величин
     double diff = median - _filteredBearing;
-    if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
-    _filteredBearing = (_filteredBearing + smoothing * diff) % 360;
+    if (diff.abs() > 180) {
+       diff += (diff > 0) ? -360 : 360;
+    }
+    
+    final newBearing = _filteredBearing + smoothing * diff;
+
+    // Используем централизованную функцию для нормализации
+    _filteredBearing = normalizeBearing(newBearing);
+
     bearingNotifier.value = _filteredBearing;
   }
 

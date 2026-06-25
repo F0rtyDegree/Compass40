@@ -7,6 +7,7 @@ import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_compass_service.dart';
 import '../utils/geo_utils.dart';
+import '../utils/angle_utils.dart';
 import 'home_state.dart';
 
 class HomeLogic {
@@ -147,8 +148,9 @@ class HomeLogic {
         state.accuracyNotifier.value = accuracy;
 
         if (state.headingSamples.length == 1) {
-          state.filteredHeading = heading;
-          state.headingNotifier.value = heading;
+          final normalizedHeading = normalizeBearing(heading);
+          state.filteredHeading = normalizedHeading;
+          state.headingNotifier.value = normalizedHeading;
         }
       },
     );
@@ -194,7 +196,7 @@ class HomeLogic {
     if (useGps) {
       final gpsBearing = GpsCompassService.instance.bearingNotifier.value;
       if (gpsBearing == null) return;
-      newHeading = (gpsBearing - state.magneticDeclination + 360) % 360;
+      newHeading = normalizeBearing(gpsBearing - state.magneticDeclination);
     } else {
       state.headingSamples.removeWhere(
         (s) => now - s.$2 > state.averagingPeriod,
@@ -208,7 +210,7 @@ class HomeLogic {
     if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
 
     state.filteredHeading += state.smoothingFactor * diff;
-    state.filteredHeading = (state.filteredHeading + 360) % 360;
+    state.filteredHeading = normalizeBearing(state.filteredHeading);
 
     state.headingNotifier.value = state.filteredHeading;
   }

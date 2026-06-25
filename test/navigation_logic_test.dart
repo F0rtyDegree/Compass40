@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:compass40/utils/geo_utils.dart';
+import 'package:compass40/utils/angle_utils.dart';
 import 'package:compass40/services/map_calibration_service.dart';
 
 void main() {

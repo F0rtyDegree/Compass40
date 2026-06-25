@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/map_anchor.dart';
 import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
+import '../utils/angle_utils.dart';
 
 class MapOverlayPainter extends CustomPainter {
   final Size imageSize;
@@ -351,7 +352,7 @@ class MapOverlayPainter extends CustomPainter {
     final distText = distanceMeters >= 1000
         ? '${(distanceMeters / 1000).toStringAsFixed(2)} km'
         : '${distanceMeters.round()} m';
-    final bearText = '${bearingDegrees.round()}°';
+    final bearText = formatBearing(bearingDegrees);
 
     _drawLabel(canvas, distText, labelPos + const Offset(0, -12), Colors.red);
     _drawLabel(canvas, bearText, labelPos + const Offset(0, 8), Colors.red);
