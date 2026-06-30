@@ -227,8 +227,9 @@ class _MapScreenState extends State<MapScreen> {
                         height: 80,
                         child: GestureDetector(
                           onTap: () {
-                            if (_state.photoSeverMode) {
-                              _logic.handlePhotoSeverTap(
+                            // ✅ ИСПРАВЛЕНО: обращаемся к флагу и методу контроллера
+                            if (_logic.photoSeverController.isActive) {
+                              _logic.photoSeverController.handleTap(
                                 _state.crosshairImagePoint!,
                               );
                             }
@@ -262,9 +263,9 @@ class _MapScreenState extends State<MapScreen> {
                           ? _logic.placePlannedTargetAtCrosshair
                           : _logic.setTargetAndStartNavigation)
                     : null,
-              onTargetLongPressed: _state.canPlaceTarget && !_state.followMode
-                  ? _logic.placeTargetFromClipboard
-                  : null,
+                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode
+                    ? _logic.placeTargetFromClipboard
+                    : null,
                 targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
                 targetEnabled: _state.canPlaceTarget && !_state.followMode,
                 onZoomIn: _logic.zoomIn,
@@ -288,7 +289,9 @@ class _MapScreenState extends State<MapScreen> {
 
   void _resetRotation() {
     final current = _state.transformState;
-    final newRotation = _state.photoSeverNorthRotation;
+    // ✅ Новый подход: угол вектора севера в системе файла → поворот карты, чтобы север смотрел вверх
+    final northAngle = _state.project?.photoSeverNorthAngle ?? 0.0;
+    final newRotation = -math.pi / 2 - northAngle;
     if (_state.viewportSize != null && _state.imageSize != null) {
       final pivotScreen = _logic.getCrosshairScreenPoint();
       final pivotImage = _logic.screenToImage(pivotScreen);

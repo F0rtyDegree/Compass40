@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gps_info/gps_info.dart';
 import '../models/map_anchor.dart';
+import '../models/map_project.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import 'map_screen_state.dart';
@@ -22,10 +23,11 @@ class MapAnchorManager {
 
   GpsData? lastGpsData;
   List<Map<String, String>>? cachedGpxPoints;
-  
+
   final VoidCallback onAnchorsChanged;
   final Future<void> Function({bool restartNavigation}) onRecalculateTargets;
   final Offset Function(Offset screenPoint) screenToImage;
+  final double magneticDeclination;
 
   MapAnchorManager({
     required this.calibrationService,
@@ -36,6 +38,7 @@ class MapAnchorManager {
     required this.onAnchorsChanged,
     required this.onRecalculateTargets,
     required this.screenToImage,
+    required this.magneticDeclination,
     this.onAnchorAdded,
     this.lastGpsData,
     this.onStartPhotoSever,
@@ -274,7 +277,7 @@ class MapAnchorManager {
     );
 
     final updatedAnchors = [...project.anchors, anchor];
-    final updatedProject = project.copyWith(
+    MapProject updatedProject = project.copyWith(
       anchors: updatedAnchors,
       pathJumpIndices: newPathJumpIndices,
       manualMode: calibrationService.isManualMode,
@@ -284,7 +287,6 @@ class MapAnchorManager {
 
     await storageService.saveProject(updatedProject);
 
-    // Если ФотоСевер уже обновил проект, не перезаписываем его
     setState(() {
       state.project = updatedProject;
     });

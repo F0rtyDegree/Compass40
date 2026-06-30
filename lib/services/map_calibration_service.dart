@@ -383,6 +383,27 @@ class MapCalibrationService {
   double distanceBetweenAnchorsMeters(MapAnchor a, MapAnchor b) {
     return calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
   }
+  /// Возвращает эквивалентные параметры ФотоСевера (масштаб и угол магнитного севера),
+  /// если текущий трансформер — SimilarityTransform (режимы F и N).
+  /// Иначе возвращает null.
+  Map<String, double>? getPhotoSeverEquivalent(double declinationRadians) {
+    final t = _currentTransform;
+    if (t is SimilarityTransform) {
+      final metersPerPixel = t.scale;
+      // Угол, на который нужно повернуть карту, чтобы магнитный север смотрел вверх
+      double northRotation = -(t.angleRadians + declinationRadians);
+      
+      // Нормализация в диапазон [-pi, pi]
+      northRotation = northRotation % (2 * math.pi);
+      if (northRotation > math.pi) northRotation -= 2 * math.pi;
+
+      return {
+        'metersPerPixel': metersPerPixel,
+        'northRotation': northRotation,
+      };
+    }
+    return null;
+  }
 
   MapWorkingPair? selectNearestValidPair(
     List<MapAnchor> anchors, {
