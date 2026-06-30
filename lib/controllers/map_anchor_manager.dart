@@ -27,7 +27,6 @@ class MapAnchorManager {
   final VoidCallback onAnchorsChanged;
   final Future<void> Function({bool restartNavigation}) onRecalculateTargets;
   final Offset Function(Offset screenPoint) screenToImage;
-  final double magneticDeclination;
 
   MapAnchorManager({
     required this.calibrationService,
@@ -38,7 +37,6 @@ class MapAnchorManager {
     required this.onAnchorsChanged,
     required this.onRecalculateTargets,
     required this.screenToImage,
-    required this.magneticDeclination,
     this.onAnchorAdded,
     this.lastGpsData,
     this.onStartPhotoSever,

@@ -115,7 +115,6 @@ class MapScreenLogic {
       screenToImage: screenToImage,
       onAnchorAdded: onAnchorAdded,
       onStartPhotoSever: () => photoSeverController.start(),
-      magneticDeclination: magneticDeclination, // ✅ Передаем склонение
     );
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     targetManager = MapTargetManager(

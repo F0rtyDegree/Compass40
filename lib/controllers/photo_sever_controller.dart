@@ -15,7 +15,6 @@ class PhotoSeverController {
 
   bool isActive = false;
   final List<Offset> points = [];
-  double northRotation = 0.0;
 
   PhotoSeverController({
     required this.state,
@@ -31,7 +30,6 @@ class PhotoSeverController {
     setState(() {
       isActive = true;
       points.clear();
-      northRotation = 0.0;
     });
     showSnackBar('Укажите первую точку (юг)');
   }
@@ -86,10 +84,6 @@ class PhotoSeverController {
         translation: newTranslation,
       ),
     );
-
-    setState(() {
-      northRotation = neededRotation;
-    });
   }
 
   Future<void> finish() async {
@@ -119,7 +113,8 @@ class PhotoSeverController {
     double linePixels = 0.0;
     if (lineLen > 1e-6) {
       final toP3 = p3 - p1;
-      final projection = (toP3.dx * lineVec.dx + toP3.dy * lineVec.dy) / lineLen;
+      final projection =
+          (toP3.dx * lineVec.dx + toP3.dy * lineVec.dy) / lineLen;
       final projectedPoint = p1 + lineVec * (projection / lineLen);
       linePixels = (p3 - projectedPoint).distance;
     }
@@ -130,9 +125,6 @@ class PhotoSeverController {
       photoSeverLinePixels: linePixels,
       photoSeverNorthAngle: northAngle,
     );
-
-    // 👇 ВРЕМЕННАЯ ПРОВЕРКА ЭТАПА 2
-    debugPrint('🧭 ФОТОСЕВЕР СОХРАНЁН: lineMeters=${dist.toStringAsFixed(1)}м, linePixels=${linePixels.toStringAsFixed(1)}px, northAngle=${(northAngle * 180 / math.pi).toStringAsFixed(1)}°');
 
     await storageService.saveProject(updatedProject);
     setState(() {

@@ -104,17 +104,17 @@ class MapCalibrationService {
     if (_manualMode) {
       return _pinnedAnchorIds.toSet();
     }
-    
+
     final t = _currentTransform;
     if (t is _AffineTransformerAdapter) {
       return t._selectedPoints.map((a) => a.id).toSet();
     }
-    
+
     // ✅ ИСПРАВЛЕНИЕ: Для двухточечных режимов (F и N) берем ID из SimilarityTransform
     if (t is SimilarityTransform) {
       return t.activeAnchorIds; // Возвращает {latestId, referenceId}
     }
-    
+
     return null;
   }
 
@@ -272,7 +272,7 @@ class MapCalibrationService {
     final t = _currentTransform;
     if (t is _AffineTransformerAdapter) {
       _pinnedAnchorIds.addAll(t._selectedPoints.map((a) => a.id));
-    } 
+    }
     // ✅ ИСПРАВЛЕНИЕ: Захватываем рабочую пару из режимов F и N
     else if (t is SimilarityTransform) {
       final ids = t.activeAnchorIds;
@@ -354,8 +354,10 @@ class MapCalibrationService {
         // Fallback: двухточечная привязка (farthest pair) для 2+ якорей
         final pair = selectWorkingPair(_anchors, minDistanceMeters: 50.0);
         if (pair != null) {
-          _currentTransform =
-              SimilarityTransform.fromPair(pair.latest, pair.reference);
+          _currentTransform = SimilarityTransform.fromPair(
+            pair.latest,
+            pair.reference,
+          );
           return;
         }
       }
@@ -382,27 +384,6 @@ class MapCalibrationService {
 
   double distanceBetweenAnchorsMeters(MapAnchor a, MapAnchor b) {
     return calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
-  }
-  /// Возвращает эквивалентные параметры ФотоСевера (масштаб и угол магнитного севера),
-  /// если текущий трансформер — SimilarityTransform (режимы F и N).
-  /// Иначе возвращает null.
-  Map<String, double>? getPhotoSeverEquivalent(double declinationRadians) {
-    final t = _currentTransform;
-    if (t is SimilarityTransform) {
-      final metersPerPixel = t.scale;
-      // Угол, на который нужно повернуть карту, чтобы магнитный север смотрел вверх
-      double northRotation = -(t.angleRadians + declinationRadians);
-      
-      // Нормализация в диапазон [-pi, pi]
-      northRotation = northRotation % (2 * math.pi);
-      if (northRotation > math.pi) northRotation -= 2 * math.pi;
-
-      return {
-        'metersPerPixel': metersPerPixel,
-        'northRotation': northRotation,
-      };
-    }
-    return null;
   }
 
   MapWorkingPair? selectNearestValidPair(
