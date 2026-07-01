@@ -287,11 +287,30 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _resetRotation() {
+void _resetRotation() {
     final current = _state.transformState;
-    // ✅ Новый подход: угол вектора севера в системе файла → поворот карты, чтобы север смотрел вверх
-    final northAngle = _state.project?.photoSeverNorthAngle ?? 0.0;
-    final newRotation = -math.pi / 2 - northAngle;
+
+    double newRotation;
+    final project = _state.project;
+    final linePixels = project?.photoSeverLinePixels ?? 0.0;
+
+    if (linePixels > 0) {
+      // ✅ Приоритет 1: Есть ручная калибровка ФотоСевера
+      final northAngle = project!.photoSeverNorthAngle;
+      newRotation = -math.pi / 2 - northAngle;
+    } else if (_state.mapRotation != 0.0) {
+      // ✅ Приоритет 2: Есть стандартная привязка (F/N), но нет ФотоСевера
+      final declinationRad = widget.magneticDeclination * math.pi / 180;
+      newRotation = _state.mapRotation - declinationRad;
+    } else {
+      // Нет ни ФотоСевера, ни привязки — не поворачиваем
+      newRotation = 0.0;
+    }
+
+    // Нормализация в диапазон [-π, π]
+    newRotation = newRotation % (2 * math.pi);
+    if (newRotation > math.pi) newRotation -= 2 * math.pi;
+
     if (_state.viewportSize != null && _state.imageSize != null) {
       final pivotScreen = _logic.getCrosshairScreenPoint();
       final pivotImage = _logic.screenToImage(pivotScreen);
