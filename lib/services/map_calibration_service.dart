@@ -9,11 +9,12 @@ import '../models/bearing_and_distance.dart';
 import 'point_selector.dart';
 import '../models/map_working_pair.dart';
 import '../transforms/similarity_transform.dart';
+import '../transforms/photo_sever_transform.dart';
 export '../models/bearing_and_distance.dart';
 export '../models/geo_point.dart';
 export '../transforms/similarity_transform.dart';
 
-enum CalibrationMode { affine, pairFarthest, pairNearest }
+enum CalibrationMode { affine, pairFarthest, pairNearest, photoSever }
 
 class _AffineTransformerAdapter implements MapTransformer {
   final AffineTransform _affine;
@@ -87,6 +88,24 @@ class MapCalibrationService {
   final Set<String> _pinnedAnchorIds = {};
   bool _manualMode = false; // true, если пользователь хоть раз коснулся якоря
 
+  // ✅ Данные ФотоСевера для режима P
+  double _psLineMeters = 0.0;
+  double _psLinePixels = 0.0;
+  double _psNorthAngle = 0.0;
+
+  void updatePhotoSeverData({
+    required double lineMeters,
+    required double linePixels,
+    required double northAngle,
+  }) {
+    _psLineMeters = lineMeters;
+    _psLinePixels = linePixels;
+    _psNorthAngle = northAngle;
+    if (_mode == CalibrationMode.photoSever) {
+      _buildTransformFromAnchors();
+    }
+  }
+
   int get usedAnchorCount {
     final t = _currentTransform;
     if (t != null) return t.usedAnchorCount;
@@ -139,6 +158,10 @@ class MapCalibrationService {
       _anchors.where((a) => _pinnedAnchorIds.contains(a.id)).toList();
 
   String get calibrationModeLetter {
+    // ✅ Режим P всегда показывается как 'P', независимо от _manualMode
+    if (_mode == CalibrationMode.photoSever) {
+      return 'P';
+    }
     if (_manualMode) {
       return '${_pinnedAnchorIds.length}';
     }
@@ -149,12 +172,23 @@ class MapCalibrationService {
         return 'F';
       case CalibrationMode.pairNearest:
         return 'N';
+      case CalibrationMode.photoSever:
+        return 'P';
     }
   }
 
-  void setCalibrationMode(CalibrationMode mode) {
+void setCalibrationMode(CalibrationMode mode) {
     _manualMode = false;
     _mode = mode;
+    
+    // ✅ При переходе в режим P, если нет закреплённых якорей — активируем последний
+    if (mode == CalibrationMode.photoSever &&
+        _pinnedAnchorIds.isEmpty &&
+        _anchors.isNotEmpty) {
+      _pinnedAnchorIds.add(_anchors.last.id);
+      _manualMode = true;
+    }
+    
     _buildTransformFromAnchors();
   }
 
@@ -188,6 +222,19 @@ class MapCalibrationService {
   }
 
   void toggleAnchorPinned(String anchorId) {
+    // ✅ Режим P: всегда ровно один активный якорь, переключение молча
+    if (_mode == CalibrationMode.photoSever) {
+      if (_pinnedAnchorIds.contains(anchorId)) {
+        _pinnedAnchorIds.remove(anchorId);
+      } else {
+        _pinnedAnchorIds.clear();
+        _pinnedAnchorIds.add(anchorId);
+      }
+      _manualMode = _pinnedAnchorIds.isNotEmpty;
+      _buildTransformFromAnchors();
+      return;
+    }
+
     // Если не в ручном режиме, захватываем текущий автоматический набор
     if (!_manualMode) {
       _captureCurrentAutomaticSet();
@@ -294,6 +341,23 @@ class MapCalibrationService {
   }
 
   void _buildTransformFromAnchors() {
+    // ✅ Режим P: одноточечная привязка по данным ФотоСевера
+    if (_mode == CalibrationMode.photoSever) {
+      if (_pinnedAnchorIds.length == 1 && _psLinePixels > 0) {
+        final baseId = _pinnedAnchorIds.first;
+        final baseAnchor = _anchors.firstWhere((a) => a.id == baseId);
+        _currentTransform = PhotoSeverTransform(
+          baseAnchor: baseAnchor,
+          lineMeters: _psLineMeters,
+          linePixels: _psLinePixels,
+          northAngle: _psNorthAngle,
+        );
+      } else {
+        _currentTransform = null;
+      }
+      return;
+    }
+
     if (_manualMode) {
       final pinnedList = pinnedAnchors;
       if (pinnedList.length >= 3) {

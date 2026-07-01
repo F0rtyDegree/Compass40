@@ -314,7 +314,15 @@ class MapAnchorManager {
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
-  void handleTapOnMap(Offset screenPosition) {
+void handleTapOnMap(Offset screenPosition) {
+    // ✅ В автоматических режимах (A/F/N) тап на якорь игнорируется
+    // Переключение якорей работает только в режимах M и P
+    final mode = calibrationService.currentMode;
+    if (!calibrationService.isManualMode &&
+        mode != CalibrationMode.photoSever) {
+      return;
+    }
+
     final anchor = _findClosestAnchor(screenPosition);
     if (anchor != null) {
       calibrationService.toggleAnchorPinned(anchor.id);
@@ -375,51 +383,132 @@ class MapAnchorManager {
     onAnchorsChanged();
   }
 
-  void showModePicker(BuildContext context) {
+void showModePicker(BuildContext context) {
+    final project = state.project;
+    final anchors = project?.anchors ?? [];
+    final anchorCount = anchors.length;
+    final hasPhotoSever = project != null && project.photoSeverLinePixels > 0;
+
+    // Условия доступности режимов
+    final canAffine = anchorCount >= 2;
+    final canFarthest = anchorCount >= 2;
+    final canNearest = anchorCount >= 2;
+    final canManual = anchorCount >= 3;
+    final canPhotoSever = hasPhotoSever && anchorCount >= 1;
+
+    void switchTo(CalibrationMode mode, BuildContext dialogCtx) {
+      calibrationService.setCalibrationMode(mode);
+      Navigator.pop(dialogCtx);
+      _saveCalibrationState();
+      setState(() {});
+    }
+
+    void switchToManual(BuildContext dialogCtx) {
+      calibrationService.enableManualMode();
+      Navigator.pop(dialogCtx);
+      _saveCalibrationState();
+      setState(() {});
+    }
+
+    void showHintAndClose(String hint, BuildContext dialogCtx) {
+      Navigator.pop(dialogCtx);
+      showSnackBar(hint);
+    }
+
     showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
         title: const Text('Режим привязки'),
         children: [
+          // === ФотоСевер (P) ===
           SimpleDialogOption(
             onPressed: () {
-              calibrationService.enableManualMode();
-              Navigator.pop(ctx);
-              _saveCalibrationState();
-              setState(() {});
-            },
-            child: const Text('Ручной (M)'),
-          ),
-          SimpleDialogOption(
-            onPressed: () {
-              calibrationService.setCalibrationMode(CalibrationMode.affine);
-              Navigator.pop(ctx);
-              _saveCalibrationState();
-              setState(() {});
-            },
-            child: const Text('Affine (A)'),
-          ),
-          SimpleDialogOption(
-            onPressed: () {
+              if (!canPhotoSever) {
+                showHintAndClose('Нужно ФотоСевер & 1 якорь', ctx);
+                return;
+              }
               calibrationService.setCalibrationMode(
-                CalibrationMode.pairFarthest,
+                CalibrationMode.photoSever,
+              );
+              calibrationService.updatePhotoSeverData(
+                lineMeters: project.photoSeverLineMeters,
+                linePixels: project.photoSeverLinePixels,
+                northAngle: project.photoSeverNorthAngle,
               );
               Navigator.pop(ctx);
               _saveCalibrationState();
               setState(() {});
             },
-            child: const Text('Farthest (F)'),
+            child: Text(
+              'ФотоСевер (P)',
+              style: TextStyle(
+                color: canPhotoSever ? null : Colors.grey,
+              ),
+            ),
           ),
+          // === Ручной (M) ===
           SimpleDialogOption(
             onPressed: () {
-              calibrationService.setCalibrationMode(
-                CalibrationMode.pairNearest,
-              );
-              Navigator.pop(ctx);
-              _saveCalibrationState();
-              setState(() {});
+              if (!canManual) {
+                showHintAndClose('Нужно минимум 3 якоря', ctx);
+                return;
+              }
+              switchToManual(ctx);
             },
-            child: const Text('Nearest (N)'),
+            child: Text(
+              'Ручной (M)',
+              style: TextStyle(
+                color: canManual ? null : Colors.grey,
+              ),
+            ),
+          ),
+          // === Affine (A) ===
+          SimpleDialogOption(
+            onPressed: () {
+              if (!canAffine) {
+                showHintAndClose('Нужно минимум 2 якоря', ctx);
+                return;
+              }
+              switchTo(CalibrationMode.affine, ctx);
+            },
+            child: Text(
+              'Affine (A)',
+              style: TextStyle(
+                color: canAffine ? null : Colors.grey,
+              ),
+            ),
+          ),
+          // === Farthest (F) ===
+          SimpleDialogOption(
+            onPressed: () {
+              if (!canFarthest) {
+                showHintAndClose('Нужно минимум 2 якоря', ctx);
+                return;
+              }
+              switchTo(CalibrationMode.pairFarthest, ctx);
+            },
+            child: Text(
+              'Farthest (F)',
+              style: TextStyle(
+                color: canFarthest ? null : Colors.grey,
+              ),
+            ),
+          ),
+          // === Nearest (N) ===
+          SimpleDialogOption(
+            onPressed: () {
+              if (!canNearest) {
+                showHintAndClose('Нужно минимум 2 якоря', ctx);
+                return;
+              }
+              switchTo(CalibrationMode.pairNearest, ctx);
+            },
+            child: Text(
+              'Nearest (N)',
+              style: TextStyle(
+                color: canNearest ? null : Colors.grey,
+              ),
+            ),
           ),
         ],
       ),

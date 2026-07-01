@@ -5,44 +5,51 @@ import 'similarity_transform.dart';
 
 class PhotoSeverTransform implements MapTransformer {
   final MapAnchor baseAnchor;
-  final double metersPerPixel;
-  final double northRotationRad;
-  final double magneticDeclinationRad; // ✅ ДОБАВЛЕНО
+  final double lineMeters;
+  final double linePixels;
+  final double northAngle;
 
   PhotoSeverTransform({
     required this.baseAnchor,
-    required this.metersPerPixel,
-    required this.northRotationRad,
-    this.magneticDeclinationRad = 0.0, // ✅ По умолчанию 0 для обратной совместимости
+    required this.lineMeters,
+    required this.linePixels,
+    required this.northAngle,
   });
+
+  /// Масштаб вычисляется через пропорцию (без деления заранее)
+  double _metersForPixels(double pixels) {
+    if (linePixels == 0) return 0;
+    return (pixels * lineMeters) / linePixels;
+  }
+
+  double _pixelsForMeters(double meters) {
+    if (lineMeters == 0) return 0;
+    return (meters * linePixels) / lineMeters;
+  }
 
   @override
   Offset imageToGeo(Offset imagePoint) {
     final dx = imagePoint.dx - baseAnchor.imageX;
     final dy = imagePoint.dy - baseAnchor.imageY;
 
-    // Поворачиваем вектор из экранных координат в систему Магнитного Севера
-    final cos = math.cos(northRotationRad);
-    final sin = math.sin(northRotationRad);
+    // Поворачиваем вектор из пиксельной системы в систему магнитного севера
+    final cos = math.cos(-northAngle);
+    final sin = math.sin(-northAngle);
     final rotDx = dx * cos - dy * sin;
     final rotDy = dx * sin + dy * cos;
 
-    final eastMeters = rotDx * metersPerPixel;
-    final northMeters = -rotDy * metersPerPixel;
-
-    // ✅ КОМПЕНСАЦИЯ: Поворачиваем из системы Магнитного Севера в Истинный
-    final cosD = math.cos(magneticDeclinationRad);
-    final sinD = math.sin(magneticDeclinationRad);
-    final trueEast = eastMeters * cosD - northMeters * sinD;
-    final trueNorth = eastMeters * sinD + northMeters * cosD;
+    // После поворота на -northAngle:
+    // rotDx = компонента вдоль магнитного севера (north)
+    // rotDy = компонента перпендикулярно (east)
+    final northMeters = _metersForPixels(rotDx);
+    final eastMeters = _metersForPixels(rotDy);
 
     final originLatRad = baseAnchor.latitude * math.pi / 180;
-    final dLat = trueNorth / 6371000.0;
-    final dLon = trueEast / (6371000.0 * math.cos(originLatRad));
+    final dLat = northMeters / 6371000.0;
+    final dLon = eastMeters / (6371000.0 * math.cos(originLatRad));
 
     final lat = baseAnchor.latitude + dLat * 180 / math.pi;
     final lon = baseAnchor.longitude + dLon * 180 / math.pi;
-
     return Offset(lon, lat);
   }
 
@@ -52,20 +59,18 @@ class PhotoSeverTransform implements MapTransformer {
     final dLat = (geoPoint.dy - baseAnchor.latitude) * math.pi / 180;
     final dLon = (geoPoint.dx - baseAnchor.longitude) * math.pi / 180;
 
-    final trueNorth = dLat * 6371000.0;
-    final trueEast = dLon * 6371000.0 * math.cos(originLatRad);
+    final northMeters = dLat * 6371000.0;
+    final eastMeters = dLon * 6371000.0 * math.cos(originLatRad);
 
-    // ✅ ОБРАТНАЯ КОМПЕНСАЦИЯ: Из Истинного Севера в Магнитный
-    final cosD = math.cos(-magneticDeclinationRad);
-    final sinD = math.sin(-magneticDeclinationRad);
-    final eastMeters = trueEast * cosD - trueNorth * sinD;
-    final northMeters = trueEast * sinD + trueNorth * cosD;
+    // Из системы магнитного севера обратно в повёрнутую систему:
+    // rotDx = компонента вдоль севера (north)
+    // rotDy = компонента вдоль востока (east)
+    final rotDx = _pixelsForMeters(northMeters);
+    final rotDy = _pixelsForMeters(eastMeters);
 
-    final rotDx = eastMeters / metersPerPixel;
-    final rotDy = -northMeters / metersPerPixel;
-
-    final cos = math.cos(-northRotationRad);
-    final sin = math.sin(-northRotationRad);
+    // Поворот из системы магнитного севера обратно в пиксельную систему
+    final cos = math.cos(northAngle);
+    final sin = math.sin(northAngle);
     final dx = rotDx * cos - rotDy * sin;
     final dy = rotDx * sin + rotDy * cos;
 
@@ -76,11 +81,14 @@ class PhotoSeverTransform implements MapTransformer {
   int get usedAnchorCount => 1;
 
   @override
-  double? get metersPerImagePixel => metersPerPixel;
-  
+  double? get metersPerImagePixel {
+    if (linePixels == 0) return null;
+    return lineMeters / linePixels;
+  }
+
   @override
   double? get rmseMeters => null;
-  
+
   @override
   double? get selfPointErrorMeters => null;
 }
