@@ -108,10 +108,10 @@ class _MapScreenState extends State<MapScreen> {
             ),
             if (_state.imagePath != null)
               Tooltip(
-                message: 'Удалить карту (долгое нажатие)',
+                message: 'Действия с картой',
                 child: InkWell(
                   customBorder: const CircleBorder(),
-                  onLongPress: () => _showMapActionsDialog(context),
+                  onTap: () => _showMapActionsDialog(context),
                   child: const Padding(
                     padding: EdgeInsets.all(12.0),
                     child: Icon(Icons.delete_forever),
