@@ -107,10 +107,7 @@ class PhotoSeverController {
     final p3 = points[2];
 
     // Магнитный угол (как задал пользователь)
-    final magneticNorthAngle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
-    // Переводим в истинный угол (вычитаем склонение)
-    final declinationRad = magneticDeclination * math.pi / 180;
-    final trueNorthAngle = magneticNorthAngle - declinationRad;
+    final northAngle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
 
     // Длина перпендикуляра от p3 к линии p1-p2 (в пикселях)
     final lineVec = p2 - p1;
@@ -124,11 +121,11 @@ class PhotoSeverController {
       linePixels = (p3 - projectedPoint).distance;
     }
 
-    // ✅ Сохраняем новые поля ФотоСевера
+    // ✅ Сохраняем магнитный угол (без пересчёта в истинный)
     final updatedProject = project.copyWith(
       photoSeverLineMeters: dist,
       photoSeverLinePixels: linePixels,
-      photoSeverNorthAngle: trueNorthAngle,
+      photoSeverNorthAngle: northAngle,
     );
 
     await storageService.saveProject(updatedProject);

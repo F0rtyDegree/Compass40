@@ -289,27 +289,25 @@ class _MapScreenState extends State<MapScreen> {
 
   void _resetRotation() {
     final current = _state.transformState;
+
+    print('=== _resetRotation ===');
+    print('mapRotation: ${_state.mapRotation}');
+    print('photoSeverLinePixels: ${_state.project?.photoSeverLinePixels}');
+    print('photoSeverNorthAngle: ${_state.project?.photoSeverNorthAngle}');
+    print('magneticDeclination: ${widget.magneticDeclination}');
+    print('current rotationRadians: ${current.rotationRadians}');
+
     final declinationRad = widget.magneticDeclination * math.pi / 180;
 
-    // Определяем истинный угол севера на изображении (как поворот от оси Y)
-    double trueNorthAngle = 0.0;
-    final project = _state.project;
-    bool hasCalibration = false;
+    // Вычисляем целевой поворот через статический метод логики
+    final newRotation = MapScreenLogic.computeResetRotation(
+      mapRotation: _state.mapRotation,
+      photoSeverNorthAngle: _state.project?.photoSeverNorthAngle ?? 0.0,
+      photoSeverLinePixels: _state.project?.photoSeverLinePixels ?? 0.0,
+      declinationRad: declinationRad,
+    );
 
-    if (project != null && project.photoSeverLinePixels > 0) {
-      // Режим P – данные ФотоСевера теперь в истинном севере
-      trueNorthAngle = project.photoSeverNorthAngle;
-      hasCalibration = true;
-    } else if (_state.mapRotation != 0.0) {
-      // Режимы A/M/F/N – mapRotation хранит истинный угол
-      trueNorthAngle = _state.mapRotation;
-      hasCalibration = true;
-    }
-
-    // Поворот экрана, чтобы вверх смотрел магнитный север
-    final double newRotation = hasCalibration
-        ? (trueNorthAngle - declinationRad)
-        : 0.0;
+    print('newRotation: $newRotation rad (${newRotation * 180 / math.pi}°)');
 
     // Нормализация в [-π, π]
     double normalized = newRotation % (2 * math.pi);

@@ -818,4 +818,20 @@ class MapScreenLogic {
       state.isGpsActive = GpsCompassService.instance.isActiveNotifier.value;
     });
   }
+  static double computeResetRotation({
+    required double mapRotation,
+    required double photoSeverNorthAngle,
+    required double photoSeverLinePixels,
+    required double declinationRad,
+  }) {
+    if (photoSeverLinePixels > 0) {
+      // Режим P: ставим магнитный север вверх (без склонения)
+      return -math.pi / 2 - photoSeverNorthAngle;
+    } else if (mapRotation != 0.0) {
+      // Обычные режимы A/F/N/M: истинный поворот минус склонение
+      return mapRotation - declinationRad;
+    } else {
+      return 0.0;
+    }
+  }
 }
