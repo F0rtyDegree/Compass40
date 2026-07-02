@@ -15,6 +15,7 @@ class PhotoSeverController {
 
   bool isActive = false;
   final List<Offset> points = [];
+  final double magneticDeclination;
 
   PhotoSeverController({
     required this.state,
@@ -24,6 +25,7 @@ class PhotoSeverController {
     required this.updateTransform,
     required this.storageService,
     required this.imageToScreen,
+    required this.magneticDeclination,
   });
 
   void start() {
@@ -104,8 +106,11 @@ class PhotoSeverController {
     final p2 = points[1];
     final p3 = points[2];
 
-    // Угол вектора магнитного севера в системе координат файла
-    final northAngle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
+    // Магнитный угол (как задал пользователь)
+    final magneticNorthAngle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
+    // Переводим в истинный угол (вычитаем склонение)
+    final declinationRad = magneticDeclination * math.pi / 180;
+    final trueNorthAngle = magneticNorthAngle - declinationRad;
 
     // Длина перпендикуляра от p3 к линии p1-p2 (в пикселях)
     final lineVec = p2 - p1;
@@ -123,7 +128,7 @@ class PhotoSeverController {
     final updatedProject = project.copyWith(
       photoSeverLineMeters: dist,
       photoSeverLinePixels: linePixels,
-      photoSeverNorthAngle: northAngle,
+      photoSeverNorthAngle: trueNorthAngle,
     );
 
     await storageService.saveProject(updatedProject);

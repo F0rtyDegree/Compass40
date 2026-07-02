@@ -92,6 +92,15 @@ class MapCalibrationService {
   double _psLineMeters = 0.0;
   double _psLinePixels = 0.0;
   double _psNorthAngle = 0.0;
+  double _magneticDeclination = 0.0;
+
+  void setMagneticDeclination(double declinationDegrees) {
+    _magneticDeclination = declinationDegrees;
+    // Перестроить трансформацию, если сейчас активен режим P
+    if (_mode == CalibrationMode.photoSever) {
+      _buildTransformFromAnchors();
+    }
+  }
 
   void updatePhotoSeverData({
     required double lineMeters,
@@ -177,10 +186,10 @@ class MapCalibrationService {
     }
   }
 
-void setCalibrationMode(CalibrationMode mode) {
+  void setCalibrationMode(CalibrationMode mode) {
     _manualMode = false;
     _mode = mode;
-    
+
     // ✅ При переходе в режим P, если нет закреплённых якорей — активируем последний
     if (mode == CalibrationMode.photoSever &&
         _pinnedAnchorIds.isEmpty &&
@@ -188,7 +197,7 @@ void setCalibrationMode(CalibrationMode mode) {
       _pinnedAnchorIds.add(_anchors.last.id);
       _manualMode = true;
     }
-    
+
     _buildTransformFromAnchors();
   }
 
@@ -346,11 +355,16 @@ void setCalibrationMode(CalibrationMode mode) {
       if (_pinnedAnchorIds.length == 1 && _psLinePixels > 0) {
         final baseId = _pinnedAnchorIds.first;
         final baseAnchor = _anchors.firstWhere((a) => a.id == baseId);
+        // Переводим магнитный угол в истинный: истинный_север = магнитный_север - склонение
+        // (при восточном склонении магнитный север восточнее истинного, значит,
+        // чтобы из магнитного угла получить истинный, нужно вычесть склонение)
+        final trueNorthAngle =
+            _psNorthAngle - _magneticDeclination * math.pi / 180;
         _currentTransform = PhotoSeverTransform(
           baseAnchor: baseAnchor,
           lineMeters: _psLineMeters,
           linePixels: _psLinePixels,
-          northAngle: _psNorthAngle,
+          northAngle: trueNorthAngle,
         );
       } else {
         _currentTransform = null;

@@ -287,36 +287,42 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-void _resetRotation() {
+  void _resetRotation() {
     final current = _state.transformState;
+    final declinationRad = widget.magneticDeclination * math.pi / 180;
 
-    double newRotation;
+    // Определяем истинный угол севера на изображении (как поворот от оси Y)
+    double trueNorthAngle = 0.0;
     final project = _state.project;
-    final linePixels = project?.photoSeverLinePixels ?? 0.0;
+    bool hasCalibration = false;
 
-    if (linePixels > 0) {
-      // ✅ Приоритет 1: Есть ручная калибровка ФотоСевера
-      final northAngle = project!.photoSeverNorthAngle;
-      newRotation = -math.pi / 2 - northAngle;
+    if (project != null && project.photoSeverLinePixels > 0) {
+      // Режим P – данные ФотоСевера теперь в истинном севере
+      trueNorthAngle = project.photoSeverNorthAngle;
+      hasCalibration = true;
     } else if (_state.mapRotation != 0.0) {
-      // ✅ Приоритет 2: Есть стандартная привязка (F/N), но нет ФотоСевера
-      final declinationRad = widget.magneticDeclination * math.pi / 180;
-      newRotation = _state.mapRotation - declinationRad;
-    } else {
-      // Нет ни ФотоСевера, ни привязки — не поворачиваем
-      newRotation = 0.0;
+      // Режимы A/M/F/N – mapRotation хранит истинный угол
+      trueNorthAngle = _state.mapRotation;
+      hasCalibration = true;
     }
 
-    // Нормализация в диапазон [-π, π]
-    newRotation = newRotation % (2 * math.pi);
-    if (newRotation > math.pi) newRotation -= 2 * math.pi;
+    // Поворот экрана, чтобы вверх смотрел магнитный север
+    final double newRotation = hasCalibration
+        ? (trueNorthAngle - declinationRad)
+        : 0.0;
 
+    // Нормализация в [-π, π]
+    double normalized = newRotation % (2 * math.pi);
+    if (normalized > math.pi) normalized -= 2 * math.pi;
+    if (normalized <= -math.pi) normalized += 2 * math.pi;
+
+    // Применяем с удержанием перекрестия на месте
     if (_state.viewportSize != null && _state.imageSize != null) {
       final pivotScreen = _logic.getCrosshairScreenPoint();
       final pivotImage = _logic.screenToImage(pivotScreen);
       final tempTransform = MapTransformState(
         scale: current.scale,
-        rotationRadians: newRotation,
+        rotationRadians: normalized,
         translation: current.translation,
       );
       final oldTransform = _state.transformState;
@@ -328,7 +334,7 @@ void _resetRotation() {
       _logic.updateTransform(
         MapTransformState(
           scale: current.scale,
-          rotationRadians: newRotation,
+          rotationRadians: normalized,
           translation: newTranslation,
         ),
       );
@@ -336,7 +342,7 @@ void _resetRotation() {
       _logic.updateTransform(
         MapTransformState(
           scale: current.scale,
-          rotationRadians: newRotation,
+          rotationRadians: normalized,
           translation: current.translation,
         ),
       );

@@ -143,6 +143,7 @@ class MapScreenLogic {
       updateTransform: updateTransform,
       storageService: storageService,
       imageToScreen: imageToScreen,
+      magneticDeclination: magneticDeclination,
     );
     await followController.loadRotateModeTimeout();
     _sensorSettings = await sensorService.loadSettings();
