@@ -621,13 +621,16 @@ class MapScreenLogic {
   void _recalculateWorkingPairAndRotation() {
     final anchors = state.project?.anchors ?? [];
     final newPair = _calibrationService.selectWorkingPair(anchors);
+    final declinationRad = magneticDeclination * math.pi / 180;
 
     setState(() {
       state.workingPair = newPair;
       if (newPair != null) {
-        state.mapRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
+        // Обычные режимы: истинный угол минус склонение
+        final trueRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
+        state.mapRotation = trueRotation - declinationRad;
       } else {
-        // Для режима P сохраняем mapRotation, который установлен при калибровке
+        // Режим P или отсутствие калибровки
         final project = state.project;
         if (project != null && project.photoSeverLinePixels > 0) {
           state.mapRotation = -math.pi / 2 - project.photoSeverNorthAngle;
