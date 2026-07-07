@@ -134,6 +134,8 @@ class PhotoSeverController {
       isActive = false;
       points.clear();
     });
+        // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
+    state.mapRotation = -math.pi / 2 - northAngle;
     showSnackBar('Калибровка ФотоСевер сохранена');
   }
 }

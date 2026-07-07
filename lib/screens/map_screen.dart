@@ -289,14 +289,6 @@ class _MapScreenState extends State<MapScreen> {
 
   void _resetRotation() {
     final current = _state.transformState;
-
-    print('=== _resetRotation ===');
-    print('mapRotation: ${_state.mapRotation}');
-    print('photoSeverLinePixels: ${_state.project?.photoSeverLinePixels}');
-    print('photoSeverNorthAngle: ${_state.project?.photoSeverNorthAngle}');
-    print('magneticDeclination: ${widget.magneticDeclination}');
-    print('current rotationRadians: ${current.rotationRadians}');
-
     final declinationRad = widget.magneticDeclination * math.pi / 180;
 
     // Вычисляем целевой поворот через статический метод логики
@@ -306,8 +298,6 @@ class _MapScreenState extends State<MapScreen> {
       photoSeverLinePixels: _state.project?.photoSeverLinePixels ?? 0.0,
       declinationRad: declinationRad,
     );
-
-    print('newRotation: $newRotation rad (${newRotation * 180 / math.pi}°)');
 
     // Нормализация в [-π, π]
     double normalized = newRotation % (2 * math.pi);

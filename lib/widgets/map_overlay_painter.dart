@@ -211,13 +211,8 @@ class MapOverlayPainter extends CustomPainter {
     canvas.translate(screen.dx, screen.dy);
 
     final magneticHeadingRad = (heading ?? 0) * (math.pi / 180);
-    final declinationRad = magneticDeclination * (math.pi / 180);
-    final trueHeadingRad = magneticHeadingRad + declinationRad;
-
-    final totalRotation =
-        trueHeadingRad + transformState.rotationRadians - mapRotation;
-
-    canvas.rotate(totalRotation);
+    final angleFromNorth = magneticHeadingRad + (transformState.rotationRadians - mapRotation);
+    canvas.rotate(angleFromNorth);
     canvas.drawPath(path, innerShadowPaint);
     canvas.drawPath(path, outlinePaint);
     canvas.restore();

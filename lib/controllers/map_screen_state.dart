@@ -16,6 +16,7 @@ class MapScreenState {
 
   // Трансформация карты (pan / zoom / rotate)
   MapTransformState transformState = const MapTransformState();
+    double? magneticHeading;
 
   // Угол поворота самой карты относительно севера (вычисляется при калибровке)
   double mapRotation = 0.0;

@@ -627,7 +627,13 @@ class MapScreenLogic {
       if (newPair != null) {
         state.mapRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
       } else {
-        state.mapRotation = 0.0;
+        // Для режима P сохраняем mapRotation, который установлен при калибровке
+        final project = state.project;
+        if (project != null && project.photoSeverLinePixels > 0) {
+          state.mapRotation = -math.pi / 2 - project.photoSeverNorthAngle;
+        } else {
+          state.mapRotation = 0.0;
+        }
       }
     });
   }
@@ -802,8 +808,11 @@ class MapScreenLogic {
   }
 
   void _onHeadingChanged() {
+    final trueHeading = headingNotifier.value;
+    final magnetic = (trueHeading - magneticDeclination + 360) % 360;
     setState(() {
-      state.heading = headingNotifier.value;
+      state.heading = trueHeading;
+      state.magneticHeading = magnetic;
     });
     if (state.followMode) {
       followController.applyHeadingRotation();
