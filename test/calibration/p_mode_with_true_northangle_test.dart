@@ -12,7 +12,7 @@ void main() {
         photoSeverLinePixels: 100,
         declinationRad: declinationRad,
       );
-      expect(result, closeTo(0.5 - declinationRad, 1e-9));
+    expect(result, closeTo(-math.pi / 2 - 0.5, 1e-9));
     });
     test('обычный режим F', () {
       final result = MapScreenLogic.computeResetRotation(

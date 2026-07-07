@@ -147,6 +147,7 @@ class MapScreenLogic {
     );
     await followController.loadRotateModeTimeout();
     _sensorSettings = await sensorService.loadSettings();
+    _calibrationService.setMagneticDeclination(magneticDeclination);
     await _loadLastProject();
     _startGpsCompassService();
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
@@ -818,6 +819,7 @@ class MapScreenLogic {
       state.isGpsActive = GpsCompassService.instance.isActiveNotifier.value;
     });
   }
+
   static double computeResetRotation({
     required double mapRotation,
     required double photoSeverNorthAngle,
