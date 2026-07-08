@@ -820,17 +820,17 @@ class MapScreenLogic {
     );
   }
 
-  void _onHeadingChanged() {
-    final trueHeading = headingNotifier.value;
-    final magnetic = (trueHeading - magneticDeclination + 360) % 360;
-    setState(() {
-      state.heading = trueHeading;
-      state.magneticHeading = magnetic;
-    });
-    if (state.followMode) {
-      followController.applyHeadingRotation();
-    }
+void _onHeadingChanged() {
+  // headingNotifier.value уже содержит магнитный курс
+  final magneticHeading = headingNotifier.value;
+  setState(() {
+    state.heading = magneticHeading;         // теперь это магнитный курс
+    state.magneticHeading = magneticHeading; // без изменений
+  });
+  if (state.followMode) {
+    followController.applyHeadingRotation();
   }
+}
 
   // --------------------------------------------------------
   // Вспомогательные
