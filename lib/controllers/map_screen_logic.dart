@@ -213,6 +213,15 @@ class MapScreenLogic {
       manual: project.manualMode,
       pinnedIds: project.pinnedAnchorIds,
     );
+    // Восстанавливаем данные ФотоСевера, если они есть
+    if (project.photoSeverLinePixels > 0) {
+      _calibrationService.updatePhotoSeverData(
+        lineMeters: project.photoSeverLineMeters,
+        linePixels: project.photoSeverLinePixels,
+        northAngle: project.photoSeverNorthAngle,
+      );
+      _calibrationService.setCalibrationMode(CalibrationMode.photoSever);
+    }
     await _loadImageSize();
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();
@@ -352,6 +361,7 @@ class MapScreenLogic {
     });
     _calibrationService.updateAnchors([]);
     _calibrationService.setPinnedAnchorIds([]);
+    anchorManager.cachedGpxPoints = null;
   }
 
   Future<void> clearAllAnchors() async {

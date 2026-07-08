@@ -187,17 +187,35 @@ class MapCalibrationService {
   }
 
   void setCalibrationMode(CalibrationMode mode) {
-    _manualMode = false;
-    _mode = mode;
-
-    // ✅ При переходе в режим P, если нет закреплённых якорей — активируем последний
-    if (mode == CalibrationMode.photoSever &&
-        _pinnedAnchorIds.isEmpty &&
-        _anchors.isNotEmpty) {
-      _pinnedAnchorIds.add(_anchors.last.id);
-      _manualMode = true;
+    // Если переключаемся в P, сохраняем текущий активный якорь (если есть)
+    if (mode == CalibrationMode.photoSever) {
+      // Если уже есть закреплённые якоря, оставляем их (возможно, один)
+      if (_pinnedAnchorIds.isEmpty && _anchors.isNotEmpty) {
+        // Пытаемся взять активный якорь из текущего трансформа
+        if (_currentTransform is _AffineTransformerAdapter) {
+          final activeIds = (_currentTransform as _AffineTransformerAdapter)._selectedPoints.map((a) => a.id).toSet();
+          if (activeIds.length == 1) {
+            _pinnedAnchorIds.addAll(activeIds);
+          } else {
+            // Если активных несколько, берём последний добавленный якорь
+            _pinnedAnchorIds.add(_anchors.last.id);
+          }
+        } else if (_currentTransform is SimilarityTransform) {
+          final ids = (_currentTransform as SimilarityTransform).activeAnchorIds;
+          if (ids != null && ids.isNotEmpty) {
+            _pinnedAnchorIds.add(ids.first);
+          } else {
+            _pinnedAnchorIds.add(_anchors.last.id);
+          }
+        } else {
+          _pinnedAnchorIds.add(_anchors.last.id);
+        }
+      }
+      _manualMode = _pinnedAnchorIds.isNotEmpty;
+    } else {
+      _manualMode = false;
     }
-
+    _mode = mode;
     _buildTransformFromAnchors();
   }
 
@@ -352,6 +370,7 @@ class MapCalibrationService {
   void _buildTransformFromAnchors() {
     // ✅ Режим P: одноточечная привязка по данным ФотоСевера
     if (_mode == CalibrationMode.photoSever) {
+      print('DEBUG P: pinned=${_pinnedAnchorIds.length}, linePixels=$_psLinePixels');
       if (_pinnedAnchorIds.length == 1 && _psLinePixels > 0) {
         final baseId = _pinnedAnchorIds.first;
         final baseAnchor = _anchors.firstWhere((a) => a.id == baseId);

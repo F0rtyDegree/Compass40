@@ -35,7 +35,7 @@ class MapFollowController {
   }
 
   void enableFollowMode() {
-    if (state.workingPair == null) {
+    if (state.workingPair == null && !_isPhotoSeverActive()) {
       showSnackBar(
         'Режим сопровождения доступен только после привязки карты (добавьте минимум 2 точки привязки)',
       );
@@ -63,7 +63,7 @@ class MapFollowController {
   }
 
   void toggleFollowMode() {
-    if (!state.followMode && state.workingPair == null) {
+    if (!state.followMode && state.workingPair == null && !_isPhotoSeverActive()) {
       showSnackBar('Режим сопровождения доступен только после привязки карты');
       return;
     }
@@ -143,19 +143,16 @@ class MapFollowController {
   }
 
   void applyHeadingRotation() {
-    if (!state.followMode ||
-        state.heading == null ||
-        state.workingPair == null) {
+    if (!state.followMode || state.heading == null || (state.workingPair == null && !_isPhotoSeverActive())) {
       return;
     }
 
     isAutoRotating = true;
 
-    final magneticHeadingRad = (state.heading!) * (math.pi / 180);
-    final declinationRad = magneticDeclination * (math.pi / 180);
-    final trueHeadingRad = magneticHeadingRad + declinationRad;
-
-    final targetRotation = -trueHeadingRad + state.mapRotation;
+    // Используем магнитный курс, так как карта ориентирована магнитным севером вверх
+    final magneticHeadingRad = (state.magneticHeading ?? 0) * (math.pi / 180);
+    final targetRotation = -magneticHeadingRad + state.mapRotation;
+    // ... остальной код (current, pivotImage и т.д.) без изменений
 
     final current = state.transformState;
     final pivotImage = screenToImage(state.crosshairScreenPoint);
@@ -197,5 +194,9 @@ class MapFollowController {
     setState(() {
       state.currentUserScreenPoint = imageToScreen(imagePoint);
     });
+  }
+    bool _isPhotoSeverActive() {
+    final project = state.project;
+    return project != null && project.photoSeverLinePixels > 0;
   }
 }
