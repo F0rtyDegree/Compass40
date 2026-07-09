@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Список всех файлов в нужном порядке
+files=(
+assets/help/compass_help.md
+assets/help/map_help.md
+assets/help/settings_help.md
+assets/help/target_help.md
+)
+
+# Вывести все файлы
+for file in "${files[@]}"; do
+    if [ -f "$file" ]; then
+        echo "============= $file ==="
+#        cat -n "$file"
+        cat "$file"
+        echo ""
+    else
+        echo "=== $file (ФАЙЛ НЕ НАЙДЕН) ==="
+        echo ""
+    fi
+done
