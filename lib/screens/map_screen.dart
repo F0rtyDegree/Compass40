@@ -543,36 +543,41 @@ class _MapScreenState extends State<MapScreen> {
       builder: (ctx) => SimpleDialog(
         title: const Text('Действия с картой'),
         children: [
-          SimpleDialogOption(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (c) => AlertDialog(
-                  title: const Text('Удалить карту?'),
-                  content: const Text('Привязки, цели и путь будут удалены.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(c, false),
-                      child: const Text('Отмена'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      child: const Text(
-                        'Удалить',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) await _logic.closeMap();
-            },
+SimpleDialogOption(
+  onPressed: () async {
+    Navigator.pop(ctx); // закрываем меню действий
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Удалить карту?'),
+        content: const Text('Привязки, цели и путь будут удалены.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
             child: const Text(
-              'Удалить карту',
+              'Удалить',
               style: TextStyle(color: Colors.red),
             ),
           ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await _logic.closeMap();
+if (context.mounted) {
+  Navigator.of(context).pop();   // закрываем экран карты → возврат на компас
+}
+    }
+  },
+  child: const Text(
+    'Удалить карту',
+    style: TextStyle(color: Colors.red),
+  ),
+),
           SimpleDialogOption(
             onPressed: () async {
               Navigator.pop(ctx);

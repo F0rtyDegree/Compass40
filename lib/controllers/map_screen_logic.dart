@@ -651,11 +651,12 @@ class MapScreenLogic {
     });
   }
 
+ 
   void _recalculateCanPlaceTarget() {
-    setState(() {
-      state.canPlaceTarget = _calibrationService.totalAnchorCount >= 2;
-    });
-  }
+  setState(() {
+    state.canPlaceTarget = true;
+  });
+}
 
   void _recalculateUserImagePoint() {
     // Если привязка отсутствует, скрываем маркер

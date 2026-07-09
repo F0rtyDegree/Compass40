@@ -1,9 +1,21 @@
 # Остановить демон
-cd android && ./gradlew --stop
+cd android
+./gradlew --stop
 
 # Удалить папку daemon целиком (в ней только логи и PID-файлы)
 rm -rf ~/.gradle/daemon
 
+# вызовет последуюющую очень долгую сборку
+# rm -rf ~/.gradle/caches 
+cd ..
+
+rm -rf /home/user/myapp/build/app/outputs/apk/debug/app-debug.apk
+rm -rf /home/user/myapp/build/app/outputs/apk/release/app-release.apk
+rm -rf /home/user/myapp/build/app/outputs/flutter-apk/app-debug.apk
+
+
 # Flutter clean при желании можно оставить
-flutter clean
-flutter pub get
+# flutter clean
+# flutter pub get
+
+df -h .

@@ -1,20 +1,15 @@
 #!/bin/bash
 # Скрипт для сборки релиза APK
 
+./clear
+
 # flutter clean 
-# flutter pub get
-flutter test
+# flutter pub get --offline
 
-flutter build apk --release
+flutter test --no-pub
+flutter build apk --release --no-pub
+
 mv /home/user/myapp/build/app/outputs/flutter-apk/app-release.apk Compass40.apk
-
-rm -rf /home/user/myapp/build/app/outputs/apk/debug/app-debug.apk
-rm -rf /home/user/myapp/build/app/outputs/apk/release/app-release.apk
-rm -rf /home/user/myapp/build/app/outputs/flutter-apk/app-debug.apk
-
-# cd android && ./gradlew --stop
-# rm -rf /home/user/.gradle/caches /home/user/.gradle/daemon
-# cd ..
 
 # echo "--- сборка завершена: $(date) ---" >> sizes-log.txt
 # du -h --max-depth=1 /home/user/ | sort -rh >> sizes-log.txt
@@ -23,4 +18,4 @@ rm -rf /home/user/myapp/build/app/outputs/flutter-apk/app-debug.apk
 # du -h --max-depth=1 /home/user/.gradle/caches | sort -rh >> sizes-log.txt
 # du -h --max-depth=1 /home/user/.gradle/caches/8.12 | sort -rh >> sizes-log.txt
 # df -h .  >> sizes-log.txt
-df -h .
+# df -h .
