@@ -3,6 +3,7 @@ import 'dart:ui';
 import '../models/map_anchor.dart';
 import 'affine_transform.dart';
 import '../utils/app_constants.dart';
+import '../utils/geo_utils.dart';
 
 class PointSelector {
   // Веса для последней точки
@@ -17,7 +18,7 @@ class PointSelector {
     double sumSq = 0;
     for (final a in points) {
       final pred = affine.transform(Offset(a.imageX, a.imageY));
-      final d = haversineDistance(a.latitude, a.longitude, pred.dy, pred.dx);
+      final d = calculateDistance(a.latitude, a.longitude, pred.dy, pred.dx);
       sumSq += d * d;
     }
     return math.sqrt(sumSq / points.length);
@@ -28,19 +29,7 @@ class PointSelector {
     if (points.isEmpty) return 0;
     final latest = points.first;
     final pred = affine.transform(Offset(latest.imageX, latest.imageY));
-    return haversineDistance(latest.latitude, latest.longitude, pred.dy, pred.dx);
-  }
-
-  // Haversine distance
-  static double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
-    const R = AppConstants.earthRadiusMeters;
-    final dLat = (lat2 - lat1) * math.pi / 180;
-    final dLon = (lon2 - lon1) * math.pi / 180;
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1 * math.pi / 180) *
-            math.cos(lat2 * math.pi / 180) *
-            math.sin(dLon / 2) * math.sin(dLon / 2);
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return calculateDistance(latest.latitude, latest.longitude, pred.dy, pred.dx);
   }
 
   // Основной метод отбора трёх точек
@@ -49,7 +38,7 @@ class PointSelector {
     if (anchors.length == 1) return <MapAnchor>[latest];
 
     double distMeters(MapAnchor a, MapAnchor b) =>
-        haversineDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+        calculateDistance(a.latitude, a.longitude, b.latitude, b.longitude);
 
     double triangleAreaM2(MapAnchor a, MapAnchor b, MapAnchor c) {
       final ab = distMeters(a, b);
