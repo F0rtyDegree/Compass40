@@ -514,17 +514,8 @@ class MapCalibrationService {
     return selectWorkingPair(anchors, minDistanceMeters: 0);
   }
 
-  SimilarityTransform? _buildTransform(MapWorkingPair pair) {
-    try {
-      return SimilarityTransform.fromPair(pair.latest, pair.reference);
-    } catch (_) {
-      return null;
-    }
-  }
-
   double? getMapRotation(MapWorkingPair pair) {
-    final transform = _buildTransform(pair);
-    return transform?.angleRadians;
+    return _computeAngleBetweenAnchors(pair.latest, pair.reference);
   }
 
   MapWorkingPair? selectWorkingPair(
@@ -547,6 +538,21 @@ class MapCalibrationService {
     return MapWorkingPair(latest: latest, reference: farthest);
   }
 
+  /// Возвращает угол (в радианах) между двумя якорями в системе координат карты.
+  /// Угол считается от направления на географический север (долгота вправо, широта вверх).
+  double _computeAngleBetweenAnchors(MapAnchor a, MapAnchor b) {
+    final dx = b.imageX - a.imageX;
+    final dy = b.imageY - a.imageY;
+    final dLon = b.longitude - a.longitude;
+    final dLat = b.latitude - a.latitude;
+
+    // угол в географической системе: направление от a к b
+    final geoAngle = math.atan2(dLon * math.cos(a.latitude * math.pi / 180), dLat);
+    // угол в системе координат изображения (Y вниз)
+    final imageAngle = math.atan2(dx, -dy);
+    // необходимая коррекция поворота карты
+    return geoAngle - imageAngle;
+  }
   BearingAndDistance bearingAndDistance({
     required double fromLat,
     required double fromLon,
