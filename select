@@ -2,9 +2,8 @@
 
 # Список всех файлов в нужном порядке
 files=(
-lib/controllers/map_anchor_manager.dart
-lib/controllers/map_target_manager.dart
-lib/screens/target_screen.dart
+lib/controllers/home_state.dart
+lib/controllers/home_logic.dart
 )
 
 # Вывести все файлы
