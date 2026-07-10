@@ -326,8 +326,9 @@ class MapCalibrationService {
     double distCA = _distanceBetweenAnchorsMeters(c, a);
     if (distAB < AppConstants.minTriangleSideMeters ||
         distBC < AppConstants.minTriangleSideMeters ||
-        distCA < AppConstants.minTriangleSideMeters)
+        distCA < AppConstants.minTriangleSideMeters) {
       return 0;
+    }
 
     double angleA = _angleFromSides(distBC, distCA, distAB);
     double angleB = _angleFromSides(distCA, distAB, distBC);

@@ -1,6 +1,6 @@
 import 'dart:math';
 import 'angle_utils.dart';
-
+import '../models/geo_point.dart';
 
 /// Вычисляет расстояние между двумя точками (в метрах).
 double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
@@ -92,3 +92,14 @@ NavigationData calculateNavigationData({
 }
 
 double _toRadians(double degrees) => degrees * (pi / 180);
+
+/// Пытается распарсить строку вида "широта,долгота".
+/// Возвращает [GeoPoint] или `null` при неверном формате.
+GeoPoint? parseCoordinates(String text) {
+  final parts = text.trim().split(',');
+  if (parts.length != 2) return null;
+  final lat = double.tryParse(parts[0].trim());
+  final lon = double.tryParse(parts[1].trim());
+  if (lat == null || lon == null) return null;
+  return GeoPoint(latitude: lat, longitude: lon);
+}

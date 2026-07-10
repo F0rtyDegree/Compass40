@@ -2,10 +2,9 @@
 
 # Список всех файлов в нужном порядке
 files=(
-assets/help/compass_help.md
-assets/help/map_help.md
-assets/help/settings_help.md
-assets/help/target_help.md
+lib/controllers/map_anchor_manager.dart
+lib/controllers/map_target_manager.dart
+lib/screens/target_screen.dart
 )
 
 # Вывести все файлы

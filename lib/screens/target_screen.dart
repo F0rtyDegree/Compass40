@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'help_viewer_screen.dart';
+import '../utils/geo_utils.dart';
 
 class TargetScreen extends StatefulWidget {
   const TargetScreen({super.key});
@@ -24,20 +25,16 @@ class _TargetScreenState extends State<TargetScreen> {
       // Проверяем, есть ли координаты в поле
       final coordsText = _coordsController.text.trim();
       if (coordsText.isNotEmpty) {
-        final parts = coordsText.split(',');
-        if (parts.length == 2) {
-          final lat = double.tryParse(parts[0].trim());
-          final lon = double.tryParse(parts[1].trim());
-          if (lat != null && lon != null) {
-            Navigator.pop(context, {
-              'base_latitude': lat,
-              'base_longitude': lon,
-              'azimuth': azimuth,
-              'distance': distance,
-              'useClipboardAsBase': true,
-            });
-            return;
-          }
+        final geo = parseCoordinates(coordsText);
+        if (geo != null) {
+          Navigator.pop(context, {
+            'base_latitude': geo.latitude,
+            'base_longitude': geo.longitude,
+            'azimuth': azimuth,
+            'distance': distance,
+            'useClipboardAsBase': true,
+          });
+          return;
         }
         // Если координаты есть, но формат неверный - предупреждаем
         ScaffoldMessenger.of(context).showSnackBar(

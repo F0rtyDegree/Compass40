@@ -10,6 +10,7 @@ import '../models/map_project.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import 'map_screen_state.dart';
+import '../utils/geo_utils.dart';
 
 class MapAnchorManager {
   final MapCalibrationService calibrationService;
@@ -82,20 +83,13 @@ class MapAnchorManager {
       return;
     }
 
-    final parts = clipboardData!.text!.split(',');
-    if (parts.length != 2) {
+    final geo = parseCoordinates(clipboardData!.text!);
+    if (geo == null) {
       showSnackBar('Неверный формат. Ожидается: широта,долгота');
       return;
     }
-
-    final lat = double.tryParse(parts[0].trim());
-    final lon = double.tryParse(parts[1].trim());
-
-    if (lat == null || lon == null) {
-      showSnackBar('Не удалось распознать координаты');
-      return;
-    }
-
+    final lat = geo.latitude;
+    final lon = geo.longitude;
     if (state.crosshairImagePoint == null) {
       showSnackBar('Прицел не определён');
       return;
