@@ -40,7 +40,8 @@ class HomeNavigationActions {
         MaterialPageRoute(builder: (c) => LogScreen(logItems: state.logItems)),
       ).then((_) => logic.loadLogEntries());
     } else if (details.primaryVelocity! > 0) {
-      logic.setTargetCalculationStartPoint(state.gpsDataNotifier.value);
+      // Сохраняем текущие GPS-координаты в локальную переменную перед переходом
+      final startGpsData = state.gpsDataNotifier.value;
 
       final result = await Navigator.push<Map<String, dynamic>>(
         context,
@@ -56,13 +57,12 @@ class HomeNavigationActions {
         startLat = result['base_latitude'] as double;
         startLon = result['base_longitude'] as double;
       } else {
-        if (state.targetCalculationStartPoint?.latitude == null) {
+        if (startGpsData.latitude == null || startGpsData.longitude == null) {
           return;
         }
-        startLat = state.targetCalculationStartPoint!.latitude!;
-        startLon = state.targetCalculationStartPoint!.longitude!;
+        startLat = startGpsData.latitude!;
+        startLon = startGpsData.longitude!;
       }
-
       final magneticAzimuth = result['azimuth'] as double;
       final trueBearing =
           (magneticAzimuth + state.magneticDeclination + 360) % 360;

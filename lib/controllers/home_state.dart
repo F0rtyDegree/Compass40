@@ -32,7 +32,6 @@ class HomeState {
   final ValueNotifier<double?> distanceToWaypoint = ValueNotifier(null);
   final ValueNotifier<double?> bearingToWaypoint = ValueNotifier(null);
 
-  GpsData? targetCalculationStartPoint;
   Map<String, double>? target;
   final ValueNotifier<double?> distanceToTarget = ValueNotifier(null);
   final ValueNotifier<double?> bearingToTarget = ValueNotifier(null);

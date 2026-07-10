@@ -1,8 +1,5 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:gps_info/gps_info.dart';
-
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_compass_service.dart';
@@ -128,7 +125,10 @@ class HomeLogic {
           if (diff > 180) diff = 360 - diff;
           if (diff > AppConstants.spikeThresholdDegrees) {
             // Добавляем последнее валидное значение, чтобы сохранить поток данных
-            state.headingSamples.add((lastHeading, DateTime.now().millisecondsSinceEpoch));
+            state.headingSamples.add((
+              lastHeading,
+              DateTime.now().millisecondsSinceEpoch,
+            ));
             if (state.headingSamples.length > HomeState.maxSamples) {
               state.headingSamples.removeAt(0);
             }
@@ -330,10 +330,6 @@ class HomeLogic {
     setState(() => state.target = target);
   }
 
-  void setTargetCalculationStartPoint(GpsData gpsData) {
-    state.targetCalculationStartPoint = gpsData;
-  }
-
   Future<void> startNavigationFromExternal(
     double latitude,
     double longitude,
@@ -344,14 +340,19 @@ class HomeLogic {
     }
 
     final distance = calculateDistance(
-        currentGps.latitude!, currentGps.longitude!, latitude, longitude);
+      currentGps.latitude!,
+      currentGps.longitude!,
+      latitude,
+      longitude,
+    );
     final azimuth = calculateTrueBearing(
-        currentGps.latitude!, currentGps.longitude!, latitude, longitude);
+      currentGps.latitude!,
+      currentGps.longitude!,
+      latitude,
+      longitude,
+    );
 
-    setTarget({
-      'latitude': latitude,
-      'longitude': longitude,
-    });
+    setTarget({'latitude': latitude, 'longitude': longitude});
 
     await addTargetCreationLogEntry(
       baseLatitude: currentGps.latitude!,
