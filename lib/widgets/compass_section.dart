@@ -180,7 +180,7 @@ class CompassSection extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 22),
                 child: CustomPaint(
                   size: const Size(12, 26),
-                  painter: TargetPainter(),
+                  painter: const ArrowPainter(color: Colors.green),
                 ),
               ),
             ),
@@ -206,7 +206,7 @@ class CompassSection extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 22),
                 child: CustomPaint(
                   size: const Size(12, 22),
-                  painter: WaypointPainter(),
+                  painter: const ArrowPainter(color: Colors.orange),
                 ),
               ),
             ),

@@ -170,24 +170,6 @@ class MapOverlayPainter extends CustomPainter {
   }
 
   void _drawCurrentPosition(Canvas canvas, Offset screen) {
-    if (!isGpsActive) {
-      final outlinePaint = Paint()
-        ..color = Colors.blue.shade500
-        ..strokeWidth = 2.0
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round;
-
-      final innerShadowPaint = Paint()
-        ..color = Colors.black.withValues(alpha: 128 / 255)
-        ..strokeWidth = 0.75
-        ..style = PaintingStyle.stroke
-        ..strokeJoin = StrokeJoin.round;
-
-      canvas.drawCircle(screen, 12, innerShadowPaint);
-      canvas.drawCircle(screen, 12, outlinePaint);
-      return;
-    }
-
     final outlinePaint = Paint()
       ..color = Colors.blue.shade500
       ..strokeWidth = 2.0
@@ -199,6 +181,12 @@ class MapOverlayPainter extends CustomPainter {
       ..strokeWidth = 0.75
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
+
+    if (!isGpsActive) {
+      canvas.drawCircle(screen, 12, innerShadowPaint);
+      canvas.drawCircle(screen, 12, outlinePaint);
+      return;
+    }
 
     final path = Path()
       ..moveTo(0, -30)

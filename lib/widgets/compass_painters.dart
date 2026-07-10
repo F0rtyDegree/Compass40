@@ -1,11 +1,14 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-class TargetPainter extends CustomPainter {
+class ArrowPainter extends CustomPainter {
+  final Color color;
+  const ArrowPainter({required this.color});
+
   @override
   void paint(Canvas canvas, Size size) {
     final fill = Paint()
-      ..color = Colors.green
+      ..color = color
       ..style = PaintingStyle.fill;
     final border = Paint()
       ..color = Colors.black.withAlpha(178)
@@ -21,30 +24,8 @@ class TargetPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_) => false;
-}
-
-class WaypointPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fill = Paint()
-      ..color = Colors.orange
-      ..style = PaintingStyle.fill;
-    final border = Paint()
-      ..color = Colors.black.withAlpha(178)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    final path = Path()
-      ..moveTo(size.width / 2, 0)
-      ..lineTo(0, size.height)
-      ..lineTo(size.width, size.height)
-      ..close();
-    canvas.drawPath(path, fill);
-    canvas.drawPath(path, border);
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
+  bool shouldRepaint(covariant ArrowPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 class WindRosePainter extends CustomPainter {

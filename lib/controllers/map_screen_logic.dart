@@ -325,7 +325,7 @@ class MapScreenLogic {
       _calibrationService.updateAnchors([]);
       await _loadImageSize();
     } catch (e) {
-      debugPrint('MapScreenLogic.pickImage error: $e');
+      showSnackBar('Не удалось загрузить изображение');
     }
   }
 

@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print
 import 'package:flutter/material.dart';
 
 Future<bool?> showExitConfirmDialog(BuildContext context) {
@@ -12,7 +13,10 @@ Future<bool?> showExitConfirmDialog(BuildContext context) {
           child: const Text('Нет'),
         ),
         TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
+          onPressed: () {
+            print('=== APP Compass40 CLOSING ===');
+            Navigator.of(context).pop(true);
+          },
           child: const Text('Да'),
         ),
       ],

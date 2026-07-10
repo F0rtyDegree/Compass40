@@ -7,8 +7,8 @@
 # flutter pub get --offline
 
 flutter test --no-pub
-# flutter build apk --release --no-pub
-flutter build apk --release --no-pub 2>&1 | grep -v "^Running Gradle task"
+flutter build apk --release --no-pub
+# flutter build apk --release --no-pub 2>&1 | grep -v "^Running Gradle task"
 
 mv /home/user/myapp/build/app/outputs/flutter-apk/app-release.apk Compass40.apk
 

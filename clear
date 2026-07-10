@@ -4,9 +4,11 @@ cd android
 
 # Удалить папку daemon целиком (в ней только логи и PID-файлы)
 rm -rf ~/.gradle/daemon
+rm -rf ~/.gradle/caches/build-cache-1 
 
-# вызовет последуюющую очень долгую сборку
-# rm -rf ~/.gradle/caches 
+# вызовет последуюющую очень долгую сборку но реально очистит место
+# rm -rf ~/.gradle/caches
+
 cd ..
 
 rm -rf /home/user/myapp/build/app/outputs/apk/debug/app-debug.apk

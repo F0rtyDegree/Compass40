@@ -1,4 +1,5 @@
 // ignore_for_file: avoid_print
+import '../utils/app_constants.dart';
 import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import '../models/map_anchor.dart';
@@ -193,7 +194,10 @@ class MapCalibrationService {
       if (_pinnedAnchorIds.isEmpty && _anchors.isNotEmpty) {
         // Пытаемся взять активный якорь из текущего трансформа
         if (_currentTransform is _AffineTransformerAdapter) {
-          final activeIds = (_currentTransform as _AffineTransformerAdapter)._selectedPoints.map((a) => a.id).toSet();
+          final activeIds = (_currentTransform as _AffineTransformerAdapter)
+              ._selectedPoints
+              .map((a) => a.id)
+              .toSet();
           if (activeIds.length == 1) {
             _pinnedAnchorIds.addAll(activeIds);
           } else {
@@ -201,7 +205,8 @@ class MapCalibrationService {
             _pinnedAnchorIds.add(_anchors.last.id);
           }
         } else if (_currentTransform is SimilarityTransform) {
-          final ids = (_currentTransform as SimilarityTransform).activeAnchorIds;
+          final ids =
+              (_currentTransform as SimilarityTransform).activeAnchorIds;
           if (ids != null && ids.isNotEmpty) {
             _pinnedAnchorIds.add(ids.first);
           } else {
@@ -308,7 +313,7 @@ class MapCalibrationService {
       for (int j = i + 1; j < points.length; j++) {
         for (int k = j + 1; k < points.length; k++) {
           double angle = _triangleMinAngle(points[i], points[j], points[k]);
-          if (angle >= 15.0) {
+          if (angle >= AppConstants.minTriangleAngleDegrees) {
             return false; // нашли неколлинеарную тройку — набор допустим
           }
         }
@@ -370,10 +375,18 @@ class MapCalibrationService {
   void _buildTransformFromAnchors() {
     // ✅ Режим P: одноточечная привязка по данным ФотоСевера
     if (_mode == CalibrationMode.photoSever) {
-      print('DEBUG P: pinned=${_pinnedAnchorIds.length}, linePixels=$_psLinePixels');
+      print(
+        'DEBUG P: pinned=${_pinnedAnchorIds.length}, linePixels=$_psLinePixels',
+      );
       if (_pinnedAnchorIds.length == 1 && _psLinePixels > 0) {
         final baseId = _pinnedAnchorIds.first;
-        final baseAnchor = _anchors.firstWhere((a) => a.id == baseId);
+        MapAnchor? baseAnchor;
+        try {
+          baseAnchor = _anchors.firstWhere((a) => a.id == baseId);
+        } catch (_) {
+          _currentTransform = null;
+          return;
+        }
         // Переводим магнитный угол в истинный: истинный_север = магнитный_север - склонение
         // (при восточном склонении магнитный север восточнее истинного, значит,
         // чтобы из магнитного угла получить истинный, нужно вычесть склонение)
@@ -449,7 +462,7 @@ class MapCalibrationService {
           } catch (_) {}
         }
         // Fallback: двухточечная привязка (farthest pair) для 2+ якорей
-        final pair = selectWorkingPair(_anchors, minDistanceMeters: 50.0);
+        final pair = selectWorkingPair(_anchors, minDistanceMeters: AppConstants.minAnchorDistanceMeters);
         if (pair != null) {
           _currentTransform = SimilarityTransform.fromPair(
             pair.latest,
