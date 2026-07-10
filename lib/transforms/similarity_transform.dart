@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import '../models/map_anchor.dart';
+import '../utils/app_constants.dart';
 
 /// Общий интерфейс для всех типов привязки
 abstract class MapTransformer {
@@ -46,8 +47,8 @@ class SimilarityTransform implements MapTransformer {
     final dLat = (latest.latitude - reference.latitude) * math.pi / 180;
     final dLon = (latest.longitude - reference.longitude) * math.pi / 180;
     final originLatRad = reference.latitude * math.pi / 180;
-    final north = dLat * 6371000.0;
-    final east = dLon * 6371000.0 * math.cos(originLatRad);
+    final north = dLat * AppConstants.earthRadiusMeters;
+    final east = dLon * AppConstants.earthRadiusMeters * math.cos(originLatRad);
 
     final geoVec = Offset(east, -north);
     final geoLen = geoVec.distance;
@@ -81,8 +82,8 @@ class SimilarityTransform implements MapTransformer {
     final north = -northNeg;
 
     final originLatRad = originLat * math.pi / 180;
-    final dLat = north / 6371000.0;
-    final dLon = east / (6371000.0 * math.cos(originLatRad));
+    final dLat = north / AppConstants.earthRadiusMeters;
+    final dLon = east / (AppConstants.earthRadiusMeters * math.cos(originLatRad));
     final lat = originLat + dLat * 180 / math.pi;
     final lon = originLon + dLon * 180 / math.pi;
     return Offset(lon, lat);
@@ -107,8 +108,8 @@ class SimilarityTransform implements MapTransformer {
     final originLatRad = originLat * math.pi / 180;
     final dLat = (lat - originLat) * math.pi / 180;
     final dLon = (lon - originLon) * math.pi / 180;
-    final north = dLat * 6371000.0;
-    final east = dLon * 6371000.0 * math.cos(originLatRad);
+    final north = dLat * AppConstants.earthRadiusMeters;
+    final east = dLon * AppConstants.earthRadiusMeters * math.cos(originLatRad);
     final geoX = east;
     final geoY = -north;
 

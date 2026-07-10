@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../controllers/home_state.dart';
+import '../utils/app_constants.dart';
 
 /// Обертка над реальной подпиской для корректного управления жизненным циклом.
 /// Гарантирует вызов callback'а onCancel при отмене и предотвращает двойную отмену.
@@ -75,14 +76,14 @@ class SensorService {
 
     final compassModeIndex = prefs.getInt('compassMode') ?? 0;
     final compassMode = CompassMode.values[compassModeIndex];
-    final autoSwitchSpeedKmh = prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0;
+    final autoSwitchSpeedKmh = prefs.getDouble('autoSwitchSpeedKmh') ?? AppConstants.autoSwitchSpeedDefaultKmh;
 
     return SensorSettings(
       useManualDeclination: useManualDeclination,
       magneticDeclination: magneticDeclination,
-      averagingPeriod: prefs.getInt('averagingPeriod') ?? 500,
+      averagingPeriod: prefs.getInt('averagingPeriod') ?? AppConstants.sensorStabilizationDefaultMs,
       smoothingFactor: prefs.getDouble('smoothingFactor') ?? 0.5,
-      uiUpdatePeriod: prefs.getInt('uiUpdatePeriod') ?? 250,
+      uiUpdatePeriod: prefs.getInt('uiUpdatePeriod') ?? AppConstants.uiUpdatePeriodDefaultMs,
       gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
       compassMode: compassMode,
       autoSwitchSpeedKmh: autoSwitchSpeedKmh,

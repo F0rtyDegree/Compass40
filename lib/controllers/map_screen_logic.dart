@@ -20,6 +20,7 @@ import 'map_anchor_manager.dart';
 import 'map_target_manager.dart';
 import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
+import '../utils/app_constants.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -264,7 +265,7 @@ class MapScreenLogic {
     final vp = state.viewportSize;
     if (vp == null || imgW == 0 || imgH == 0) return;
 
-    final fitScale = math.min(vp.width / imgW, vp.height / imgH) * 0.92;
+    final fitScale = math.min(vp.width / imgW, vp.height / imgH) * AppConstants.imageFitPaddingFactor;
 
     setState(() {
       state.transformState = MapTransformState(
@@ -424,7 +425,7 @@ class MapScreenLogic {
   void zoomIn() {
     followController.keepFollowDuringScale = true;
     final current = state.transformState;
-    final newScale = (current.scale * 1.5).clamp(0.05, 20.0);
+    final newScale = (current.scale * 1.5).clamp(AppConstants.minMapScale, AppConstants.maxMapScale);
     _scaleAroundCrosshair(current, newScale);
     followController.keepFollowDuringScale = false;
   }
@@ -432,7 +433,7 @@ class MapScreenLogic {
   void zoomOut() {
     followController.keepFollowDuringScale = true;
     final current = state.transformState;
-    final newScale = (current.scale / 1.5).clamp(0.05, 20.0);
+    final newScale = (current.scale / 1.5).clamp(AppConstants.minMapScale, AppConstants.maxMapScale);
     _scaleAroundCrosshair(current, newScale);
     followController.keepFollowDuringScale = false;
   }
@@ -484,7 +485,7 @@ class MapScreenLogic {
       await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
 
       state.crosshairFeedback.value = true;
-      Future.delayed(const Duration(milliseconds: 200), () {
+      Future.delayed(const Duration(milliseconds: AppConstants.feedbackDurationMs), () {
         if (!state.isDisposed) {
           state.crosshairFeedback.value = false;
         }

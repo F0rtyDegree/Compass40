@@ -2,12 +2,13 @@ import 'dart:math' as math;
 import 'dart:ui';
 import '../models/map_anchor.dart';
 import 'affine_transform.dart';
+import '../utils/app_constants.dart';
 
 class PointSelector {
   // Веса для последней точки
   static List<double> buildWeights(int n) {
     final w = List.filled(n, 1.0);
-    if (n > 0) w[0] = 10.0;
+    if (n > 0) w[0] = AppConstants.latestPointWeight;
     return w;
   }
 
@@ -32,7 +33,7 @@ class PointSelector {
 
   // Haversine distance
   static double haversineDistance(double lat1, double lon1, double lat2, double lon2) {
-    const R = 6371000.0;
+    const R = AppConstants.earthRadiusMeters;
     final dLat = (lat2 - lat1) * math.pi / 180;
     final dLon = (lon2 - lon1) * math.pi / 180;
     final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
@@ -65,7 +66,7 @@ class PointSelector {
     double maxDist = -1;
     for (final a in others) {
       final d = distMeters(latest, a);
-      if (d >= 50 && d > maxDist) {
+      if (d >= AppConstants.minAnchorDistanceMeters && d > maxDist) {
         maxDist = d;
         farthest = a;
       }
@@ -78,17 +79,17 @@ class PointSelector {
     double bestArea = -1;
     for (final x in others) {
       if (x == farthest) continue;
-      if (distMeters(latest, x) < 50 || distMeters(farthest, x) < 50) continue;
+      if (distMeters(latest, x) < AppConstants.minAnchorDistanceMeters || distMeters(farthest, x) < AppConstants.minAnchorDistanceMeters) continue;
 
       final a = distMeters(farthest, x);
       final b = distMeters(latest, x);
       final c = distMeters(latest, farthest);
-      if (a < 1 || b < 1 || c < 1) continue;
+      if (a < AppConstants.minTriangleSideMeters || b < AppConstants.minTriangleSideMeters || c < AppConstants.minTriangleSideMeters) continue;
 
       final cosAngle = (b * b + c * c - a * a) / (2 * b * c);
       final angle = math.acos(cosAngle.clamp(-1.0, 1.0)) * 180 / math.pi;
 
-      if (angle < 15 || angle > 165) continue;
+      if (angle < AppConstants.minTriangleAngleDegrees || angle > AppConstants.maxTriangleAngleDegrees) continue;
 
       final area = triangleAreaM2(latest, farthest, x);
       if (area > bestArea) {
@@ -97,7 +98,7 @@ class PointSelector {
       }
     }
 
-    if (bestArea < 1.0 || bestThird == null) {
+    if (bestArea < AppConstants.minTriangleAreaM2 || bestThird == null) {
       return <MapAnchor>[];
     }
 

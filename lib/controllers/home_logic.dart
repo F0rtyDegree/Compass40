@@ -8,6 +8,7 @@ import '../services/sensor_service.dart';
 import '../services/gps_compass_service.dart';
 import '../utils/geo_utils.dart';
 import '../utils/angle_utils.dart';
+import '../utils/app_constants.dart';
 import 'home_state.dart';
 
 class HomeLogic {
@@ -125,7 +126,7 @@ class HomeLogic {
           double lastHeading = state.headingSamples.last.$1;
           double diff = (heading - lastHeading).abs();
           if (diff > 180) diff = 360 - diff;
-          if (diff > 30) {
+          if (diff > AppConstants.spikeThresholdDegrees) {
             // Добавляем последнее валидное значение, чтобы сохранить поток данных
             state.headingSamples.add((lastHeading, DateTime.now().millisecondsSinceEpoch));
             if (state.headingSamples.length > HomeState.maxSamples) {

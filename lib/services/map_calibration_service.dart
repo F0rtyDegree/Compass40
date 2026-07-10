@@ -63,10 +63,8 @@ class _AffineTransformerAdapter implements MapTransformer {
     final a = _affine.m[0];
     final d = _affine.m[3];
     final latRad = p.latitude * math.pi / 180;
-    final metersPerDegLon = 111320.0 * math.cos(latRad);
-    final metersPerDegLat = 111320.0;
-    final dxMeters = a * metersPerDegLon;
-    final dyMeters = d * metersPerDegLat;
+    final dxMeters = a * AppConstants.metersPerDegreeLat * math.cos(latRad);
+    final dyMeters = d * AppConstants.metersPerDegreeLat;
     return math.sqrt(dxMeters * dxMeters + dyMeters * dyMeters);
   }
 
@@ -326,7 +324,7 @@ class MapCalibrationService {
     double distAB = _distanceBetweenAnchorsMeters(a, b);
     double distBC = _distanceBetweenAnchorsMeters(b, c);
     double distCA = _distanceBetweenAnchorsMeters(c, a);
-    if (distAB < 1 || distBC < 1 || distCA < 1) return 0;
+    if (distAB < AppConstants.minTriangleSideMeters || distBC < AppConstants.minTriangleSideMeters || distCA < AppConstants.minTriangleSideMeters) return 0;
 
     double angleA = _angleFromSides(distBC, distCA, distAB);
     double angleB = _angleFromSides(distCA, distAB, distBC);
@@ -462,7 +460,10 @@ class MapCalibrationService {
           } catch (_) {}
         }
         // Fallback: двухточечная привязка (farthest pair) для 2+ якорей
-        final pair = selectWorkingPair(_anchors, minDistanceMeters: AppConstants.minAnchorDistanceMeters);
+        final pair = selectWorkingPair(
+          _anchors,
+          minDistanceMeters: AppConstants.minAnchorDistanceMeters,
+        );
         if (pair != null) {
           _currentTransform = SimilarityTransform.fromPair(
             pair.latest,
@@ -498,7 +499,7 @@ class MapCalibrationService {
 
   MapWorkingPair? selectNearestValidPair(
     List<MapAnchor> anchors, {
-    double minDistanceMeters = 50.0,
+    double minDistanceMeters = AppConstants.minAnchorDistanceMeters,
   }) {
     if (anchors.length < 2) return null;
     final latest = anchors.last;
@@ -527,7 +528,7 @@ class MapCalibrationService {
 
   MapWorkingPair? selectWorkingPair(
     List<MapAnchor> anchors, {
-    double minDistanceMeters = 50.0,
+    double minDistanceMeters = AppConstants.minAnchorDistanceMeters,
   }) {
     if (anchors.length < 2) return null;
     final latest = anchors.last;

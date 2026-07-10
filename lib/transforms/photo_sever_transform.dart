@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import '../models/map_anchor.dart';
+import '../utils/app_constants.dart';
 import 'similarity_transform.dart';
 
 class PhotoSeverTransform implements MapTransformer {
@@ -45,8 +46,8 @@ class PhotoSeverTransform implements MapTransformer {
     final eastMeters = _metersForPixels(rotDy);
 
     final originLatRad = baseAnchor.latitude * math.pi / 180;
-    final dLat = northMeters / 6371000.0;
-    final dLon = eastMeters / (6371000.0 * math.cos(originLatRad));
+    final dLat = northMeters / AppConstants.earthRadiusMeters;
+    final dLon = eastMeters / (AppConstants.earthRadiusMeters * math.cos(originLatRad));
 
     final lat = baseAnchor.latitude + dLat * 180 / math.pi;
     final lon = baseAnchor.longitude + dLon * 180 / math.pi;
@@ -59,8 +60,8 @@ class PhotoSeverTransform implements MapTransformer {
     final dLat = (geoPoint.dy - baseAnchor.latitude) * math.pi / 180;
     final dLon = (geoPoint.dx - baseAnchor.longitude) * math.pi / 180;
 
-    final northMeters = dLat * 6371000.0;
-    final eastMeters = dLon * 6371000.0 * math.cos(originLatRad);
+    final northMeters = dLat * AppConstants.earthRadiusMeters;
+    final eastMeters = dLon * AppConstants.earthRadiusMeters * math.cos(originLatRad);
 
     // Из системы магнитного севера обратно в повёрнутую систему:
     // rotDx = компонента вдоль севера (north)
