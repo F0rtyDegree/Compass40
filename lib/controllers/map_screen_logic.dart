@@ -21,6 +21,7 @@ import 'map_target_manager.dart';
 import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
+import '../widgets/map_image_painter.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -336,6 +337,7 @@ class MapScreenLogic {
 
   Future<void> closeMap() async {
     if (state.imagePath != null) {
+      removeImageFromCache(state.imagePath!); // очищаем кэш изображения
       final file = File(state.imagePath!);
       if (await file.exists()) {
         await file.delete();
@@ -851,11 +853,11 @@ void _onHeadingChanged() {
     required double declinationRad,
   }) {
     if (photoSeverLinePixels > 0) {
-      // Режим P: ставим магнитный север вверх (без склонения)
+      // Режим P: угол уже магнитный, так как photoSeverNorthAngle магнитный
       return -math.pi / 2 - photoSeverNorthAngle;
     } else if (mapRotation != 0.0) {
-      // Обычные режимы A/F/N/M: истинный поворот минус склонение
-      return mapRotation - declinationRad;
+      // mapRotation уже магнитный, дополнительное склонение не вычитаем
+      return mapRotation;
     } else {
       return 0.0;
     }

@@ -324,7 +324,10 @@ class MapCalibrationService {
     double distAB = _distanceBetweenAnchorsMeters(a, b);
     double distBC = _distanceBetweenAnchorsMeters(b, c);
     double distCA = _distanceBetweenAnchorsMeters(c, a);
-    if (distAB < AppConstants.minTriangleSideMeters || distBC < AppConstants.minTriangleSideMeters || distCA < AppConstants.minTriangleSideMeters) return 0;
+    if (distAB < AppConstants.minTriangleSideMeters ||
+        distBC < AppConstants.minTriangleSideMeters ||
+        distCA < AppConstants.minTriangleSideMeters)
+      return 0;
 
     double angleA = _angleFromSides(distBC, distCA, distAB);
     double angleB = _angleFromSides(distCA, distAB, distBC);
@@ -373,9 +376,6 @@ class MapCalibrationService {
   void _buildTransformFromAnchors() {
     // ✅ Режим P: одноточечная привязка по данным ФотоСевера
     if (_mode == CalibrationMode.photoSever) {
-      print(
-        'DEBUG P: pinned=${_pinnedAnchorIds.length}, linePixels=$_psLinePixels',
-      );
       if (_pinnedAnchorIds.length == 1 && _psLinePixels > 0) {
         final baseId = _pinnedAnchorIds.first;
         MapAnchor? baseAnchor;

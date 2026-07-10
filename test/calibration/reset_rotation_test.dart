@@ -58,7 +58,7 @@ void main() {
         photoSeverLinePixels: 0,
         declinationRad: declinationRad,
       );
-      expect(result, closeTo(0.8 - declinationRad, 1e-9));
+      expect(result, closeTo(0.8, 1e-9));
     });
   });
 }

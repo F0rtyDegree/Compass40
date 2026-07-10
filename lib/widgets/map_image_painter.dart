@@ -6,6 +6,12 @@ import '../models/map_transform_state.dart';
 // Статический кеш загруженных изображений
 final Map<String, ui.Image> _imageCache = {};
 
+/// Удаляет изображение из кэша и освобождает память.
+void removeImageFromCache(String path) {
+  final image = _imageCache.remove(path);
+  image?.dispose();
+}
+
 /// Отрисовывает изображение карты с трансформацией.
 class MapImageLayer extends StatefulWidget {
   final String imagePath;
@@ -54,8 +60,8 @@ class _MapImageLayerState extends State<MapImageLayer> {
     }
 
     if (_isLoading) return;
-    
-    if(mounted){
+
+    if (mounted) {
       setState(() {
         _isLoading = true;
         _image = null; // Reset image on new load
