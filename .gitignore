@@ -16,3 +16,4 @@ android/.gradle/
 android/local.properties
 *.loc
 *.diff
+sizes-log.txt
