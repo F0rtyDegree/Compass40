@@ -1,5 +1,5 @@
-#!/bin/bash
 # Скрипт для сборки релиза APK
+echo "$(date) сборка APP ..." >> sizes.log
 
 ./clear
 
@@ -12,11 +12,15 @@ flutter build apk --release --no-pub
 
 mv /home/user/myapp/build/app/outputs/flutter-apk/app-release.apk Compass40.apk
 
-# echo "--- сборка завершена: $(date) ---" >> sizes-log.txt
-du -h --max-depth=1 /home/user/ | sort -rh >> sizes-log.txt
-# du -h --max-depth=1 /home/user/.gradle | sort -rh >> sizes-log.txt
-# du -h --max-depth=1 /home/user/.gradle/daemon | sort -rh >> sizes-log.txt
-# du -h --max-depth=1 /home/user/.gradle/caches | sort -rh >> sizes-log.txt
-# du -h --max-depth=1 /home/user/.gradle/caches/8.12 | sort -rh >> sizes-log.txt
-df -h .  >> sizes-log.txt
-# df -h .
+du -h --max-depth=1 /home/user/ | sort -rh >> sizes.log
+du -h --max-depth=1 /home/user/.gradle | sort -rh >> sizes.log
+du -h --max-depth=1 /home/user/.gradle/daemon | sort -rh >> sizes.log
+du -h --max-depth=1 /home/user/.gradle/caches | sort -rh >> sizes.log
+du -h --max-depth=1 /home/user/.gradle/caches/8.12 | sort -rh >> sizes.log
+df -h .  >> sizes.log
+df -h .
+
+echo "$(date) сборка завершена" >> sizes.log
+echo "" >> sizes.log
+
+#!/bin/bash
