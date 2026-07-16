@@ -16,9 +16,7 @@ Future<bool?> showExitConfirmDialog(BuildContext context) {
         TextButton(
           onPressed: () async {
             final totalMB = await getTotalAppStorageMB();
-            print(
-              'APP STOP (all size: ~${totalMB.toStringAsFixed(1)} MB)',
-            );
+            print('Compass40 STOP (~${totalMB.toStringAsFixed(1)} MB)',);
             if (context.mounted) {
               Navigator.of(context).pop(true);
             }

@@ -4,7 +4,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 5.0.0
+version: 5.0.1
 environment:
   sdk: ^3.9.0
 
@@ -13,7 +13,7 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
-  permission_handler: ^11.0.1
+  permission_handler: ^12.0.3
 
   gps_info:
     path: packages/gps_info
@@ -29,7 +29,7 @@ dependencies:
   flutter_markdown: ^0.7.7+1
   file_picker: ^11.0.2
   xml: ^6.3.0
-
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter

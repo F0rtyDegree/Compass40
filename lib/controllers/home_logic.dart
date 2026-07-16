@@ -1,5 +1,8 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_compass_service.dart';
@@ -7,6 +10,7 @@ import '../utils/geo_utils.dart';
 import '../utils/angle_utils.dart';
 import '../utils/app_constants.dart';
 import 'home_state.dart';
+import '../services/file_logger.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -22,17 +26,38 @@ class HomeLogic {
   });
 
   Future<void> init() async {
+    // Сначала запрашиваем разрешения в основном потоке
+    final status = await Permission.storage.request();
+    if (!status.isGranted) {
+      // Для Android 11+ пробуем альтернативное разрешение
+      await Permission.manageExternalStorage.request();
+    }
+
+    // Теперь, когда разрешения (вероятно) есть, можно начинать логирование
+    FileLogger.writeLog('Compass40 start');
+    
+    // Продолжаем инициализацию
     await _loadAllSettings();
     await loadLogEntries();
     await _initServicesAndPermissions();
   }
 
   void dispose() {
+    print('dispose(): (7)');
+    print('dispose: (6)');
+    // Запускаем запись в лог в фоне и не ждем ее завершения
+    FileLogger.writeLog('Compass40 stop');
+    print('dispose(): (5)');
     GpsCompassService.instance.stop();
+    print('dispose(): (4)');
     state.uiUpdateTimer?.cancel();
+    print('dispose(): (3)');
     state.gpsDataSubscription.cancel();
+    print('dispose(): (2)');
     state.compassSubscription.cancel();
+    print('dispose(): (1)');
     state.disposeNotifiers();
+    print('dispose(): exit');
   }
 
   // ----------------------------------------------------------------------
@@ -173,7 +198,7 @@ class HomeLogic {
     );
   }
 
-  void _updateHeading() {
+  Future<void> _updateHeading() async {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     bool useGps = false;
@@ -204,7 +229,7 @@ class HomeLogic {
       );
       if (state.headingSamples.isEmpty) return;
       final headings = state.headingSamples.map((s) => s.$1).toList();
-      newHeading = calculateCircularMedian(headings);
+      newHeading = await calculateCircularMedian(headings);
     }
 
     double diff = newHeading - state.filteredHeading;

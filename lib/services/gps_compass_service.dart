@@ -66,7 +66,7 @@ class GpsCompassService {
     }
   }
 
-  void _processSamples() {
+  Future<void> _processSamples() async {
     final windowSize = _settings?.gpsAveragingSamples ?? 3;
     if (_samples.length < windowSize) {
       isActiveNotifier.value = false;
@@ -76,7 +76,7 @@ class GpsCompassService {
 
     // Берём последние windowSize сэмплов
     final recent = _samples.sublist(_samples.length - windowSize);
-    final median = calculateCircularMedian(List.from(recent));
+    final median = await calculateCircularMedian(List.from(recent));
     final smoothing = _settings?.smoothingFactor ?? 0.5;
     
     // Корректный расчет разницы для круговых величин

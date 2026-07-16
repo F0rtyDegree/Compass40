@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:math' as math;
 import 'dart:async';
 import 'dart:io';
@@ -297,7 +299,7 @@ class MapScreenLogic {
           await tempFile.delete();
         }
       } catch (e) {
-        debugPrint('Failed to delete temp file: $e');
+        print('pickImage(): Failed to delete temp file: $e');
       }
 
       final projectId = DateTime.now().millisecondsSinceEpoch.toString();

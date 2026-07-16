@@ -1,7 +1,7 @@
 # Скрипт для сборки релиза APK
 echo "$(date) сборка APP ..." >> sizes.log
 
-./clear
+./clean
 
 # flutter clean 
 # flutter pub get --offline

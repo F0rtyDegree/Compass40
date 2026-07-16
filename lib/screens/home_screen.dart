@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'dart:io'; // Импортируем dart:io
 
 import 'map_screen.dart';
 import 'help_viewer_screen.dart';
@@ -22,7 +21,7 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   late final HomeState _state;
   late final LogService _logService;
   late final SensorService _sensorService;
@@ -32,6 +31,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _state = HomeState();
     _logService = LogService();
     _sensorService = SensorService();
@@ -57,20 +57,23 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _logic.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached) {
+       _logic.dispose();
+    }
   }
 
   Future<void> _handleExitRequest() async {
     final exitConfirmed = await showExitConfirmDialog(context);
     if (exitConfirmed == true) {
       await _logic.clearWaypoint();
-      // Используем exit(0) для надежного завершения приложения на Android.
-      if (Platform.isAndroid) {
-        exit(0);
-      } else {
-        SystemNavigator.pop();
-      }
+      SystemNavigator.pop();
     }
   }
 
