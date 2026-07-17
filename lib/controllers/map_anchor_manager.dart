@@ -157,10 +157,7 @@ class MapAnchorManager {
 
   Future<void> pickGpxFile(BuildContext context) async {
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['gpx', 'xml'],
-      );
+      final result = await FilePicker.pickFiles(type: FileType.any);
       if (result == null || result.files.isEmpty) return;
 
       final file = File(result.files.single.path!);
@@ -308,7 +305,7 @@ class MapAnchorManager {
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
-void handleTapOnMap(Offset screenPosition) {
+  void handleTapOnMap(Offset screenPosition) {
     // ✅ В автоматических режимах (A/F/N) тап на якорь игнорируется
     // Переключение якорей работает только в режимах M и P
     final mode = calibrationService.currentMode;
@@ -377,7 +374,7 @@ void handleTapOnMap(Offset screenPosition) {
     onAnchorsChanged();
   }
 
-void showModePicker(BuildContext context) {
+  void showModePicker(BuildContext context) {
     final project = state.project;
     final anchors = project?.anchors ?? [];
     final anchorCount = anchors.length;
@@ -421,9 +418,7 @@ void showModePicker(BuildContext context) {
                 showHintAndClose('Нужно ФотоСевер & 1 якорь', ctx);
                 return;
               }
-              calibrationService.setCalibrationMode(
-                CalibrationMode.photoSever,
-              );
+              calibrationService.setCalibrationMode(CalibrationMode.photoSever);
               calibrationService.updatePhotoSeverData(
                 lineMeters: project.photoSeverLineMeters,
                 linePixels: project.photoSeverLinePixels,
@@ -435,9 +430,7 @@ void showModePicker(BuildContext context) {
             },
             child: Text(
               'ФотоСевер (P)',
-              style: TextStyle(
-                color: canPhotoSever ? null : Colors.grey,
-              ),
+              style: TextStyle(color: canPhotoSever ? null : Colors.grey),
             ),
           ),
           // === Ручной (M) ===
@@ -451,9 +444,7 @@ void showModePicker(BuildContext context) {
             },
             child: Text(
               'Ручной (M)',
-              style: TextStyle(
-                color: canManual ? null : Colors.grey,
-              ),
+              style: TextStyle(color: canManual ? null : Colors.grey),
             ),
           ),
           // === Affine (A) ===
@@ -467,9 +458,7 @@ void showModePicker(BuildContext context) {
             },
             child: Text(
               'Affine (A)',
-              style: TextStyle(
-                color: canAffine ? null : Colors.grey,
-              ),
+              style: TextStyle(color: canAffine ? null : Colors.grey),
             ),
           ),
           // === Farthest (F) ===
@@ -483,9 +472,7 @@ void showModePicker(BuildContext context) {
             },
             child: Text(
               'Farthest (F)',
-              style: TextStyle(
-                color: canFarthest ? null : Colors.grey,
-              ),
+              style: TextStyle(color: canFarthest ? null : Colors.grey),
             ),
           ),
           // === Nearest (N) ===
@@ -499,9 +486,7 @@ void showModePicker(BuildContext context) {
             },
             child: Text(
               'Nearest (N)',
-              style: TextStyle(
-                color: canNearest ? null : Colors.grey,
-              ),
+              style: TextStyle(color: canNearest ? null : Colors.grey),
             ),
           ),
         ],

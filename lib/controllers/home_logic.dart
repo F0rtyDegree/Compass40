@@ -48,7 +48,7 @@ class HomeLogic {
     // Запускаем запись в лог в фоне и не ждем ее завершения
     FileLogger.writeLog('Compass40 stop');
     print('dispose(): (5)');
-    GpsCompassService.instance.stop();
+    GpsCompassService.instance.dispose();
     print('dispose(): (4)');
     state.uiUpdateTimer?.cancel();
     print('dispose(): (3)');

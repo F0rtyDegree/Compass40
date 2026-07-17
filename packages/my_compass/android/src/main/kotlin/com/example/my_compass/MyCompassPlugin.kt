@@ -70,7 +70,7 @@ class MyCompassPlugin : FlutterPlugin, EventChannel.StreamHandler, SensorEventLi
                 sensorManager.registerListener(
                     this,
                     sensor,
-                    SensorManager.SENSOR_DELAY_GAME
+                    SensorManager.SENSOR_DELAY_UI
                 )
             }
         } else {
@@ -78,14 +78,14 @@ class MyCompassPlugin : FlutterPlugin, EventChannel.StreamHandler, SensorEventLi
                 sensorManager.registerListener(
                     this,
                     sensor,
-                    SensorManager.SENSOR_DELAY_GAME
+                    SensorManager.SENSOR_DELAY_UI
                 )
             }
             magneticFieldSensor?.also { sensor ->
                 sensorManager.registerListener(
                     this,
                     sensor,
-                    SensorManager.SENSOR_DELAY_GAME
+                    SensorManager.SENSOR_DELAY_UI
                 )
             }
         }
