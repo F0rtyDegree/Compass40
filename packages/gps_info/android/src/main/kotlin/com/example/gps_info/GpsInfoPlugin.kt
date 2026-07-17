@@ -12,6 +12,7 @@ import android.location.LocationManager
 import android.location.OnNmeaMessageListener
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -22,6 +23,10 @@ import io.flutter.plugin.common.PluginRegistry
 
 class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     PluginRegistry.RequestPermissionsResultListener {
+
+    companion object {
+        private const val TAG = "GpsInfoPlugin"
+    }
 
     private var activity: Activity? = null
     private lateinit var locationManager: LocationManager
@@ -36,9 +41,12 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     private var magneticDeclination: Float? = null
     private var updateInterval: Long = 1000L
 
+    private var isListening = false
+
     override fun onAttachedToEngine(
         flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
     ) {
+        Log.d(TAG, "onAttachedToEngine")
         val eventChannel = EventChannel(
             flutterPluginBinding.binaryMessenger,
             GPS_DATA_CHANNEL_NAME
@@ -48,14 +56,17 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
 
         eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                Log.d(TAG, "onListen called")
                 eventSink = events
                 if (arguments is Int) {
                     updateInterval = arguments.toLong()
+                    Log.d(TAG, "updateInterval set to $updateInterval")
                 }
                 startGpsListener()
             }
 
             override fun onCancel(arguments: Any?) {
+                Log.d(TAG, "onCancel called")
                 stopGpsListener()
                 eventSink = null
             }
@@ -63,17 +74,25 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        Log.d(TAG, "onAttachedToActivity")
         activity = binding.activity
         binding.addRequestPermissionsResultListener(this)
     }
 
-    override fun onDetachedFromActivity() { activity = null }
+    override fun onDetachedFromActivity() {
+        Log.d(TAG, "onDetachedFromActivity")
+        activity = null
+    }
 
     override fun onReattachedToActivityForConfigChanges(
         binding: ActivityPluginBinding
-    ) { onAttachedToActivity(binding) }
+    ) {
+        Log.d(TAG, "onReattachedToActivityForConfigChanges")
+        onAttachedToActivity(binding)
+    }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        Log.d(TAG, "onDetachedFromActivityForConfigChanges")
         onDetachedFromActivity()
     }
 
@@ -87,6 +106,7 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     }
 
     private fun requestLocationPermission() {
+        Log.d(TAG, "requestLocationPermission")
         activity?.let {
             ActivityCompat.requestPermissions(
                 it,
@@ -101,13 +121,16 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
         permissions: Array<out String>,
         grantResults: IntArray
     ): Boolean {
+        Log.d(TAG, "onRequestPermissionsResult: requestCode=$requestCode")
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() &&
                 grantResults[0] == PackageManager.PERMISSION_GRANTED
             ) {
+                Log.d(TAG, "Location permission granted")
                 startGpsListener()
                 return true
             } else {
+                Log.e(TAG, "Location permission denied")
                 eventSink?.error(
                     "PERMISSION_DENIED",
                     "Location permission not granted.",
@@ -132,7 +155,6 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
             data["speed"] = it.speed
             data["altitude"] = it.altitude
 
-            // ✅ Отправляем истинный GPS bearing как есть
             data["gpsBearing"] = if (it.hasBearing()) {
                 it.bearing.toDouble()
             } else {
@@ -180,7 +202,9 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
                     if (parts.size > 9 && parts[9].isNotEmpty()) {
                         try {
                             mslAltitude = parts[9].toDouble()
-                        } catch (e: NumberFormatException) { }
+                        } catch (e: NumberFormatException) {
+                            // ignore
+                        }
                     }
                 }
             }
@@ -200,7 +224,14 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
 
     @Suppress("deprecation")
     private fun startGpsListener() {
+        Log.d(TAG, "startGpsListener: isListening=$isListening")
+        if (isListening) {
+            Log.d(TAG, "Already listening, skipping")
+            return
+        }
+
         if (activity == null) {
+            Log.e(TAG, "Activity is null")
             eventSink?.error(
                 "NO_ACTIVITY",
                 "Plugin is not attached to an activity.",
@@ -208,15 +239,18 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
             )
             return
         }
+
         if (!hasLocationPermission()) {
+            Log.d(TAG, "No permission, requesting...")
             requestLocationPermission()
             return
         }
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                locationManager.registerGnssStatusCallback(
-                    gnssStatusCallback!!, null
-                )
+                gnssStatusCallback?.let {
+                    locationManager.registerGnssStatusCallback(it, null)
+                }
                 nmeaListener?.let {
                     locationManager.addNmeaListener(it, null)
                 }
@@ -227,7 +261,10 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
                 0f,
                 locationListener
             )
+            isListening = true
+            Log.d(TAG, "GPS listener started successfully")
         } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException: ${e.message}")
             eventSink?.error(
                 "SECURITY_EXCEPTION",
                 "Failed to register GPS listener.",
@@ -238,20 +275,36 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
 
     @Suppress("deprecation")
     private fun stopGpsListener() {
-        if (hasLocationPermission()) {
+        Log.d(TAG, "stopGpsListener: isListening=$isListening")
+        if (!isListening) {
+            Log.d(TAG, "Not listening, skipping")
+            return
+        }
+
+        try {
+            // Для отмены регистрации разрешение не требуется
             locationManager.removeUpdates(locationListener)
+            Log.d(TAG, "removeUpdates called")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                locationManager.unregisterGnssStatusCallback(gnssStatusCallback!!)
+                gnssStatusCallback?.let {
+                    locationManager.unregisterGnssStatusCallback(it)
+                }
                 nmeaListener?.let {
                     locationManager.removeNmeaListener(it)
                 }
             }
+            isListening = false
+            Log.d(TAG, "GPS listener stopped successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping GPS listener: ${e.message}")
         }
     }
 
     override fun onDetachedFromEngine(
         binding: FlutterPlugin.FlutterPluginBinding
     ) {
+        Log.d(TAG, "onDetachedFromEngine")
         stopGpsListener()
+        eventSink = null
     }
 }

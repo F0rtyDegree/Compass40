@@ -24,12 +24,14 @@ import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../widgets/map_image_painter.dart';
+import '../services/gps_manager.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
   final void Function(VoidCallback fn) setState;
   final void Function(String message) showSnackBar;
   final MapStorageService storageService;
+  final GpsManager _gpsManager = GpsManager();
   final double magneticDeclination;
   final ValueNotifier<double> headingNotifier;
   final MapCalibrationService _calibrationService = MapCalibrationService();
@@ -164,20 +166,21 @@ class MapScreenLogic {
     _onGpsActiveChanged(); // Инициализируем начальное состояние
   }
 
-  void dispose() {
-    headingNotifier.removeListener(_onHeadingChanged);
-    GpsCompassService.instance.isActiveNotifier.removeListener(
-      _onGpsActiveChanged,
-    );
-    if (state.project != null) {
-      storageService.saveProject(state.project!);
-    }
-    state.rotateModeTimer?.cancel();
-    state.followRestoreTimer?.cancel();
-    _gpsSub?.cancel();
-    state.crosshairFeedback.dispose();
-    state.isDisposed = true;
+void dispose() {
+  headingNotifier.removeListener(_onHeadingChanged);
+  GpsCompassService.instance.isActiveNotifier.removeListener(
+    _onGpsActiveChanged,
+  );
+  if (state.project != null) {
+    storageService.saveProject(state.project!);
   }
+  state.rotateModeTimer?.cancel();
+  state.followRestoreTimer?.cancel();
+  _gpsSub?.cancel();
+  _gpsManager.dispose();   // <-- добавлена эта строка
+  state.crosshairFeedback.dispose();
+  state.isDisposed = true;
+}
 
   // --------------------------------------------------------
   // Загрузка проекта
@@ -268,7 +271,9 @@ class MapScreenLogic {
     final vp = state.viewportSize;
     if (vp == null || imgW == 0 || imgH == 0) return;
 
-    final fitScale = math.min(vp.width / imgW, vp.height / imgH) * AppConstants.imageFitPaddingFactor;
+    final fitScale =
+        math.min(vp.width / imgW, vp.height / imgH) *
+        AppConstants.imageFitPaddingFactor;
 
     setState(() {
       state.transformState = MapTransformState(
@@ -429,7 +434,10 @@ class MapScreenLogic {
   void zoomIn() {
     followController.keepFollowDuringScale = true;
     final current = state.transformState;
-    final newScale = (current.scale * 1.5).clamp(AppConstants.minMapScale, AppConstants.maxMapScale);
+    final newScale = (current.scale * 1.5).clamp(
+      AppConstants.minMapScale,
+      AppConstants.maxMapScale,
+    );
     _scaleAroundCrosshair(current, newScale);
     followController.keepFollowDuringScale = false;
   }
@@ -437,7 +445,10 @@ class MapScreenLogic {
   void zoomOut() {
     followController.keepFollowDuringScale = true;
     final current = state.transformState;
-    final newScale = (current.scale / 1.5).clamp(AppConstants.minMapScale, AppConstants.maxMapScale);
+    final newScale = (current.scale / 1.5).clamp(
+      AppConstants.minMapScale,
+      AppConstants.maxMapScale,
+    );
     _scaleAroundCrosshair(current, newScale);
     followController.keepFollowDuringScale = false;
   }
@@ -489,11 +500,14 @@ class MapScreenLogic {
       await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
 
       state.crosshairFeedback.value = true;
-      Future.delayed(const Duration(milliseconds: AppConstants.feedbackDurationMs), () {
-        if (!state.isDisposed) {
-          state.crosshairFeedback.value = false;
-        }
-      });
+      Future.delayed(
+        const Duration(milliseconds: AppConstants.feedbackDurationMs),
+        () {
+          if (!state.isDisposed) {
+            state.crosshairFeedback.value = false;
+          }
+        },
+      );
     }
   }
 
@@ -656,12 +670,11 @@ class MapScreenLogic {
     });
   }
 
- 
   void _recalculateCanPlaceTarget() {
-  setState(() {
-    state.canPlaceTarget = true;
-  });
-}
+    setState(() {
+      state.canPlaceTarget = true;
+    });
+  }
 
   void _recalculateUserImagePoint() {
     // Если привязка отсутствует, скрываем маркер
@@ -810,33 +823,38 @@ class MapScreenLogic {
   }
 
   void _startGpsSubscription() {
-    _gpsSub = sensorService.subscribeToGps(
+    _gpsSub = _gpsManager.subscribe(
       intervalSeconds: _sensorSettings.gpsInterval,
       onData: (gpsData) {
         _lastGpsData = gpsData;
-        anchorManager.lastGpsData = gpsData;
-
+        // обновление позиции на карте
+        _recalculateUserImagePoint();
         if (state.followMode) {
-          _recalculateUserImagePoint();
           followController.centerMapOnUser();
         } else {
           _recalculateUserImagePoint();
         }
       },
+      onError: (error) {
+        print('GPS error in MapScreenLogic: $error');
+      },
+      onDone: () {
+        print('GPS stream closed in MapScreenLogic');
+      },
     );
   }
 
-void _onHeadingChanged() {
-  // headingNotifier.value уже содержит магнитный курс
-  final magneticHeading = headingNotifier.value;
-  setState(() {
-    state.heading = magneticHeading;         // теперь это магнитный курс
-    state.magneticHeading = magneticHeading; // без изменений
-  });
-  if (state.followMode) {
-    followController.applyHeadingRotation();
+  void _onHeadingChanged() {
+    // headingNotifier.value уже содержит магнитный курс
+    final magneticHeading = headingNotifier.value;
+    setState(() {
+      state.heading = magneticHeading; // теперь это магнитный курс
+      state.magneticHeading = magneticHeading; // без изменений
+    });
+    if (state.followMode) {
+      followController.applyHeadingRotation();
+    }
   }
-}
 
   // --------------------------------------------------------
   // Вспомогательные

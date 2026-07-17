@@ -2,9 +2,11 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:gps_info/gps_info.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
+import '../services/gps_manager.dart';
 import '../services/gps_compass_service.dart';
 import '../utils/geo_utils.dart';
 import '../utils/angle_utils.dart';
@@ -17,6 +19,10 @@ class HomeLogic {
   final void Function(VoidCallback fn) setState;
   final LogService logService;
   final SensorService sensorService;
+  final GpsManager _gpsManager = GpsManager();
+
+  // Локальная подписка на GPS (через GpsManager)
+  StreamSubscription<GpsData>? _gpsSubscription;
 
   HomeLogic({
     required this.state,
@@ -26,17 +32,13 @@ class HomeLogic {
   });
 
   Future<void> init() async {
-    // Сначала запрашиваем разрешения в основном потоке
+    // Разрешения
     final status = await Permission.storage.request();
     if (!status.isGranted) {
-      // Для Android 11+ пробуем альтернативное разрешение
       await Permission.manageExternalStorage.request();
     }
 
-    // Теперь, когда разрешения (вероятно) есть, можно начинать логирование
     FileLogger.writeLog('Compass40 start');
-    
-    // Продолжаем инициализацию
     await _loadAllSettings();
     await loadLogEntries();
     await _initServicesAndPermissions();
@@ -45,14 +47,19 @@ class HomeLogic {
   void dispose() {
     print('dispose(): (7)');
     print('dispose: (6)');
-    // Запускаем запись в лог в фоне и не ждем ее завершения
     FileLogger.writeLog('Compass40 stop');
     print('dispose(): (5)');
-    GpsCompassService.instance.dispose();
+
+    // Отменяем подписку на GPS
+    _gpsSubscription?.cancel();
+    _gpsSubscription = null;
+    // Принудительно останавливаем GPS, если вдруг подписка не отменилась
+    _gpsManager.dispose();
+
     print('dispose(): (4)');
     state.uiUpdateTimer?.cancel();
     print('dispose(): (3)');
-    state.gpsDataSubscription.cancel();
+    // state.gpsDataSubscription больше не нужна, удаляем
     print('dispose(): (2)');
     state.compassSubscription.cancel();
     print('dispose(): (1)');
@@ -103,11 +110,11 @@ class HomeLogic {
   // ----------------------------------------------------------------------
 
   Future<void> _initServicesAndPermissions() async {
-    // Магнитный компас доступен всегда, без разрешения
     _subscribeToCompassStream();
 
     if (await sensorService.requestLocationPermission()) {
       final settings = await sensorService.loadSettings();
+      // GpsCompassService теперь сам подписывается на GpsManager
       GpsCompassService.instance.start(settings);
       _subscribeToGpsDataStream();
     }
@@ -116,7 +123,8 @@ class HomeLogic {
   void _subscribeToGpsDataStream() async {
     final settings = await sensorService.loadSettings();
 
-    state.gpsDataSubscription = sensorService.subscribeToGps(
+    // Подписываемся через GpsManager
+    _gpsSubscription = _gpsManager.subscribe(
       intervalSeconds: settings.gpsInterval,
       onData: (gpsData) {
         state.gpsDataNotifier.value = gpsData;
@@ -126,6 +134,14 @@ class HomeLogic {
             state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
           });
         }
+        // Данные уже передаются в GpsCompassService через его собственную подписку,
+        // поэтому здесь ничего не вызываем.
+      },
+      onError: (error) {
+        print('GPS error in HomeLogic: $error');
+      },
+      onDone: () {
+        print('GPS stream closed in HomeLogic');
       },
     );
   }
@@ -137,19 +153,17 @@ class HomeLogic {
 
         final heading = data[0];
         final accuracy = data.length > 1 ? data[1] : 0.0;
-        // Принимаем все данные, даже с плохой точностью, но accuracy=0 игнорируем
         if (accuracy == 0) {
           state.accuracyNotifier.value = 0;
           return;
         }
 
-        // Фильтр одиночных выбросов: если угол отличается от последнего >30°, подставляем последнее значение
+        // Фильтр выбросов
         if (state.headingSamples.isNotEmpty) {
           double lastHeading = state.headingSamples.last.$1;
           double diff = (heading - lastHeading).abs();
           if (diff > 180) diff = 360 - diff;
           if (diff > AppConstants.spikeThresholdDegrees) {
-            // Добавляем последнее валидное значение, чтобы сохранить поток данных
             state.headingSamples.add((
               lastHeading,
               DateTime.now().millisecondsSinceEpoch,
