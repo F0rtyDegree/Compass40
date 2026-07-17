@@ -3,7 +3,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 
-// Эта функция будет выполняться в отдельном изоляте.
+// Эта функция выполняется в изоляте.
 // Она БОЛЬШЕ НЕ запрашивает разрешения. Предполагается, что они уже есть.
 Future<void> _writeLogInternal(String message) async {
   try {
@@ -33,6 +33,8 @@ Future<void> _writeLogInternal(String message) async {
 
     const String logFileName = 'compass_log.txt';
     final file = File('${compassDir.path}/$logFileName');
+    
+    // Используем append, так как файл уже очищен при инициализации
     final timestamp = DateTime.now().toIso8601String().replaceFirst('T', ' ');
     final logLine = '$timestamp  $message\n';
 
@@ -44,7 +46,45 @@ Future<void> _writeLogInternal(String message) async {
 }
 
 class FileLogger {
-  // Эта функция теперь неблокирующая ("fire and forget")
+  static bool _initialized = false;
+
+  /// Инициализировать лог-файл: удалить старый и создать новый.
+  /// Вызывать один раз при запуске приложения.
+  static Future<void> init() async {
+    if (_initialized) return;
+    try {
+      Directory? downloadsDir;
+      if (Platform.isAndroid) {
+        downloadsDir = Directory('/storage/emulated/0/Download');
+        if (!await downloadsDir.exists()) {
+          downloadsDir = Directory('/sdcard/Download');
+        }
+      }
+      if (downloadsDir == null || !await downloadsDir.exists()) {
+        print('FileLogger.init: Download directory not found.');
+        return;
+      }
+
+      const String folderName = 'Compass40';
+      final compassDir = Directory('${downloadsDir.path}/$folderName');
+      if (!await compassDir.exists()) {
+        await compassDir.create(recursive: true);
+      }
+
+      final file = File('${compassDir.path}/compass_log.txt');
+      if (await file.exists()) {
+        await file.delete();
+      }
+      await file.create(recursive: true);
+      _initialized = true;
+      print('FileLogger.init: log file cleared');
+    } catch (e) {
+      print('FileLogger.init ERROR: $e');
+    }
+  }
+
+  /// Записать сообщение в лог-файл.
+  /// Файл должен быть предварительно инициализирован через [init].
   static void writeLog(String message) {
     compute(_writeLogInternal, message);
   }

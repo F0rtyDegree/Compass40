@@ -31,18 +31,24 @@ class HomeLogic {
     required this.sensorService,
   });
 
-  Future<void> init() async {
-    // Разрешения
-    final status = await Permission.storage.request();
-    if (!status.isGranted) {
-      await Permission.manageExternalStorage.request();
-    }
-
-    FileLogger.writeLog('Compass40 start');
-    await _loadAllSettings();
-    await loadLogEntries();
-    await _initServicesAndPermissions();
+Future<void> init() async {
+  // Сначала запрашиваем разрешения в основном потоке
+  final status = await Permission.storage.request();
+  if (!status.isGranted) {
+    await Permission.manageExternalStorage.request();
   }
+
+  // Инициализируем лог-файл (очищаем старый)
+  await FileLogger.init();
+
+  // Теперь можно писать логи
+  FileLogger.writeLog('Compass40 start');
+  
+  // Продолжаем инициализацию
+  await _loadAllSettings();
+  await loadLogEntries();
+  await _initServicesAndPermissions();
+}
 
   void dispose() {
     print('dispose(): (7)');
