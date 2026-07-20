@@ -10,10 +10,12 @@ import '../widgets/map_overlay_painter.dart';
 import '../widgets/map_zoom_buttons.dart';
 import 'help_viewer_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:gps_info/gps_info.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
 class MapScreen extends StatefulWidget {
+  final ValueNotifier<GpsData> gpsDataNotifier;
   final double magneticDeclination;
   final ValueNotifier<double> headingNotifier;
   final Function(double lat, double lon, double? distance, String timeStr)?
@@ -23,6 +25,7 @@ class MapScreen extends StatefulWidget {
 
   const MapScreen({
     super.key,
+    required this.gpsDataNotifier,
     this.magneticDeclination = 0.0,
     required this.headingNotifier,
     this.onAnchorAdded,
@@ -63,6 +66,7 @@ class _MapScreenState extends State<MapScreen> {
         }
       },
       storageService: _storageService,
+      gpsDataNotifier: widget.gpsDataNotifier,
       magneticDeclination: widget.magneticDeclination,
       headingNotifier: widget.headingNotifier,
       onAnchorAdded: widget.onAnchorAdded,

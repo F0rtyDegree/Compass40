@@ -24,14 +24,13 @@ import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../widgets/map_image_painter.dart';
-import '../services/gps_manager.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
   final void Function(VoidCallback fn) setState;
   final void Function(String message) showSnackBar;
   final MapStorageService storageService;
-  final GpsManager _gpsManager = GpsManager();
+  final ValueNotifier<GpsData> gpsDataNotifier;
   final double magneticDeclination;
   final ValueNotifier<double> headingNotifier;
   final MapCalibrationService _calibrationService = MapCalibrationService();
@@ -43,9 +42,7 @@ class MapScreenLogic {
   final VoidCallback? onCancelNavigation;
   late final PhotoSeverController photoSeverController;
 
-  StreamSubscription<GpsData>? _gpsSub;
   GpsData? _lastGpsData;
-  late SensorSettings _sensorSettings;
   late final MapAnchorManager anchorManager;
   final Future<double?> Function() askDistanceDialog;
   late final MapTargetManager targetManager;
@@ -56,6 +53,7 @@ class MapScreenLogic {
     required this.setState,
     required this.showSnackBar,
     required this.storageService,
+    required this.gpsDataNotifier,
     required this.magneticDeclination,
     required this.headingNotifier,
     this.onAnchorAdded,
@@ -63,7 +61,6 @@ class MapScreenLogic {
     this.onCancelNavigation,
     required this.askDistanceDialog,
   });
-
   bool get canPlaceTarget => state.canPlaceTarget;
   bool get followMode => state.followMode;
 
@@ -122,7 +119,6 @@ class MapScreenLogic {
       onAnchorAdded: onAnchorAdded,
       onStartPhotoSever: () => photoSeverController.start(),
     );
-    anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     targetManager = MapTargetManager(
       state: state,
       setState: setState,
@@ -152,18 +148,19 @@ class MapScreenLogic {
       magneticDeclination: magneticDeclination,
     );
     await followController.loadRotateModeTimeout();
-    _sensorSettings = await sensorService.loadSettings();
     _calibrationService.setMagneticDeclination(magneticDeclination);
     await _loadLastProject();
-    _startGpsCompassService();
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
-    _startGpsSubscription();
+    // Подписываемся на единый источник GPS
+    gpsDataNotifier.addListener(_onGpsDataChanged);
+    _lastGpsData = gpsDataNotifier.value;
+    anchorManager.lastGpsData = gpsDataNotifier.value;
     headingNotifier.addListener(_onHeadingChanged);
     _onHeadingChanged();
     GpsCompassService.instance.isActiveNotifier.addListener(
       _onGpsActiveChanged,
     );
-    _onGpsActiveChanged(); // Инициализируем начальное состояние
+    _onGpsActiveChanged();
   }
 
   void dispose() {
@@ -171,12 +168,12 @@ class MapScreenLogic {
     GpsCompassService.instance.isActiveNotifier.removeListener(
       _onGpsActiveChanged,
     );
+    gpsDataNotifier.removeListener(_onGpsDataChanged);
     if (state.project != null) {
       storageService.saveProject(state.project!);
     }
     state.rotateModeTimer?.cancel();
     state.followRestoreTimer?.cancel();
-    _gpsSub?.cancel();
     state.crosshairFeedback.dispose();
     state.isDisposed = true;
   }
@@ -813,37 +810,6 @@ class MapScreenLogic {
     followController.resetRotateModeTimer();
   }
 
-  // --------------------------------------------------------
-  // GPS подписка
-  // --------------------------------------------------------
-
-  void _startGpsCompassService() {
-    GpsCompassService.instance.start(_sensorSettings);
-  }
-
-  void _startGpsSubscription() {
-    _gpsSub = _gpsManager.subscribe(
-      intervalSeconds: _sensorSettings.gpsInterval,
-      onData: (gpsData) {
-        _lastGpsData = gpsData;
-        anchorManager.lastGpsData = gpsData;
-        // обновление позиции на карте
-        _recalculateUserImagePoint();
-        if (state.followMode) {
-          followController.centerMapOnUser();
-        } else {
-          _recalculateUserImagePoint();
-        }
-      },
-      onError: (error) {
-        print('GPS error in MapScreenLogic: $error');
-      },
-      onDone: () {
-        print('GPS stream closed in MapScreenLogic');
-      },
-    );
-  }
-
   void _onHeadingChanged() {
     // headingNotifier.value уже содержит магнитный курс
     final magneticHeading = headingNotifier.value;
@@ -864,6 +830,19 @@ class MapScreenLogic {
     setState(() {
       state.isGpsActive = GpsCompassService.instance.isActiveNotifier.value;
     });
+  }
+
+  /// Обработчик обновлений от единого источника GPS (gpsDataNotifier).
+  /// Не создавать новых подписок на GpsManager!
+  void _onGpsDataChanged() {
+    final gpsData = gpsDataNotifier.value;
+    if (gpsData.latitude == null || gpsData.longitude == null) return;
+    _lastGpsData = gpsData;
+    anchorManager.lastGpsData = gpsData;
+    _recalculateUserImagePoint();
+    if (state.followMode) {
+      followController.centerMapOnUser();
+    }
   }
 
   static double computeResetRotation({

@@ -128,7 +128,6 @@ class TrackRecorder {
     }
     return points;
   }
-
   Future<void> clear() async {
     if (_csvPath == null) return;
     final file = File(_csvPath!);
@@ -139,6 +138,20 @@ class TrackRecorder {
     _pointCount = 0;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isRecordingTrack', false);
+  }
+
+  /// Инициализирует состояние для восстановления записи после сбоя.
+  /// Устанавливает путь к существующему CSV-файлу, чтобы последующий экспорт работал.
+  Future<void> initializeForRecovery() async {
+    final dir = Directory('/storage/emulated/0/Download/Compass40');
+    if (!await dir.exists()) return;
+
+    final csvFile = File('${dir.path}/track_points.csv');
+    if (await csvFile.exists()) {
+      _csvPath = csvFile.path;
+      final lines = await csvFile.readAsLines();
+      _pointCount = lines.length;
+    }
   }
 
   Future<void> dispose() async {

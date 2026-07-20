@@ -194,6 +194,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   context,
                   MaterialPageRoute(
                     builder: (_) => MapScreen(
+                      gpsDataNotifier: _state.gpsDataNotifier,
                       magneticDeclination: _state.magneticDeclination,
                       headingNotifier: _state.headingNotifier,
                       onAnchorAdded: (lat, lon, distance, timeStr) async {

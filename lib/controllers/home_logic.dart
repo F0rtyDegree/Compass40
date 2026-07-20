@@ -435,6 +435,8 @@ void dispose() {
   Future<void> _checkAndRecoverTrack() async {
     final wasRecording = await TrackRecorder.recoverIfNeeded();
     if (wasRecording) {
+      // Инициализируем экземпляр для работы с существующим CSV
+      await _trackRecorder.initializeForRecovery();
       setState(() {
         state.isRecordingTrack = true;
         state.isRecordingTrackNotifier.value = true;
