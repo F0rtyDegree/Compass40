@@ -1,5 +1,6 @@
 # Скрипт для сборки релиза APK
 echo "$(date) сборка APP ..." >> sizes.log
+rm -rf /home/user/myapp/Compass40.apk.gz
 
 ./clean
 
@@ -11,6 +12,8 @@ flutter build apk --release --no-pub
 # flutter build apk --release --no-pub 2>&1 | grep -v "^Running Gradle task"
 
 mv /home/user/myapp/build/app/outputs/flutter-apk/app-release.apk Compass40.apk
+gzip -c Compass40.apk > Compass40.apk.gz
+rm -rf /home/user/myapp/Compass40.apk
 
 du -h --max-depth=1 /home/user/ | sort -rh >> sizes.log
 du -h --max-depth=1 /home/user/.gradle | sort -rh >> sizes.log

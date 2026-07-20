@@ -166,21 +166,20 @@ class MapScreenLogic {
     _onGpsActiveChanged(); // Инициализируем начальное состояние
   }
 
-void dispose() {
-  headingNotifier.removeListener(_onHeadingChanged);
-  GpsCompassService.instance.isActiveNotifier.removeListener(
-    _onGpsActiveChanged,
-  );
-  if (state.project != null) {
-    storageService.saveProject(state.project!);
+  void dispose() {
+    headingNotifier.removeListener(_onHeadingChanged);
+    GpsCompassService.instance.isActiveNotifier.removeListener(
+      _onGpsActiveChanged,
+    );
+    if (state.project != null) {
+      storageService.saveProject(state.project!);
+    }
+    state.rotateModeTimer?.cancel();
+    state.followRestoreTimer?.cancel();
+    _gpsSub?.cancel();
+    state.crosshairFeedback.dispose();
+    state.isDisposed = true;
   }
-  state.rotateModeTimer?.cancel();
-  state.followRestoreTimer?.cancel();
-  _gpsSub?.cancel();
-  _gpsManager.dispose();   // <-- добавлена эта строка
-  state.crosshairFeedback.dispose();
-  state.isDisposed = true;
-}
 
   // --------------------------------------------------------
   // Загрузка проекта
@@ -827,6 +826,7 @@ void dispose() {
       intervalSeconds: _sensorSettings.gpsInterval,
       onData: (gpsData) {
         _lastGpsData = gpsData;
+        anchorManager.lastGpsData = gpsData;
         // обновление позиции на карте
         _recalculateUserImagePoint();
         if (state.followMode) {

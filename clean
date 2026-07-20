@@ -1,18 +1,20 @@
-# Остановить демон
-cd android
+#!/bin/bash
+cd /home/user/myapp/android
 ./gradlew --stop
+cd /home/user/myapp
 
-# Удалить папку daemon целиком (в ней только логи и PID-файлы)
-rm -rf ~/.gradle/daemon
-rm -rf /home/user/.gradle/caches/build-cache-1 
+rm -rf /home/user/.gradle/daemon
+rm -rf /home/user/.gradle/caches/build-cache-1
 rm -rf /home/user/.gradle/caches/transforms-*
+# +30сек rm -rf /home/user/.gradle/caches/8.12/transforms
+
 # rm -rf ~/.android/cache ~/.androidsdkroot/.installer ~/.androidsdkroot/.temp
 # rm -rf /home/user/.gradle/caches/8.12/javaCompile
 
 # вызовет последуюющую очень долгую сборку но реально очистит место
 # rm -rf ~/.gradle/caches
 
-cd ..
+
 
 rm -rf /home/user/myapp/build/app/outputs/apk/debug/app-debug.apk
 rm -rf /home/user/myapp/build/app/outputs/apk/release/app-release.apk
