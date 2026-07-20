@@ -6,6 +6,7 @@ import 'sensor_service.dart';
 /// Подписывается на SensorService ровно один раз и раздаёт данные всем подписчикам через broadcast stream.
 /// Автоматически запускает/останавливает платформенный GPS при появлении/исчезновении подписчиков.
 class GpsManager {
+  bool _isDisposed = false;
   static final GpsManager _instance = GpsManager._();
   factory GpsManager() => _instance;
   GpsManager._();
@@ -40,12 +41,13 @@ class GpsManager {
     );
 
     // Оборачиваем подписку, чтобы при отписке уменьшать счётчик
-    final wrapped = subscription..onDone(() {
-      _subscriberCount--;
-      if (_subscriberCount == 0) {
-        _stopPlatformListening();
-      }
-    });
+    final wrapped = subscription
+      ..onDone(() {
+        _subscriberCount--;
+        if (_subscriberCount == 0) {
+          _stopPlatformListening();
+        }
+      });
 
     return wrapped;
   }
@@ -69,6 +71,8 @@ class GpsManager {
   }
 
   void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
     forceStop();
     _controller.close();
   }

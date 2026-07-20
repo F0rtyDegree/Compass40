@@ -48,6 +48,10 @@ class HomeState {
 
   static const int maxSamples = 50;
 
+  // Запись трека
+  bool isRecordingTrack = false;
+  final ValueNotifier<bool> isRecordingTrackNotifier = ValueNotifier(false);
+
   void disposeNotifiers() {
     gpsDataNotifier.dispose();
     headingNotifier.dispose();
@@ -57,5 +61,6 @@ class HomeState {
     distanceToTarget.dispose();
     bearingToTarget.dispose();
     isGpsCompassActiveNotifier.dispose();
+    isRecordingTrackNotifier.dispose();
   }
 }

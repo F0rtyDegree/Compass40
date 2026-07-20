@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +15,7 @@ import '../controllers/home_state.dart';
 import '../controllers/home_navigation_actions.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
+import 'dart:async';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -37,12 +40,24 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     _sensorService = SensorService();
     _logic = HomeLogic(
       state: _state,
-      setState: (fn) { if (mounted) setState(fn); },
+      setState: (fn) {
+        if (mounted) setState(fn);
+      },
       logService: _logService,
       sensorService: _sensorService,
     );
     Provider.of<ThemeProvider>(context, listen: false).loadTheme();
-    _logic.init();
+    _logic.init().then((_) {
+      // Показываем уведомление о восстановлении трека
+      if (_logic.wasTrackRecovered && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Запись трека восстановлена после сбоя'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -65,14 +80,45 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached) {
-       _logic.dispose();
+      _logic.dispose();
     }
   }
 
   Future<void> _handleExitRequest() async {
     final exitConfirmed = await showExitConfirmDialog(context);
     if (exitConfirmed == true) {
-      await _logic.clearWaypoint();
+      final completer = Completer<void>();
+
+      // Таймаут на случай, если финализация зависнет
+      Future.delayed(const Duration(seconds: 2), () {
+        if (!completer.isCompleted) {
+          print('⚠️ finalizeTrackAndExport timeout, forcing exit');
+          completer.complete();
+        }
+      });
+
+      try {
+        await _logic.finalizeTrackAndExport();
+      } catch (e, stack) {
+        print('❌ Error finalizing track: $e');
+        print(stack);
+      } finally {
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      }
+
+      await completer.future;
+
+      try {
+        await _logic.clearWaypoint();
+      } catch (e) {
+        print('❌ Error clearing waypoint: $e');
+      }
+
+      _logic.dispose();
+
+      // Закрываем приложение безопасным способом
       SystemNavigator.pop();
     }
   }
@@ -89,6 +135,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         appBar: AppBar(
           title: const Text('Compass 40°'),
           actions: [
+            // Кнопка записи трека
+            ValueListenableBuilder<bool>(
+              valueListenable: _state.isRecordingTrackNotifier,
+              builder: (context, isRecording, _) {
+                return IconButton(
+                  icon: Icon(
+                    isRecording ? Icons.stop : Icons.play_arrow,
+                    color: isRecording ? Colors.red : Colors.grey,
+                  ),
+                  onPressed: _logic.toggleTrackRecording,
+                  tooltip: isRecording
+                      ? 'Остановить запись трека'
+                      : 'Начать запись трека',
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.settings),
               onPressed: _actions.openSettings,

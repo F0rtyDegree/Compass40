@@ -3,8 +3,8 @@ echo "$(date) сборка APP ..." >> sizes.log
 
 ./clean
 
-flutter clean 
-flutter pub get --offline
+# flutter clean 
+# flutter pub get --offline
 
 flutter test --no-pub
 flutter build apk --release --no-pub

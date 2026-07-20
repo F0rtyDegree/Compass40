@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -8,6 +9,8 @@ import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_manager.dart';
 import '../services/gps_compass_service.dart';
+import '../services/track_recorder.dart';
+import '../services/gpx_export_service.dart';
 import '../utils/geo_utils.dart';
 import '../utils/angle_utils.dart';
 import '../utils/app_constants.dart';
@@ -24,6 +27,12 @@ class HomeLogic {
   // Локальная подписка на GPS (через GpsManager)
   StreamSubscription<GpsData>? _gpsSubscription;
 
+  // Запись трека
+  final TrackRecorder _trackRecorder = TrackRecorder();
+  bool _wasTrackRecovered = false;
+  bool get wasTrackRecovered => _wasTrackRecovered;
+  bool _disposed = false;
+
   HomeLogic({
     required this.state,
     required this.setState,
@@ -31,47 +40,53 @@ class HomeLogic {
     required this.sensorService,
   });
 
-Future<void> init() async {
-  // Сначала запрашиваем разрешения в основном потоке
-  final status = await Permission.storage.request();
-  if (!status.isGranted) {
-    await Permission.manageExternalStorage.request();
+  Future<void> init() async {
+    // Сначала запрашиваем разрешения в основном потоке
+    final status = await Permission.storage.request();
+    if (!status.isGranted) {
+      await Permission.manageExternalStorage.request();
+    }
+
+    // Инициализируем лог-файл (очищаем старый)
+    await FileLogger.init();
+
+    // Теперь можно писать логи
+    FileLogger.writeLog('Compass40 start');
+    
+    // Продолжаем инициализацию
+    await _loadAllSettings();
+    await loadLogEntries();
+    
+    // Восстановление трека после падения
+    await _checkAndRecoverTrack();
+
+    await _initServicesAndPermissions();
   }
 
-  // Инициализируем лог-файл (очищаем старый)
-  await FileLogger.init();
+void dispose() {
+  if (_disposed) return;
+  _disposed = true;
 
-  // Теперь можно писать логи
-  FileLogger.writeLog('Compass40 start');
-  
-  // Продолжаем инициализацию
-  await _loadAllSettings();
-  await loadLogEntries();
-  await _initServicesAndPermissions();
+  print('dispose(): (7)');
+  print('dispose: (6)');
+  FileLogger.writeLog('Compass40 stop');
+  print('dispose(): (5)');
+
+  _trackRecorder.stop();
+
+  _gpsSubscription?.cancel();
+  _gpsSubscription = null;
+  _gpsManager.dispose();
+
+  print('dispose(): (4)');
+  state.uiUpdateTimer?.cancel();
+  print('dispose(): (3)');
+  print('dispose(): (2)');
+  state.compassSubscription.cancel();
+  print('dispose(): (1)');
+  state.disposeNotifiers();
+  print('dispose(): exit');
 }
-
-  void dispose() {
-    print('dispose(): (7)');
-    print('dispose: (6)');
-    FileLogger.writeLog('Compass40 stop');
-    print('dispose(): (5)');
-
-    // Отменяем подписку на GPS
-    _gpsSubscription?.cancel();
-    _gpsSubscription = null;
-    // Принудительно останавливаем GPS, если вдруг подписка не отменилась
-    _gpsManager.dispose();
-
-    print('dispose(): (4)');
-    state.uiUpdateTimer?.cancel();
-    print('dispose(): (3)');
-    // state.gpsDataSubscription больше не нужна, удаляем
-    print('dispose(): (2)');
-    state.compassSubscription.cancel();
-    print('dispose(): (1)');
-    state.disposeNotifiers();
-    print('dispose(): exit');
-  }
 
   // ----------------------------------------------------------------------
   // Настройки
@@ -411,6 +426,62 @@ Future<void> init() async {
 
   void cancelExternalNavigation() {
     clearTarget();
+  }
+
+  // ----------------------------------------------------------------------
+  // Управление записью трека
+  // ----------------------------------------------------------------------
+
+  Future<void> _checkAndRecoverTrack() async {
+    final wasRecording = await TrackRecorder.recoverIfNeeded();
+    if (wasRecording) {
+      setState(() {
+        state.isRecordingTrack = true;
+        state.isRecordingTrackNotifier.value = true;
+      });
+      _wasTrackRecovered = true;
+    }
+  }
+
+  Future<void> toggleTrackRecording() async {
+    if (state.isRecordingTrack) {
+      await _trackRecorder.stop();
+      setState(() {
+        state.isRecordingTrack = false;
+        state.isRecordingTrackNotifier.value = false;
+      });
+    } else {
+      await _trackRecorder.start();
+      setState(() {
+        state.isRecordingTrack = true;
+        state.isRecordingTrackNotifier.value = true;
+      });
+    }
+  }
+
+  Future<void> finalizeTrackAndExport() async {
+    final trackPoints = await _trackRecorder.getTrackPoints();
+    if (trackPoints.isEmpty) {
+      await _trackRecorder.clear();
+      return;
+    }
+
+    final dir = Directory('/storage/emulated/0/Download/Compass40');
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+
+    final now = DateTime.now();
+    final fileName = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}.gpx';
+    final filePath = '${dir.path}/$fileName';
+
+    await GpxExportService.exportGpx(
+      logItems: state.logItems,
+      trackPoints: trackPoints,
+      outputPath: filePath,
+    );
+
+    await _trackRecorder.clear();
   }
 
   // ----------------------------------------------------------------------
