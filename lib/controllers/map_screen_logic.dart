@@ -208,14 +208,18 @@ class MapScreenLogic {
 
     _calibrationService.updateAnchors(project.anchors);
     _calibrationService.setPinnedAnchorIds(project.pinnedAnchorIds);
-    _calibrationService.restoreState(
-      mode: CalibrationMode.values.firstWhere(
+    
+    final savedMode = CalibrationMode.values.firstWhere(
         (m) => m.name == project.calibrationMode,
         orElse: () => CalibrationMode.affine,
-      ),
+    );
+
+    _calibrationService.restoreState(
+      mode: savedMode,
       manual: project.manualMode,
       pinnedIds: project.pinnedAnchorIds,
     );
+    
     // Восстанавливаем данные ФотоСевера, если они есть
     if (project.photoSeverLinePixels > 0) {
       _calibrationService.updatePhotoSeverData(
@@ -223,8 +227,8 @@ class MapScreenLogic {
         linePixels: project.photoSeverLinePixels,
         northAngle: project.photoSeverNorthAngle,
       );
-      _calibrationService.setCalibrationMode(CalibrationMode.photoSever);
     }
+
     await _loadImageSize();
     _recalculateWorkingPairAndRotation();
     _recalculateCanPlaceTarget();

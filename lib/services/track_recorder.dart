@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import '../controllers/home_state.dart';
 import 'dart:async';
 import 'dart:io';
