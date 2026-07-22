@@ -78,6 +78,7 @@ class TrackRecorder {
     final line = '$time,$lat,$lon\n';
     final file = File(_csvPath!);
     file.writeAsStringSync(line, mode: FileMode.append);
+    print('[TrackRecorder] wrote point: $line');
 
     _pointCount++;
     if (_pointCount >= _saveThreshold) {

@@ -16,6 +16,7 @@ import '../utils/angle_utils.dart';
 import '../utils/app_constants.dart';
 import 'home_state.dart';
 import '../services/file_logger.dart';
+import '../services/background_tracker.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -52,41 +53,42 @@ class HomeLogic {
 
     // Теперь можно писать логи
     FileLogger.writeLog('Compass40 start');
-    
+
     // Продолжаем инициализацию
     await _loadAllSettings();
     await loadLogEntries();
-    
+
     // Восстановление трека после падения
     await _checkAndRecoverTrack();
 
     await _initServicesAndPermissions();
   }
 
-void dispose() {
-  if (_disposed) return;
-  _disposed = true;
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
 
-  print('dispose(): (7)');
-  print('dispose: (6)');
-  FileLogger.writeLog('Compass40 stop');
-  print('dispose(): (5)');
+    print('dispose(): (7)');
+    print('dispose: (6)');
+    FileLogger.writeLog('Compass40 stop');
+    print('dispose(): (5)');
 
-  _trackRecorder.stop();
+    // Остановка фонового сервиса
+    stopBackgroundService();
 
-  _gpsSubscription?.cancel();
-  _gpsSubscription = null;
-  _gpsManager.dispose();
+    _gpsSubscription?.cancel();
+    _gpsSubscription = null;
+    _gpsManager.dispose();
 
-  print('dispose(): (4)');
-  state.uiUpdateTimer?.cancel();
-  print('dispose(): (3)');
-  print('dispose(): (2)');
-  state.compassSubscription.cancel();
-  print('dispose(): (1)');
-  state.disposeNotifiers();
-  print('dispose(): exit');
-}
+    print('dispose(): (4)');
+    state.uiUpdateTimer?.cancel();
+    print('dispose(): (3)');
+    print('dispose(): (2)');
+    state.compassSubscription.cancel();
+    print('dispose(): (1)');
+    state.disposeNotifiers();
+    print('dispose(): exit');
+  }
 
   // ----------------------------------------------------------------------
   // Настройки
@@ -474,7 +476,8 @@ void dispose() {
     }
 
     final now = DateTime.now();
-    final fileName = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}.gpx';
+    final fileName =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}-${now.minute.toString().padLeft(2, '0')}-${now.second.toString().padLeft(2, '0')}.gpx';
     final filePath = '${dir.path}/$fileName';
 
     await GpxExportService.exportGpx(
