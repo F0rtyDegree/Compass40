@@ -15,11 +15,12 @@ mv /home/user/myapp/build/app/outputs/flutter-apk/app-release.apk Compass40.apk
 gzip -c Compass40.apk > Compass40.apk.gz
 rm -rf /home/user/myapp/Compass40.apk
 
-du -h --max-depth=1 /home/user/ | sort -rh >> sizes.log
-du -h --max-depth=1 /home/user/.gradle | sort -rh >> sizes.log
-du -h --max-depth=1 /home/user/.gradle/daemon | sort -rh >> sizes.log
-du -h --max-depth=1 /home/user/.gradle/caches | sort -rh >> sizes.log
-du -h --max-depth=1 /home/user/.gradle/caches/8.12 | sort -rh >> sizes.log
+# du -h --max-depth=1 /home/user/ | sort -rh >> sizes.log
+# du -h --max-depth=1 /home/user/.gradle | sort -rh >> sizes.log
+# du -h --max-depth=1 /home/user/.gradle/daemon | sort -rh >> sizes.log
+# du -h --max-depth=1 /home/user/.gradle/caches | sort -rh >> sizes.log
+# du -h --max-depth=1 /home/user/.gradle/caches/8.12 | sort -rh >> sizes.log
+du -h --max-depth=1 /home/user/.gradle/caches/8.12/transforms | sort -rh >> sizes.log
 df -h .  >> sizes.log
 df -h .
 

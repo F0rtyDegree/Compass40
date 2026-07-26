@@ -39,14 +39,14 @@ class SensorService {
       averagingPeriod:
           prefs.getInt('averagingPeriod') ??
           AppConstants.sensorStabilizationDefaultMs,
-      smoothingFactor: prefs.getDouble('smoothingFactor') ?? 0.5,
+      smoothingFactor: prefs.getDouble('smoothingFactor') ?? AppConstants.smoothingFactorDefault,
       uiUpdatePeriod:
           prefs.getInt('uiUpdatePeriod') ??
           AppConstants.uiUpdatePeriodDefaultMs,
-      gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
+      gpsInterval: prefs.getInt('gpsUpdateInterval') ?? AppConstants.gpsUpdateIntervalDefaultSec,
       compassMode: compassMode,
       autoSwitchSpeedKmh: autoSwitchSpeedKmh,
-      gpsAveragingSamples: prefs.getInt('gpsAveragingSamples') ?? 3,
+      gpsAveragingSamples: prefs.getInt('gpsAveragingSamples') ?? AppConstants.gpsAveragingSamplesDefault,
     );
   }
 
@@ -129,6 +129,6 @@ class SensorSettings {
     required this.gpsInterval,
     required this.compassMode,
     required this.autoSwitchSpeedKmh,
-    this.gpsAveragingSamples = 3,
+    this.gpsAveragingSamples = AppConstants.gpsAveragingSamplesDefault,
   });
 }

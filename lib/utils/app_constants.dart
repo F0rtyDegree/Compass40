@@ -7,7 +7,11 @@ class AppConstants {
 
   static const int uiUpdatePeriodDefaultMs = 250;
   static const int sensorStabilizationDefaultMs = 500;
-  static const double autoSwitchSpeedDefaultKmh = 3.0;
+  static const double autoSwitchSpeedDefaultKmh = 2.5;
+  static const int gpsUpdateIntervalDefaultSec = 1;
+  static const int gpsAveragingSamplesDefault = 3;
+  static const int rotateModeTimeoutDefaultMs = 1000;
+  static const double smoothingFactorDefault = 0.5;
 
   static const double minMapScale = 0.05;
   static const double maxMapScale = 20.0;

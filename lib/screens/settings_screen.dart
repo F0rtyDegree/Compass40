@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/app_constants.dart';
 import 'help_viewer_screen.dart';
 import '../theme_provider.dart';
 import '../controllers/home_state.dart';
@@ -23,7 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _autoSwitchSpeedController = TextEditingController();
   final _gpsAveragingSamplesController = TextEditingController();
   final _rotateModeTimeoutController = TextEditingController();
-  double _smoothingFactor = 0.5;
+  double _smoothingFactor = AppConstants.smoothingFactorDefault;
   CompassMode _compassMode = CompassMode.magnetic;
 
   @override
@@ -38,20 +39,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
     _declinationController.text = (prefs.getDouble('manualDeclination') ?? '')
         .toString();
-    _averagingPeriodController.text = (prefs.getInt('averagingPeriod') ?? 500)
+    _averagingPeriodController.text = (prefs.getInt('averagingPeriod') ?? AppConstants.sensorStabilizationDefaultMs)
         .toString();
-    _gpsIntervalController.text = (prefs.getInt('gpsUpdateInterval') ?? 1)
+    _gpsIntervalController.text = (prefs.getInt('gpsUpdateInterval') ?? AppConstants.gpsUpdateIntervalDefaultSec)
         .toString();
-    _uiUpdatePeriodController.text = (prefs.getInt('uiUpdatePeriod') ?? 250)
+    _uiUpdatePeriodController.text = (prefs.getInt('uiUpdatePeriod') ?? AppConstants.uiUpdatePeriodDefaultMs)
         .toString();
     _autoSwitchSpeedController.text =
-        (prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0).toString();
+        (prefs.getDouble('autoSwitchSpeedKmh') ?? AppConstants.autoSwitchSpeedDefaultKmh).toString();
     _gpsAveragingSamplesController.text =
-        (prefs.getInt('gpsAveragingSamples') ?? 3).toString();
+        (prefs.getInt('gpsAveragingSamples') ?? AppConstants.gpsAveragingSamplesDefault).toString();
     _rotateModeTimeoutController.text =
-        (prefs.getInt('rotateModeTimeoutMs') ?? 1000).toString();
+        (prefs.getInt('rotateModeTimeoutMs') ?? AppConstants.rotateModeTimeoutDefaultMs).toString();
 
-    double smoothingFactor = prefs.getDouble('smoothingFactor') ?? 0.5;
+    double smoothingFactor = prefs.getDouble('smoothingFactor') ?? AppConstants.smoothingFactorDefault;
     smoothingFactor = smoothingFactor.clamp(0.01, 0.99);
     _smoothingFactor = smoothingFactor;
 
@@ -72,25 +73,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     final period = int.tryParse(_averagingPeriodController.text);
-    await prefs.setInt('averagingPeriod', period ?? 500);
+    await prefs.setInt('averagingPeriod', period ?? AppConstants.sensorStabilizationDefaultMs);
 
     final interval = int.tryParse(_gpsIntervalController.text);
-    await prefs.setInt('gpsUpdateInterval', interval ?? 1);
+    await prefs.setInt('gpsUpdateInterval', interval ?? AppConstants.gpsUpdateIntervalDefaultSec);
 
     final uiPeriod = int.tryParse(_uiUpdatePeriodController.text);
-    await prefs.setInt('uiUpdatePeriod', uiPeriod ?? 250);
+    await prefs.setInt('uiUpdatePeriod', uiPeriod ?? AppConstants.uiUpdatePeriodDefaultMs);
 
     await prefs.setDouble('smoothingFactor', _smoothingFactor);
     await prefs.setInt('compassMode', _compassMode.index);
 
     final autoSpeed = double.tryParse(_autoSwitchSpeedController.text);
-    await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? 3.0);
+    await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? AppConstants.autoSwitchSpeedDefaultKmh);
 
     final gpsSamples = int.tryParse(_gpsAveragingSamplesController.text);
-    await prefs.setInt('gpsAveragingSamples', gpsSamples ?? 3);
+    await prefs.setInt('gpsAveragingSamples', gpsSamples ?? AppConstants.gpsAveragingSamplesDefault);
 
     final rotateTimeout = int.tryParse(_rotateModeTimeoutController.text);
-    await prefs.setInt('rotateModeTimeoutMs', rotateTimeout ?? 1000);
+    await prefs.setInt('rotateModeTimeoutMs', rotateTimeout ?? AppConstants.rotateModeTimeoutDefaultMs);
   }
 
   Widget _buildTextFieldRow(
@@ -225,7 +226,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildTextFieldRow(
                       'Частота UI:',
                       _uiUpdatePeriodController,
-                      '250',
+                      '${AppConstants.uiUpdatePeriodDefaultMs}',
                       suffix: 'мс',
                     ),
                     const SizedBox(height: 24),
@@ -300,14 +301,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildTextFieldRow(
                       'Интервал GPS:',
                       _gpsIntervalController,
-                      '1',
+                      '${AppConstants.gpsUpdateIntervalDefaultSec}',
                       suffix: 'сек',
                     ),
                     const SizedBox(height: 16),
                     _buildTextFieldRow(
                       'Сэмплы GPS:',
                       _gpsAveragingSamplesController,
-                      '3',
+                      '${AppConstants.gpsAveragingSamplesDefault}',
                       isInt: true,
                       suffix: 'шт',
                     ),
@@ -354,7 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildTextFieldRow(
                       'Стабилизация сенсоров:',
                       _averagingPeriodController,
-                      '500',
+                      '${AppConstants.sensorStabilizationDefaultMs}',
                       suffix: 'мс',
                     ),
                     const SizedBox(height: 16),
@@ -391,7 +392,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildTextFieldRow(
                       'Сброс режима вращения:',
                       _rotateModeTimeoutController,
-                      '1000',
+                      '${AppConstants.rotateModeTimeoutDefaultMs}',
                       suffix: 'мс',
                     ),
                   ],
