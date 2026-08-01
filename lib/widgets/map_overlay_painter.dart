@@ -83,15 +83,15 @@ class MapOverlayPainter extends CustomPainter {
     if (userPath.length < 2) return;
 
     final solidPathPaint = Paint()
-      ..color = Colors.blue.withValues(alpha: 204 / 255)
-      ..strokeWidth = 3.0
+      ..color = Colors.red.withAlpha((255 * 0.8).round())
+      ..strokeWidth = 6.0
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
 
     final dashedPathPaint = Paint()
-      ..color = Colors.blue.withValues(alpha: 150 / 255)
-      ..strokeWidth = 2.5
+      ..color = Colors.red.withAlpha((255 * 0.6).round())
+      ..strokeWidth = 5.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
@@ -171,14 +171,14 @@ class MapOverlayPainter extends CustomPainter {
 
   void _drawCurrentPosition(Canvas canvas, Offset screen) {
     final outlinePaint = Paint()
-      ..color = Colors.blue.shade500
-      ..strokeWidth = 2.0
+      ..color = Colors.red
+      ..strokeWidth = 4.0
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
 
     final innerShadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 128 / 255)
-      ..strokeWidth = 0.75
+      ..color = Colors.black.withAlpha((255 * 0.5).round())
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round;
 
@@ -242,7 +242,7 @@ class MapOverlayPainter extends CustomPainter {
 
   void _drawLine(Canvas canvas, Offset from, Offset to) {
     final paint = Paint()
-      ..color = Colors.red.withValues(alpha: 180 / 255)
+      ..color = Colors.red.withAlpha((255 * 0.7).round())
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
