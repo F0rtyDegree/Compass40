@@ -88,8 +88,6 @@ class HomeLogic {
     print('dispose(): (1)');
     state.disposeNotifiers();
     print('dispose(): exit');
-
-    exit(0);
   }
 
   // ----------------------------------------------------------------------
