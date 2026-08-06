@@ -3,7 +3,7 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.0.5 Интенты: масштаб карты и автосопровождение
+ver. 6.1.0 Интенты: масштаб карты и автосопровождение
 "
 
 ver. 6.0.3 Убрал Exit(0).
