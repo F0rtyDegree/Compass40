@@ -52,22 +52,17 @@ class MapAnchorManager {
     });
   }
 
-  Future<void> addAnchorFromCurrentGps() async {
-    final gpsData = lastGpsData;
-    if (gpsData?.latitude == null || gpsData?.longitude == null) {
-      showSnackBar('Нет сигнала GPS');
-      return;
-    }
-    if (state.crosshairImagePoint == null) {
-      showSnackBar('Прицел не определён');
-      return;
-    }
-    await _addAnchor(
-      imagePoint: state.crosshairImagePoint!,
-      latitude: gpsData!.latitude!,
-      longitude: gpsData.longitude!,
-    );
+Future<void> addAnchorFromGps(GpsData gpsData, Offset imagePoint) async {
+  if (gpsData.latitude == null || gpsData.longitude == null) {
+    showSnackBar('Нет сигнала GPS');
+    return;
   }
+  await _addAnchor(
+    imagePoint: imagePoint,
+    latitude: gpsData.latitude!,
+    longitude: gpsData.longitude!,
+  );
+}
 
   Future<void> addAnchorFromClipboard() async {
     ClipboardData? clipboardData;

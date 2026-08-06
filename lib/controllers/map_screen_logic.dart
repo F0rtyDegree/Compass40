@@ -579,9 +579,15 @@ class MapScreenLogic {
   // Якоря
   // --------------------------------------------------------
 
-  Future<void> addAnchorFromCurrentGps() async {
-    await anchorManager.addAnchorFromCurrentGps();
+Future<void> addAnchorFromCurrentGps() async {
+  final gps = gpsDataNotifier.value;   // фиксируем на момент вызова
+  final crosshair = state.crosshairImagePoint;
+  if (crosshair == null) {
+    showSnackBar('Прицел не определён');
+    return;
   }
+  await anchorManager.addAnchorFromGps(gps, crosshair);
+}
 
   Future<void> addAnchorFromClipboard() async {
     await anchorManager.addAnchorFromClipboard();
