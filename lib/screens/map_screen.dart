@@ -11,6 +11,7 @@ import '../widgets/map_zoom_buttons.dart';
 import 'help_viewer_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gps_info/gps_info.dart';
+import '../controllers/map_screen_controller.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
@@ -75,10 +76,12 @@ class _MapScreenState extends State<MapScreen> {
       askDistanceDialog: _showPhotoSeverDistanceDialog,
     );
     _logic.init();
+    MapScreenController().register(_logic); // <-- добавлено
   }
 
   @override
   void dispose() {
+    MapScreenController().unregister(); // <-- добавлено
     _logic.dispose();
     super.dispose();
   }

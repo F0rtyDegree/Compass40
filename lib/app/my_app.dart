@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../screens/home_screen.dart';
 import '../theme_provider.dart';
 
+import '../main.dart' as app_main;
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -13,6 +15,7 @@ class MyApp extends StatelessWidget {
       builder: (context, themeProvider, child) {
         return MaterialApp(
           title: 'Compass 40°',
+          navigatorKey: app_main.navigatorKey,
           theme: ThemeData(
             brightness: Brightness.light,
             colorScheme: ColorScheme.fromSeed(
