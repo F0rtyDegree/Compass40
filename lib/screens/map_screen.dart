@@ -12,6 +12,7 @@ import 'help_viewer_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gps_info/gps_info.dart';
 import '../controllers/map_screen_controller.dart';
+import 'package:flutter/services.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
@@ -42,6 +43,9 @@ class _MapScreenState extends State<MapScreen> {
   final MapStorageService _storageService = MapStorageService();
   final MapScreenState _state = MapScreenState();
   late final MapScreenLogic _logic;
+  final MethodChannel _controlChannel = MethodChannel(
+    'by.fortydegree.compass40/control',
+  );
 
   Offset _gestureStartTranslation = Offset.zero;
   double _gestureStartScale = 1.0;
@@ -76,12 +80,14 @@ class _MapScreenState extends State<MapScreen> {
       askDistanceDialog: _showPhotoSeverDistanceDialog,
     );
     _logic.init();
-    MapScreenController().register(_logic); // <-- добавлено
+    MapScreenController().register(_logic);
+    _controlChannel.invokeMethod('setMapActive', true);
   }
 
   @override
   void dispose() {
-    MapScreenController().unregister(); // <-- добавлено
+    _controlChannel.invokeMethod('setMapActive', false);
+    MapScreenController().unregister();
     _logic.dispose();
     super.dispose();
   }
