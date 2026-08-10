@@ -1,4 +1,3 @@
-
 import 'package:flutter/foundation.dart';
 
 /// Приводит азимут к диапазону [0, 360), где 360 становится 0.

@@ -1,5 +1,6 @@
 // ignore_for_file: avoid_print
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter/services.dart';
 
 final FlutterBackgroundService _service = FlutterBackgroundService();
 
@@ -14,6 +15,17 @@ void initializeBackgroundService() {
     ),
     iosConfiguration: IosConfiguration(),
   );
+}
+
+final MethodChannel _notificationChannel = MethodChannel(
+  'by.fortydegree.compass40/notification',
+);
+
+void updateNotification({String? title, String? content}) {
+  _notificationChannel.invokeMethod('updateNotification', {
+    'title': title ?? 'Compass 40°',
+    'content': content ?? 'Компас активен',
+  });
 }
 
 void startBackgroundService() {

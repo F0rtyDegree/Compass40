@@ -5,6 +5,7 @@
   channel = "stable-24.05"; # or "unstable"
   # Use https://search.nixos.org/packages to find packages
   packages = [
+    pkgs.flutter
     pkgs.jdk21
     pkgs.unzip
   ];

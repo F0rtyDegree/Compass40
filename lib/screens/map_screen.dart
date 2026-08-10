@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gps_info/gps_info.dart';
 import '../controllers/map_screen_controller.dart';
 import 'package:flutter/services.dart';
+import '../services/background_tracker.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
@@ -80,6 +81,7 @@ class _MapScreenState extends State<MapScreen> {
       askDistanceDialog: _showPhotoSeverDistanceDialog,
     );
     _logic.init();
+    updateNotification(title: 'Карта', content: 'Режим карты активен');
     MapScreenController().register(_logic);
     _controlChannel.invokeMethod('setMapActive', true);
   }
@@ -88,6 +90,7 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _controlChannel.invokeMethod('setMapActive', false);
     MapScreenController().unregister();
+    updateNotification(title: 'Compass 40°', content: 'Компас активен');
     _logic.dispose();
     super.dispose();
   }

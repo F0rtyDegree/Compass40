@@ -2,6 +2,7 @@
 
 # Список всех файлов в нужном порядке
 files=(
+    "info"
     "pubspec.yaml"
     "analysis_options.yaml"
     "android/app/src/main/AndroidManifest.xml"
