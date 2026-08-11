@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/map_transform_state.dart';

@@ -89,7 +89,7 @@ class MainActivity : FlutterActivity() {
             val notification = NotificationCompat.Builder(this, "compass40_tracking_channel")
                 .setContentTitle(title)
                 .setContentText(content)
-                .setSmallIcon(android.R.drawable.ic_menu_compass) // замените на свою иконку
+                .setSmallIcon(R.drawable.ic_bg_service_small)
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
