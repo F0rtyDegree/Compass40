@@ -81,6 +81,7 @@ class _MapScreenState extends State<MapScreen> {
       askDistanceDialog: _showPhotoSeverDistanceDialog,
     );
     _logic.init();
+    print('🔔 MapScreen.initState: calling updateNotification with "Map"');
     updateNotification(title: 'Карта', content: 'Режим карты активен');
     MapScreenController().register(_logic);
     _controlChannel.invokeMethod('setMapActive', true);
@@ -90,6 +91,7 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _controlChannel.invokeMethod('setMapActive', false);
     MapScreenController().unregister();
+    print('🔔 MapScreen.dispose: calling updateNotification with "Compass activate"');
     updateNotification(title: 'Compass 40°', content: 'Компас активен');
     _logic.dispose();
     super.dispose();

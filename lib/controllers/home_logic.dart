@@ -447,31 +447,31 @@ class HomeLogic {
     }
   }
 
-Future<void> toggleTrackRecording() async {
-  if (state.isRecordingTrack) {
-    await _trackRecorder.stop();
-    setState(() {
-      state.isRecordingTrack = false;
-      state.isRecordingTrackNotifier.value = false;
-    });
-    // Уведомление: запись остановлена
-    updateNotification(
-      title: 'Compass 40°',
-      content: 'Компас активен',
-    );
-  } else {
-    await _trackRecorder.start();
-    setState(() {
-      state.isRecordingTrack = true;
-      state.isRecordingTrackNotifier.value = true;
-    });
-    // Уведомление: запись началась
-    updateNotification(
-      title: 'Запись трека',
-      content: 'Идёт запись...',
-    );
+  Future<void> toggleTrackRecording() async {
+    if (state.isRecordingTrack) {
+      await _trackRecorder.stop();
+      setState(() {
+        state.isRecordingTrack = false;
+        state.isRecordingTrackNotifier.value = false;
+      });
+      // Уведомление: запись остановлена
+      print(
+        '🔔 toggleTrackRecording: calling updateNotification with "stop Record"',
+      );
+      updateNotification(title: 'Compass 40°', content: 'Компас активен');
+    } else {
+      await _trackRecorder.start();
+      setState(() {
+        state.isRecordingTrack = true;
+        state.isRecordingTrackNotifier.value = true;
+      });
+      // Уведомление: запись началась
+      print(
+        '🔔 toggleTrackRecording: calling updateNotification with "start Record"',
+      );
+      updateNotification(title: 'Запись трека', content: 'Идёт запись...');
+    }
   }
-}
 
   Future<void> finalizeTrackAndExport() async {
     final trackPoints = await _trackRecorder.getTrackPoints();

@@ -22,6 +22,7 @@ final MethodChannel _notificationChannel = MethodChannel(
 );
 
 void updateNotification({String? title, String? content}) {
+  print('🔔 updateNotification called with title: $title, content: $content');
   _notificationChannel.invokeMethod('updateNotification', {
     'title': title ?? 'Compass 40°',
     'content': content ?? 'Компас активен',
