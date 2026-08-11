@@ -84,7 +84,7 @@ class _MapScreenState extends State<MapScreen> {
     );
     _logic.init();
     print('🔔 MapScreen.initState: calling updateNotification with "Map"');
-    updateNotification(title: 'Карта', content: 'Режим карты активен');
+    updateNotification(title: 'Режим - Карта');
     MapScreenController().register(_logic);
     _controlChannel.invokeMethod('setMapActive', true);
   }
@@ -94,7 +94,7 @@ class _MapScreenState extends State<MapScreen> {
     _controlChannel.invokeMethod('setMapActive', false);
     MapScreenController().unregister();
     print('🔔 MapScreen.dispose: calling updateNotification with "Compass activate"');
-    updateNotification(title: 'Compass 40°', content: 'Компас активен');
+    updateNotification(title: 'Режим - Компас');
     _logic.dispose();
     super.dispose();
   }

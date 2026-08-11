@@ -21,11 +21,16 @@ final MethodChannel _notificationChannel = MethodChannel(
   'by.fortydegree.compass40/notification',
 );
 
+String _currentTitle = '';
+String _currentContent = '';
+
 void updateNotification({String? title, String? content}) {
-  print('🔔 updateNotification called with title: $title, content: $content');
+  if (title != null) _currentTitle = title;
+  if (content != null) _currentContent = content;
+  print('🔔 updateNotification called with title: $_currentTitle, content: $_currentContent');
   _notificationChannel.invokeMethod('updateNotification', {
-    'title': title ?? 'Compass 40°',
-    'content': content ?? 'Компас активен',
+    'title': _currentTitle,
+    'content': _currentContent,
   });
 }
 

@@ -458,7 +458,7 @@ class HomeLogic {
       print(
         '🔔 toggleTrackRecording: calling updateNotification with "stop Record"',
       );
-      updateNotification(title: 'Compass 40°', content: 'Компас активен');
+      updateNotification(content: 'Запись трэка остановлена');
     } else {
       await _trackRecorder.start();
       setState(() {
@@ -469,7 +469,7 @@ class HomeLogic {
       print(
         '🔔 toggleTrackRecording: calling updateNotification with "start Record"',
       );
-      updateNotification(title: 'Запись трека', content: 'Идёт запись...');
+      updateNotification(content: 'Идёт запись трэка...');
     }
   }
 

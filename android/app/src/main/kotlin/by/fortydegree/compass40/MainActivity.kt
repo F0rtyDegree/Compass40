@@ -63,8 +63,8 @@ class MainActivity : FlutterActivity() {
                 .setMethodCallHandler { call, result ->
                     when (call.method) {
                         "updateNotification" -> {
-                            val title = call.argument<String>("title") ?: "Compass 40°"
-                            val content = call.argument<String>("content") ?: "Компас активен"
+                            val title = call.argument<String>("title") ?: "Режим - Компас"
+                            val content = call.argument<String>("content") ?: ""
                             updateForegroundNotification(title, content)
                             result.success(null)
                         }

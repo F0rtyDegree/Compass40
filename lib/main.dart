@@ -15,7 +15,7 @@ import 'package:compass40/controllers/map_screen_controller.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final FlutterLocalNotificationsPlugin _notificationsPlugin =
     FlutterLocalNotificationsPlugin();
-    
+
 Future<void> _handleIntent(MethodCall call) async {
   switch (call.method) {
     case 'by.fortydegree.compass40.ACTION_ZOOM_IN':
@@ -55,6 +55,10 @@ void main() async {
   // Инициализация фонового сервиса
   initializeBackgroundService();
   startBackgroundService();
+
+  // Даём сервису время создать уведомление, затем обновляем
+  await Future.delayed(const Duration(milliseconds: 300));
+  updateNotification(title: 'Режим - Компас', content: 'Поехали !!!');
 
   // Регистрируем обработчик интентов
   const MethodChannel intentChannel = MethodChannel(
