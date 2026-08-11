@@ -37,9 +37,10 @@ class MapScreenLogic {
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
   final Function(double lat, double lon, double? distance, String timeStr)?
-  onAnchorAdded;
+      onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
+  final VoidCallback? onAnchorsChangedForStatus;
   late final PhotoSeverController photoSeverController;
 
   GpsData? _lastGpsData;
@@ -59,6 +60,7 @@ class MapScreenLogic {
     this.onAnchorAdded,
     this.onStartNavigation,
     this.onCancelNavigation,
+    this.onAnchorsChangedForStatus,
     required this.askDistanceDialog,
   });
   bool get canPlaceTarget => state.canPlaceTarget;
@@ -674,6 +676,8 @@ Future<void> addAnchorFromCurrentGps() async {
         }
       }
     });
+
+    onAnchorsChangedForStatus?.call();
   }
 
   void _recalculateCanPlaceTarget() {
