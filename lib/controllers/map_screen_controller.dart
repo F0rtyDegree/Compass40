@@ -26,4 +26,8 @@ class MapScreenController {
   void toggleFollowMode() {
     _logic?.toggleFollowMode();
   }
+
+  void nextCalibrationMode() {
+    _logic?.nextCalibrationMode();
+  }
 }

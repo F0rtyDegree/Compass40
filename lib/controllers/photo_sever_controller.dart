@@ -12,6 +12,7 @@ class PhotoSeverController {
   final void Function(MapTransformState newTransform) updateTransform;
   final MapStorageService storageService;
   final Offset Function(Offset imagePoint) imageToScreen;
+  final VoidCallback? onFinish;
 
   bool isActive = false;
   final List<Offset> points = [];
@@ -26,6 +27,7 @@ class PhotoSeverController {
     required this.storageService,
     required this.imageToScreen,
     required this.magneticDeclination,
+    this.onFinish,
   });
 
   void start() {
@@ -134,8 +136,11 @@ class PhotoSeverController {
       isActive = false;
       points.clear();
     });
-        // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
+    // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
     state.mapRotation = -math.pi / 2 - northAngle;
     showSnackBar('Калибровка ФотоСевер сохранена');
+    
+    // Вызываем callback после сохранения
+    onFinish?.call();
   }
 }

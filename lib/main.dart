@@ -27,6 +27,9 @@ Future<void> _handleIntent(MethodCall call) async {
     case 'by.fortydegree.compass40.ACTION_TOGGLE_FOLLOW':
       MapScreenController().toggleFollowMode();
       break;
+    case 'by.fortydegree.compass40.ACTION_NEXT_CALIBRATION_MODE':
+      MapScreenController().nextCalibrationMode();
+      break;
   }
 }
 

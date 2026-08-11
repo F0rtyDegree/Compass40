@@ -114,9 +114,12 @@
 
 | Действие | Intent Action |
 |----------|---------------|
+| Действие | Intent Action |
+|----------|---------------|
 | Увеличить масштаб | `by.fortydegree.compass40.ACTION_ZOOM_IN` |
 | Уменьшить масштаб | `by.fortydegree.compass40.ACTION_ZOOM_OUT` |
 | Включить/выключить автосопровождение | `by.fortydegree.compass40.ACTION_TOGGLE_FOLLOW` |
+| Переключить режим привязки | `by.fortydegree.compass40.ACTION_NEXT_CALIBRATION_MODE` |
 
 **Как использовать в Tasker:**
 1. Создайте действие **Send Intent**.

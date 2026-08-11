@@ -186,42 +186,23 @@ class MapCalibrationService {
   }
 
   void setCalibrationMode(CalibrationMode mode) {
-    // Если переключаемся в P, сохраняем текущий активный якорь (если есть)
+    // При переключении в режим P закрепляем только последний добавленный якорь
     if (mode == CalibrationMode.photoSever) {
-      // Если уже есть закреплённые якоря, оставляем их (возможно, один)
-      if (_pinnedAnchorIds.isEmpty && _anchors.isNotEmpty) {
-        // Пытаемся взять активный якорь из текущего трансформа
-        if (_currentTransform is _AffineTransformerAdapter) {
-          final activeIds = (_currentTransform as _AffineTransformerAdapter)
-              ._selectedPoints
-              .map((a) => a.id)
-              .toSet();
-          if (activeIds.length == 1) {
-            _pinnedAnchorIds.addAll(activeIds);
-          } else {
-            // Если активных несколько, берём последний добавленный якорь
-            _pinnedAnchorIds.add(_anchors.last.id);
-          }
-        } else if (_currentTransform is SimilarityTransform) {
-          final ids =
-              (_currentTransform as SimilarityTransform).activeAnchorIds;
-          if (ids != null && ids.isNotEmpty) {
-            _pinnedAnchorIds.add(ids.first);
-          } else {
-            _pinnedAnchorIds.add(_anchors.last.id);
-          }
-        } else {
-          _pinnedAnchorIds.add(_anchors.last.id);
-        }
+      // Очищаем все закреплённые точки
+      _pinnedAnchorIds.clear();
+      // Берём последний якорь из общего списка (если есть)
+      if (_anchors.isNotEmpty) {
+        _pinnedAnchorIds.add(_anchors.last.id);
       }
+      // В режиме P всегда ручной режим (для отображения одного якоря)
       _manualMode = _pinnedAnchorIds.isNotEmpty;
     } else {
+      // Для остальных режимов ручной режим выключен
       _manualMode = false;
     }
     _mode = mode;
     _buildTransformFromAnchors();
   }
-
   void enableManualMode() {
     _manualMode = true;
     _buildTransformFromAnchors();

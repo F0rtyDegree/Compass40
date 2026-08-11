@@ -37,7 +37,7 @@ class MapScreenLogic {
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
   final Function(double lat, double lon, double? distance, String timeStr)?
-      onAnchorAdded;
+  onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   final VoidCallback? onAnchorsChangedForStatus;
@@ -148,6 +148,17 @@ class MapScreenLogic {
       storageService: storageService,
       imageToScreen: imageToScreen,
       magneticDeclination: magneticDeclination,
+      onFinish: () {
+        // Переключаем режим на ФотоСевер
+        _calibrationService.setCalibrationMode(CalibrationMode.photoSever);
+        _calibrationService.updatePhotoSeverData(
+          lineMeters: state.project!.photoSeverLineMeters,
+          linePixels: state.project!.photoSeverLinePixels,
+          northAngle: state.project!.photoSeverNorthAngle,
+        );
+        // Обновляем UI (буква режима в левом верхнем углу)
+        setState(() {});
+      },
     );
     await followController.loadRotateModeTimeout();
     _calibrationService.setMagneticDeclination(magneticDeclination);
@@ -210,10 +221,10 @@ class MapScreenLogic {
 
     _calibrationService.updateAnchors(project.anchors);
     _calibrationService.setPinnedAnchorIds(project.pinnedAnchorIds);
-    
+
     final savedMode = CalibrationMode.values.firstWhere(
-        (m) => m.name == project.calibrationMode,
-        orElse: () => CalibrationMode.affine,
+      (m) => m.name == project.calibrationMode,
+      orElse: () => CalibrationMode.affine,
     );
 
     _calibrationService.restoreState(
@@ -221,7 +232,7 @@ class MapScreenLogic {
       manual: project.manualMode,
       pinnedIds: project.pinnedAnchorIds,
     );
-    
+
     // Восстанавливаем данные ФотоСевера, если они есть
     if (project.photoSeverLinePixels > 0) {
       _calibrationService.updatePhotoSeverData(
@@ -581,15 +592,15 @@ class MapScreenLogic {
   // Якоря
   // --------------------------------------------------------
 
-Future<void> addAnchorFromCurrentGps() async {
-  final gps = gpsDataNotifier.value;   // фиксируем на момент вызова
-  final crosshair = state.crosshairImagePoint;
-  if (crosshair == null) {
-    showSnackBar('Прицел не определён');
-    return;
+  Future<void> addAnchorFromCurrentGps() async {
+    final gps = gpsDataNotifier.value; // фиксируем на момент вызова
+    final crosshair = state.crosshairImagePoint;
+    if (crosshair == null) {
+      showSnackBar('Прицел не определён');
+      return;
+    }
+    await anchorManager.addAnchorFromGps(gps, crosshair);
   }
-  await anchorManager.addAnchorFromGps(gps, crosshair);
-}
 
   Future<void> addAnchorFromClipboard() async {
     await anchorManager.addAnchorFromClipboard();
@@ -625,8 +636,35 @@ Future<void> addAnchorFromCurrentGps() async {
 
   void showModePicker(BuildContext context) {
     anchorManager.showModePicker(context);
+    // После выбора режима пересчитываем поворот и обновляем статус
+    _recalculateWorkingPairAndRotation();
   }
 
+  void nextCalibrationMode() {
+    const order = [
+      CalibrationMode.affine,
+      CalibrationMode.pairFarthest,
+      CalibrationMode.pairNearest,
+      CalibrationMode.photoSever,
+    ];
+    final current = _calibrationService.currentMode;
+    int index = order.indexOf(current);
+    if (index == -1) index = 0;
+
+    for (int i = 1; i <= order.length; i++) {
+      final nextIndex = (index + i) % order.length;
+      final candidate = order[nextIndex];
+      if (candidate == CalibrationMode.photoSever) {
+        final project = state.project;
+        if (project == null || project.photoSeverLinePixels == 0) {
+          continue; // Пропускаем P, если нет данных
+        }
+      }
+      _calibrationService.setCalibrationMode(candidate);
+      _recalculateWorkingPairAndRotation();
+      return;
+    }
+  }
   // --------------------------------------------------------
   // Цели
   // --------------------------------------------------------

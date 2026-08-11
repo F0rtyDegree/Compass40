@@ -52,17 +52,17 @@ class MapAnchorManager {
     });
   }
 
-Future<void> addAnchorFromGps(GpsData gpsData, Offset imagePoint) async {
-  if (gpsData.latitude == null || gpsData.longitude == null) {
-    showSnackBar('Нет сигнала GPS');
-    return;
+  Future<void> addAnchorFromGps(GpsData gpsData, Offset imagePoint) async {
+    if (gpsData.latitude == null || gpsData.longitude == null) {
+      showSnackBar('Нет сигнала GPS');
+      return;
+    }
+    await _addAnchor(
+      imagePoint: imagePoint,
+      latitude: gpsData.latitude!,
+      longitude: gpsData.longitude!,
+    );
   }
-  await _addAnchor(
-    imagePoint: imagePoint,
-    latitude: gpsData.latitude!,
-    longitude: gpsData.longitude!,
-  );
-}
 
   Future<void> addAnchorFromClipboard() async {
     ClipboardData? clipboardData;
@@ -259,6 +259,11 @@ Future<void> addAnchorFromGps(GpsData gpsData, Offset imagePoint) async {
       longitude: longitude,
       createdAt: DateTime.now(),
     );
+
+    // Если текущий режим ФотоСевер, делаем эту точку единственной активной
+    if (calibrationService.currentMode == CalibrationMode.photoSever) {
+      calibrationService.setPinnedAnchorIds([anchor.id]);
+    }
 
     final updatedAnchors = [...project.anchors, anchor];
     MapProject updatedProject = project.copyWith(
