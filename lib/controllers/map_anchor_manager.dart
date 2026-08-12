@@ -374,7 +374,7 @@ class MapAnchorManager {
     onAnchorsChanged();
   }
 
-  void showModePicker(BuildContext context) {
+  Future<void> showModePicker(BuildContext context) async {
     final project = state.project;
     final anchors = project?.anchors ?? [];
     final anchorCount = anchors.length;
@@ -406,7 +406,7 @@ class MapAnchorManager {
       showSnackBar(hint);
     }
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (ctx) => SimpleDialog(
         title: const Text('Режим привязки'),
@@ -418,6 +418,7 @@ class MapAnchorManager {
                 showHintAndClose('Нужно ФотоСевер & 1 якорь', ctx);
                 return;
               }
+              print('🔄 Выбран режим P');
               calibrationService.setCalibrationMode(CalibrationMode.photoSever);
               calibrationService.updatePhotoSeverData(
                 lineMeters: project.photoSeverLineMeters,
@@ -432,8 +433,7 @@ class MapAnchorManager {
               'ФотоСевер (P)',
               style: TextStyle(color: canPhotoSever ? null : Colors.grey),
             ),
-          ),
-          // === Ручной (M) ===
+          ), // === Ручной (M) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canManual) {
@@ -495,6 +495,9 @@ class MapAnchorManager {
   }
 
   void _saveCalibrationState() {
+    print(
+      '💾 _saveCalibrationState called, mode=${calibrationService.currentMode}, pinned=${calibrationService.pinnedAnchorIdsList}',
+    );
     final project = state.project;
     if (project != null) {
       final updated = project.copyWith(
@@ -506,6 +509,10 @@ class MapAnchorManager {
       setState(() {
         state.project = updated;
       });
+      // ✅ Обновляем статус привязки
+      print('💾 calling onAnchorsChanged()');
+      onAnchorsChanged();
+      print('💾 after onAnchorsChanged()');
     }
   }
 

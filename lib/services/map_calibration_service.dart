@@ -86,6 +86,7 @@ class MapCalibrationService {
   CalibrationMode _mode = CalibrationMode.affine;
   final Set<String> _pinnedAnchorIds = {};
   bool _manualMode = false; // true, если пользователь хоть раз коснулся якоря
+  VoidCallback? onTransformChanged;
 
   // ✅ Данные ФотоСевера для режима P
   double _psLineMeters = 0.0;
@@ -203,6 +204,7 @@ class MapCalibrationService {
     _mode = mode;
     _buildTransformFromAnchors();
   }
+
   void enableManualMode() {
     _manualMode = true;
     _buildTransformFromAnchors();
@@ -460,6 +462,7 @@ class MapCalibrationService {
 
     // Если режим не распознан — сброс
     _currentTransform = null;
+    onTransformChanged?.call();
   }
 
   GeoPoint? imagePointToGeoFromCurrent(Offset imagePoint) {
@@ -528,12 +531,16 @@ class MapCalibrationService {
     final dLat = b.latitude - a.latitude;
 
     // угол в географической системе: направление от a к b
-    final geoAngle = math.atan2(dLon * math.cos(a.latitude * math.pi / 180), dLat);
+    final geoAngle = math.atan2(
+      dLon * math.cos(a.latitude * math.pi / 180),
+      dLat,
+    );
     // угол в системе координат изображения (Y вниз)
     final imageAngle = math.atan2(dx, -dy);
     // необходимая коррекция поворота карты
     return geoAngle - imageAngle;
   }
+
   BearingAndDistance bearingAndDistance({
     required double fromLat,
     required double fromLon,

@@ -634,8 +634,8 @@ class MapScreenLogic {
   // Смена режима (меню)
   // --------------------------------------------------------
 
-  void showModePicker(BuildContext context) {
-    anchorManager.showModePicker(context);
+  Future<void> showModePicker(BuildContext context) async {
+    await anchorManager.showModePicker(context);
     // После выбора режима пересчитываем поворот и обновляем статус
     _recalculateWorkingPairAndRotation();
   }
@@ -694,7 +694,14 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void _recalculateWorkingPairAndRotation() {
+    print(
+      '🔁 _recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
+    );
     final anchors = state.project?.anchors ?? [];
+    // Перестраиваем трансформацию на основе текущих якорей и режима
+    print('🔁 before updateAnchors, used=${_calibrationService.usedAnchorCount}');
+    _calibrationService.updateAnchors(anchors);
+    print('🔁 after updateAnchors, used=${_calibrationService.usedAnchorCount}');
     final newPair = _calibrationService.selectWorkingPair(anchors);
     final declinationRad = magneticDeclination * math.pi / 180;
 
@@ -715,9 +722,11 @@ class MapScreenLogic {
       }
     });
 
+    print(
+      '🔁 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
+    );
     onAnchorsChangedForStatus?.call();
   }
-
   void _recalculateCanPlaceTarget() {
     setState(() {
       state.canPlaceTarget = true;

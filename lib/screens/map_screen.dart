@@ -24,7 +24,7 @@ class MapScreen extends StatefulWidget {
   final double magneticDeclination;
   final ValueNotifier<double> headingNotifier;
   final Function(double lat, double lon, double? distance, String timeStr)?
-      onAnchorAdded;
+  onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
 
@@ -62,28 +62,30 @@ class _MapScreenState extends State<MapScreen> {
   void initState() {
     super.initState();
     _logic = MapScreenLogic(
-        state: _state,
-        setState: (fn) {
-          if (mounted) setState(fn);
-        },
-        showSnackBar: (msg) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
-            );
-          }
-        },
-        storageService: _storageService,
-        gpsDataNotifier: widget.gpsDataNotifier,
-        magneticDeclination: widget.magneticDeclination,
-        headingNotifier: widget.headingNotifier,
-        onAnchorAdded: widget.onAnchorAdded,
-        onStartNavigation: widget.onStartNavigation,
-        onCancelNavigation: widget.onCancelNavigation,
-        askDistanceDialog: _showPhotoSeverDistanceDialog,
-        onAnchorsChangedForStatus: _updateStatusText, // <-- Наша новая связь
+      state: _state,
+      setState: (fn) {
+        if (mounted) setState(fn);
+      },
+      showSnackBar: (msg) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
+          );
+        }
+      },
+      storageService: _storageService,
+      gpsDataNotifier: widget.gpsDataNotifier,
+      magneticDeclination: widget.magneticDeclination,
+      headingNotifier: widget.headingNotifier,
+      onAnchorAdded: widget.onAnchorAdded,
+      onStartNavigation: widget.onStartNavigation,
+      onCancelNavigation: widget.onCancelNavigation,
+      askDistanceDialog: _showPhotoSeverDistanceDialog,
+      onAnchorsChangedForStatus: _updateStatusText, // <-- Наша новая связь
     );
-    _logic.init().then((_) => _updateStatusText()); // Обновляем статус после инициализации
+    _logic.init().then(
+      (_) => _updateStatusText(),
+    ); // Обновляем статус после инициализации
 
     MapScreenController().register(_logic);
     _controlChannel.invokeMethod('setMapActive', true);
@@ -92,6 +94,7 @@ class _MapScreenState extends State<MapScreen> {
   void _updateStatusText() {
     final used = _logic.usedAnchorCount;
     final total = _logic.totalAnchorCount;
+    print('📊 _updateStatusText: used=$used, total=$total');
     updateNotification(title: 'Режим - Карта $used/$total');
   }
 
@@ -99,7 +102,9 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _controlChannel.invokeMethod('setMapActive', false);
     MapScreenController().unregister();
-    print('🔔 MapScreen.dispose: calling updateNotification with "Compass activate"');
+    print(
+      '🔔 MapScreen.dispose: calling updateNotification with "Compass activate"',
+    );
     updateNotification(title: 'Режим - Компас');
     _logic.dispose();
     super.dispose();
@@ -692,7 +697,9 @@ class _MapScreenState extends State<MapScreen> {
   Widget _buildModeIndicator() {
     final letter = _logic.calibrationModeLetter;
     return GestureDetector(
-      onTap: () => _logic.showModePicker(context),
+      onTap: () async {
+        await _logic.showModePicker(context);
+      },
       child: Container(
         width: 32,
         height: 32,
