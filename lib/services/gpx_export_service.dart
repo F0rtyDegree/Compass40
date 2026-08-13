@@ -46,9 +46,59 @@ class GpxExportService {
       buffer.writeln('  </wpt>');
     }
 
+    // --- 2.5. Waypoints: Точки привязки (MapAnchorLogEntry) ---
+    final anchorEntries = logItems.whereType<MapAnchorLogEntry>().toList();
+    anchorEntries.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    for (int i = 0; i < anchorEntries.length; i++) {
+      final entry = anchorEntries[i];
+      final lat = entry.latitude.toStringAsFixed(6);
+      final lon = entry.longitude.toStringAsFixed(6);
+      // Берём дату из entry.timestamp (она корректная) и время из entry.timeStr
+      final datePart = entry.timestamp
+          .toUtc()
+          .toIso8601String()
+          .split('T')
+          .first; // "2026-08-13"
+      final timePart = entry.timeStr.split(' ').first; // "13:35:22.00309"
+      // Разбираем локальное время (Минск, UTC+3)
+      final parts = timePart.split(':');
+      final hours = int.parse(parts[0]);
+      final minutes = int.parse(parts[1]);
+      final secParts = parts[2].split('.');
+      final seconds = int.parse(secParts[0]);
+      final millis = int.parse(secParts[1].padRight(3, '0').substring(0, 3));
+      // Создаём DateTime в локальном времени (без указания зоны, но мы знаем, что это UTC+3)
+      final localDateTime = DateTime(
+        int.parse(datePart.split('-')[0]),
+        int.parse(datePart.split('-')[1]),
+        int.parse(datePart.split('-')[2]),
+        hours,
+        minutes,
+        seconds,
+        millis,
+      );
+      // Переводим в UTC (вычитаем 3 часа)
+      final utcDateTime = localDateTime.toUtc();
+      final time = utcDateTime.toIso8601String();
+      final name = 'ТП${i + 1}';
+      String desc = '';
+      if (entry.distanceFromPrevious != null) {
+        desc = '${entry.distanceFromPrevious!.round()}м';
+      }
+      buffer.writeln('  <wpt lat="$lat" lon="$lon">');
+      buffer.writeln('    <time>$time</time>');
+      buffer.writeln('    <name>$name</name>');
+      if (desc.isNotEmpty) {
+        buffer.writeln('    <desc><![CDATA[$desc]]></desc>');
+      }
+      buffer.writeln('  </wpt>');
+    }
     // --- 3. Трек (из CSV) ---
     if (trackPoints.isNotEmpty) {
-      final fileName = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+      final fileName = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .replaceAll('.', '-');
       buffer.writeln('  <trk>');
       buffer.writeln('    <name>$fileName</name>');
       buffer.writeln('    <trkseg>');

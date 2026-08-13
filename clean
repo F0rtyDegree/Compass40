@@ -13,6 +13,8 @@ rm -rf /home/user/.gradle/caches/transforms-*
 
 # вызовет последуюющую очень долгую сборку но реально очистит место
 # rm -rf ~/.gradle/caches
+# find ~/.gradle/caches -type f -atime +0 -delete
+
 
 
 

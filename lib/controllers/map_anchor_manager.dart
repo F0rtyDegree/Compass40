@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
@@ -287,8 +289,9 @@ class MapAnchorManager {
 
     if (onAnchorAdded != null) {
       final now = DateTime.now();
+      final millis = now.millisecond.toString().padLeft(5, '0');
       final timeStr =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.$millis';
       final anchorIndices = calibrationService.activeAnchorIndices;
       final timeWithIndices = anchorIndices != null
           ? '$timeStr ($anchorIndices)'
@@ -300,7 +303,6 @@ class MapAnchorManager {
         timeWithIndices,
       );
     }
-
     final anchorNum = updatedAnchors.length;
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
