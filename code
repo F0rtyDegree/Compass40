@@ -4,9 +4,10 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.0 В треке точки привязки
+ver. 6.5.1 В точки привязки из журнала пишем в трэк. 
 "
 
+ver. 6.5.0 В точки привязки из журнала пишем в трэк. 
 ver. 6.4.1 Режим М. Обновление счетчиков точек привязки в строке сервиса.
 ver. 6.4.0 ФотоСевер: Авторежим P. Интент перебора режимов привязки.
 ver. 6.3.5 Текст уведомлений. число точек привязки карты
@@ -283,7 +284,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 6.5.0
+version: 6.5.1
 environment:
   sdk: ^3.9.0
 
@@ -1466,6 +1467,8 @@ class HomeState {
   }
 }
 ============= lib/controllers/map_anchor_manager.dart ===
+// ignore_for_file: avoid_print
+
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
@@ -1755,8 +1758,9 @@ class MapAnchorManager {
 
     if (onAnchorAdded != null) {
       final now = DateTime.now();
+      final millis = now.millisecond.toString().padLeft(5, '0');
       final timeStr =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
+          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.$millis';
       final anchorIndices = calibrationService.activeAnchorIndices;
       final timeWithIndices = anchorIndices != null
           ? '$timeStr ($anchorIndices)'
@@ -1768,7 +1772,6 @@ class MapAnchorManager {
         timeWithIndices,
       );
     }
-
     final anchorNum = updatedAnchors.length;
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
@@ -2844,12 +2847,21 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
-    final gps = gpsDataNotifier.value; // фиксируем на момент вызова
     final crosshair = state.crosshairImagePoint;
     if (crosshair == null) {
       showSnackBar('Прицел не определён');
       return;
     }
+
+    // Ждём 1 секунду, чтобы GPS успел обновиться
+    await Future.delayed(const Duration(millisecond: 1500));
+
+    final gps = gpsDataNotifier.value;
+    if (gps.latitude == null || gps.longitude == null) {
+      showSnackBar('Нет сигнала GPS');
+      return;
+    }
+
     await anchorManager.addAnchorFromGps(gps, crosshair);
   }
 
@@ -6901,9 +6913,59 @@ class GpxExportService {
       buffer.writeln('  </wpt>');
     }
 
+    // --- 2.5. Waypoints: Точки привязки (MapAnchorLogEntry) ---
+    final anchorEntries = logItems.whereType<MapAnchorLogEntry>().toList();
+    anchorEntries.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    for (int i = 0; i < anchorEntries.length; i++) {
+      final entry = anchorEntries[i];
+      final lat = entry.latitude.toStringAsFixed(6);
+      final lon = entry.longitude.toStringAsFixed(6);
+      // Берём дату из entry.timestamp (она корректная) и время из entry.timeStr
+      final datePart = entry.timestamp
+          .toUtc()
+          .toIso8601String()
+          .split('T')
+          .first; // "2026-08-13"
+      final timePart = entry.timeStr.split(' ').first; // "13:35:22.00309"
+      // Разбираем локальное время (Минск, UTC+3)
+      final parts = timePart.split(':');
+      final hours = int.parse(parts[0]);
+      final minutes = int.parse(parts[1]);
+      final secParts = parts[2].split('.');
+      final seconds = int.parse(secParts[0]);
+      final millis = int.parse(secParts[1].padRight(3, '0').substring(0, 3));
+      // Создаём DateTime в локальном времени (без указания зоны, но мы знаем, что это UTC+3)
+      final localDateTime = DateTime(
+        int.parse(datePart.split('-')[0]),
+        int.parse(datePart.split('-')[1]),
+        int.parse(datePart.split('-')[2]),
+        hours,
+        minutes,
+        seconds,
+        millis,
+      );
+      // Переводим в UTC (вычитаем 3 часа)
+      final utcDateTime = localDateTime.toUtc();
+      final time = utcDateTime.toIso8601String();
+      final name = 'ТП${i + 1}';
+      String desc = '';
+      if (entry.distanceFromPrevious != null) {
+        desc = '${entry.distanceFromPrevious!.round()}м';
+      }
+      buffer.writeln('  <wpt lat="$lat" lon="$lon">');
+      buffer.writeln('    <time>$time</time>');
+      buffer.writeln('    <name>$name</name>');
+      if (desc.isNotEmpty) {
+        buffer.writeln('    <desc><![CDATA[$desc]]></desc>');
+      }
+      buffer.writeln('  </wpt>');
+    }
     // --- 3. Трек (из CSV) ---
     if (trackPoints.isNotEmpty) {
-      final fileName = DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-');
+      final fileName = DateTime.now()
+          .toIso8601String()
+          .replaceAll(':', '-')
+          .replaceAll('.', '-');
       buffer.writeln('  <trk>');
       buffer.writeln('    <name>$fileName</name>');
       buffer.writeln('    <trkseg>');
@@ -6924,6 +6986,7 @@ class GpxExportService {
     await file.writeAsString(buffer.toString());
   }
 }
+
 ============= lib/services/log_service.dart ===
 import 'dart:async';
 import 'dart:convert';

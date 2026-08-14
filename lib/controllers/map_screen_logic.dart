@@ -593,12 +593,21 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
-    final gps = gpsDataNotifier.value; // фиксируем на момент вызова
     final crosshair = state.crosshairImagePoint;
     if (crosshair == null) {
       showSnackBar('Прицел не определён');
       return;
     }
+
+    // Ждём чтобы GPS успел обновиться
+    await Future.delayed(const Duration(milliseconds: 1500));
+
+    final gps = gpsDataNotifier.value;
+    if (gps.latitude == null || gps.longitude == null) {
+      showSnackBar('Нет сигнала GPS');
+      return;
+    }
+
     await anchorManager.addAnchorFromGps(gps, crosshair);
   }
 
