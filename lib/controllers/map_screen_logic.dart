@@ -593,24 +593,126 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
+    // Фиксируем момент нажатия кнопки (системное время телефона)
+    final int anchorRequestTimeMs = DateTime.now().millisecondsSinceEpoch;
+
+    // Получаем позицию прицела на карте (в пикселях изображения)
     final crosshair = state.crosshairImagePoint;
     if (crosshair == null) {
       showSnackBar('Прицел не определён');
       return;
     }
 
-    // Ждём чтобы GPS успел обновиться
-    await Future.delayed(const Duration(milliseconds: 1500));
+    // Берём первую точку GPS (она может быть получена до нажатия)
+    GpsData gps1 = gpsDataNotifier.value;
 
-    final gps = gpsDataNotifier.value;
-    if (gps.latitude == null || gps.longitude == null) {
-      showSnackBar('Нет сигнала GPS');
-      return;
+    // Если gps1 невалидна – ждём до 7 раз по 500 мс, пока не появится валидная точка
+    if (gps1.latitude == null || gps1.longitude == null) {
+      bool found = false;
+      for (int i = 0; i < 7; i++) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        final candidate = gpsDataNotifier.value;
+        if (candidate.latitude != null && candidate.longitude != null) {
+          gps1 = candidate;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        showSnackBar('Нет сигнала GPS');
+        return;
+      }
     }
 
-    await anchorManager.addAnchorFromGps(gps, crosshair);
-  }
+    showSnackBar('Ожидание GPS...');
 
+    // Цикл до 7 раз с шагом 500 мс
+    const int maxIterations = 7;
+    const Duration step = Duration(milliseconds: 500);
+
+    GpsData? finalGps;
+
+    for (int i = 0; i < maxIterations; i++) {
+      await Future.delayed(step);
+
+      final GpsData gps2 = gpsDataNotifier.value;
+
+      // Проверяем валидность gps2
+      if (gps2.latitude == null || gps2.longitude == null) {
+        // Точка невалидна – пропускаем итерацию, но запоминаем её как gps1 для следующего шага
+        gps1 = gps2;
+        continue;
+      }
+
+      // Получаем времена с fallback на текущее время, если поле time отсутствует
+      final int time1 = gps1.time ?? anchorRequestTimeMs;
+      final int time2 = gps2.time ?? DateTime.now().millisecondsSinceEpoch;
+
+      // Проверяем попадание anchorRequestTimeMs между time1 и time2
+      if (time1 < anchorRequestTimeMs && anchorRequestTimeMs < time2) {
+        // Линейная интерполяция
+        final double t = (anchorRequestTimeMs - time1) / (time2 - time1);
+        final double lat = gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
+        final double lon = gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
+
+        finalGps = GpsData(
+          latitude: lat,
+          longitude: lon,
+          accuracy: (gps1.accuracy ?? 0) + ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
+          speed: (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
+          altitude: (gps1.altitude ?? 0) + ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
+          mslAltitude: (gps1.mslAltitude ?? 0) + ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
+          satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
+          satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
+          magneticDeclination: gps2.magneticDeclination ?? gps1.magneticDeclination,
+          gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
+          time: anchorRequestTimeMs,
+        );
+        break;
+      }
+      // Проверяем случай, когда время нажатия совпадает с одной из точек
+      else if (time1 == anchorRequestTimeMs) {
+        finalGps = gps1;
+        break;
+      } else if (time2 == anchorRequestTimeMs) {
+        finalGps = gps2;
+        break;
+      }
+
+      // Если не попали в интервал и не совпали – сдвигаем пару
+      gps1 = gps2;
+    }
+
+    // Если интерполяция не удалась и не нашли совпадения – используем последнюю валидную точку (gps1)
+    if (finalGps == null) {
+      if (gps1.latitude != null && gps1.longitude != null) {
+        finalGps = gps1;
+        // Время для fallback – время gps1 или текущее
+        final int fallbackTime = gps1.time ?? anchorRequestTimeMs;
+        // Создаём копию с корректным временем (на случай, если time не было)
+        finalGps = GpsData(
+          latitude: gps1.latitude,
+          longitude: gps1.longitude,
+          accuracy: gps1.accuracy,
+          speed: gps1.speed,
+          altitude: gps1.altitude,
+          mslAltitude: gps1.mslAltitude,
+          satellitesUsed: gps1.satellitesUsed,
+          satellitesInView: gps1.satellitesInView,
+          magneticDeclination: gps1.magneticDeclination,
+          gpsBearing: gps1.gpsBearing,
+          time: fallbackTime,
+        );
+        showSnackBar('Использована последняя точка GPS');
+      } else {
+        showSnackBar('Не удалось получить координаты GPS');
+        return;
+      }
+    }
+
+    // Добавляем якорь с вычисленными координатами и временем нажатия
+    await anchorManager.addAnchorFromGps(finalGps, crosshair);
+  }
   Future<void> addAnchorFromClipboard() async {
     await anchorManager.addAnchorFromClipboard();
   }
@@ -708,9 +810,13 @@ class MapScreenLogic {
     );
     final anchors = state.project?.anchors ?? [];
     // Перестраиваем трансформацию на основе текущих якорей и режима
-    print('🔁 before updateAnchors, used=${_calibrationService.usedAnchorCount}');
+    print(
+      '🔁 before updateAnchors, used=${_calibrationService.usedAnchorCount}',
+    );
     _calibrationService.updateAnchors(anchors);
-    print('🔁 after updateAnchors, used=${_calibrationService.usedAnchorCount}');
+    print(
+      '🔁 after updateAnchors, used=${_calibrationService.usedAnchorCount}',
+    );
     final newPair = _calibrationService.selectWorkingPair(anchors);
     final declinationRad = magneticDeclination * math.pi / 180;
 
@@ -736,6 +842,7 @@ class MapScreenLogic {
     );
     onAnchorsChangedForStatus?.call();
   }
+
   void _recalculateCanPlaceTarget() {
     setState(() {
       state.canPlaceTarget = true;

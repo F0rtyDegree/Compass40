@@ -8,7 +8,8 @@ class GpsData {
   final int? satellitesUsed;
   final int? satellitesInView;
   final double? magneticDeclination;
-  final double? gpsBearing; // ✅ новое поле
+  final double? gpsBearing;
+  final int? time;
 
   GpsData({
     this.latitude,
@@ -21,6 +22,7 @@ class GpsData {
     this.satellitesInView,
     this.magneticDeclination,
     this.gpsBearing,
+    this.time,
   });
 
   factory GpsData.fromMap(Map<dynamic, dynamic> map) {
@@ -35,6 +37,7 @@ class GpsData {
       satellitesInView: map['satellitesInView'] as int?,
       magneticDeclination: map['magneticDeclination'] as double?,
       gpsBearing: map['gpsBearing'] as double?,
+      time: map['time'] as int?,
     );
   }
 }

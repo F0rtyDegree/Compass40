@@ -24,6 +24,11 @@ class MapAnchorManager {
   onAnchorAdded;
   final VoidCallback? onStartPhotoSever;
 
+  String _formatTime(DateTime time) {
+    final millis = time.millisecond.toString().padLeft(5, '0');
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}.$millis';
+  }
+
   GpsData? lastGpsData;
   List<Map<String, String>>? cachedGpxPoints;
 
@@ -59,10 +64,18 @@ class MapAnchorManager {
       showSnackBar('Нет сигнала GPS');
       return;
     }
+    // Если время отсутствует – критическая ошибка, не добавляем якорь
+    if (gpsData.time == null) {
+      showSnackBar('Ошибка: время GPS не получено');
+      return;
+    }
+    final DateTime requestTime = DateTime.fromMillisecondsSinceEpoch(gpsData.time!);
+    final String timeStr = _formatTime(requestTime);
     await _addAnchor(
       imagePoint: imagePoint,
       latitude: gpsData.latitude!,
       longitude: gpsData.longitude!,
+      timeStr: timeStr,
     );
   }
 
@@ -228,6 +241,7 @@ class MapAnchorManager {
     required Offset imagePoint,
     required double latitude,
     required double longitude,
+    String? timeStr,
   }) async {
     final project = state.project;
     if (project == null) return;
@@ -288,14 +302,11 @@ class MapAnchorManager {
     await onRecalculateTargets(restartNavigation: true);
 
     if (onAnchorAdded != null) {
-      final now = DateTime.now();
-      final millis = now.millisecond.toString().padLeft(5, '0');
-      final timeStr =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.$millis';
+      final String finalTimeStr = timeStr ?? _formatTime(DateTime.now());
       final anchorIndices = calibrationService.activeAnchorIndices;
       final timeWithIndices = anchorIndices != null
-          ? '$timeStr ($anchorIndices)'
-          : timeStr;
+          ? '$finalTimeStr ($anchorIndices)'
+          : finalTimeStr;
       await onAnchorAdded!(
         latitude,
         longitude,
@@ -542,3 +553,5 @@ class MapAnchorManager {
     return closest;
   }
 }
+
+

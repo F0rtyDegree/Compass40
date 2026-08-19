@@ -153,6 +153,7 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
         val data = HashMap<String, Any?>()
         data["satellitesUsed"] = satellitesUsed
         data["satellitesInView"] = satellitesInView
+        data["time"] = now
 
         lastLocation?.let {
             data["latitude"] = it.latitude

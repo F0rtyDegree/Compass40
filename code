@@ -4,9 +4,10 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.1 В точки привязки из журнала пишем в трэк. 
+ver. 6.5.2 пробуем все таки интерполяцию координат по времени . 
 "
 
+ver. 6.5.1 точку привязки инициируем не текущей координатой, а следующей. 
 ver. 6.5.0 В точки привязки из журнала пишем в трэк. 
 ver. 6.4.1 Режим М. Обновление счетчиков точек привязки в строке сервиса.
 ver. 6.4.0 ФотоСевер: Авторежим P. Интент перебора режимов привязки.
@@ -284,7 +285,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 6.5.1
+version: 6.5.2
 environment:
   sdk: ^3.9.0
 
@@ -1493,6 +1494,11 @@ class MapAnchorManager {
   onAnchorAdded;
   final VoidCallback? onStartPhotoSever;
 
+  String _formatTime(DateTime time) {
+    final millis = time.millisecond.toString().padLeft(5, '0');
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}.$millis';
+  }
+
   GpsData? lastGpsData;
   List<Map<String, String>>? cachedGpxPoints;
 
@@ -1528,10 +1534,18 @@ class MapAnchorManager {
       showSnackBar('Нет сигнала GPS');
       return;
     }
+    // Если время отсутствует – критическая ошибка, не добавляем якорь
+    if (gpsData.time == null) {
+      showSnackBar('Ошибка: время GPS не получено');
+      return;
+    }
+    final DateTime requestTime = DateTime.fromMillisecondsSinceEpoch(gpsData.time!);
+    final String timeStr = _formatTime(requestTime);
     await _addAnchor(
       imagePoint: imagePoint,
       latitude: gpsData.latitude!,
       longitude: gpsData.longitude!,
+      timeStr: timeStr,
     );
   }
 
@@ -1697,6 +1711,7 @@ class MapAnchorManager {
     required Offset imagePoint,
     required double latitude,
     required double longitude,
+    String? timeStr,
   }) async {
     final project = state.project;
     if (project == null) return;
@@ -1757,14 +1772,11 @@ class MapAnchorManager {
     await onRecalculateTargets(restartNavigation: true);
 
     if (onAnchorAdded != null) {
-      final now = DateTime.now();
-      final millis = now.millisecond.toString().padLeft(5, '0');
-      final timeStr =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}.$millis';
+      final String finalTimeStr = timeStr ?? _formatTime(DateTime.now());
       final anchorIndices = calibrationService.activeAnchorIndices;
       final timeWithIndices = anchorIndices != null
-          ? '$timeStr ($anchorIndices)'
-          : timeStr;
+          ? '$finalTimeStr ($anchorIndices)'
+          : finalTimeStr;
       await onAnchorAdded!(
         latitude,
         longitude,
@@ -2011,6 +2023,8 @@ class MapAnchorManager {
     return closest;
   }
 }
+
+
 
 ============= lib/controllers/map_follow_controller.dart ===
 import 'dart:math' as math;
@@ -2847,24 +2861,126 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
+    // Момент нажатия кнопки (время телефона с точностью до мс)
+    final int requestTimeMs = DateTime.now().millisecondsSinceEpoch;
+
+    // Получаем позицию прицела на карте (в пикселях изображения)
     final crosshair = state.crosshairImagePoint;
     if (crosshair == null) {
       showSnackBar('Прицел не определён');
       return;
     }
 
-    // Ждём 1 секунду, чтобы GPS успел обновиться
-    await Future.delayed(const Duration(millisecond: 1500));
+    // Берём первую точку GPS (она может быть получена до нажатия)
+    GpsData gps1 = gpsDataNotifier.value;
 
-    final gps = gpsDataNotifier.value;
-    if (gps.latitude == null || gps.longitude == null) {
-      showSnackBar('Нет сигнала GPS');
-      return;
+    // Если gps1 невалидна – ждём до 7 раз по 500 мс, пока не появится валидная точка
+    if (gps1.latitude == null || gps1.longitude == null) {
+      bool found = false;
+      for (int i = 0; i < 7; i++) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        final candidate = gpsDataNotifier.value;
+        if (candidate.latitude != null && candidate.longitude != null) {
+          gps1 = candidate;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        showSnackBar('Нет сигнала GPS');
+        return;
+      }
     }
 
-    await anchorManager.addAnchorFromGps(gps, crosshair);
-  }
+    showSnackBar('Ожидание GPS...');
 
+    // Цикл до 7 раз с шагом 500 мс
+    const int maxIterations = 7;
+    const Duration step = Duration(milliseconds: 500);
+
+    GpsData? finalGps;
+
+    for (int i = 0; i < maxIterations; i++) {
+      await Future.delayed(step);
+
+      final GpsData gps2 = gpsDataNotifier.value;
+
+      // Проверяем валидность gps2
+      if (gps2.latitude == null || gps2.longitude == null) {
+        // Точка невалидна – пропускаем итерацию, но запоминаем её как gps1 для следующего шага
+        gps1 = gps2;
+        continue;
+      }
+
+      // Получаем времена с fallback на текущее время, если поле time отсутствует
+      final int time1 = gps1.time ?? requestTimeMs;
+      final int time2 = gps2.time ?? DateTime.now().millisecondsSinceEpoch;
+
+      // Проверяем попадание requestTimeMs между time1 и time2
+      if (time1 < requestTimeMs && requestTimeMs < time2) {
+        // Линейная интерполяция
+        final double t = (requestTimeMs - time1) / (time2 - time1);
+        final double lat = gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
+        final double lon = gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
+
+        finalGps = GpsData(
+          latitude: lat,
+          longitude: lon,
+          accuracy: (gps1.accuracy ?? 0) + ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
+          speed: (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
+          altitude: (gps1.altitude ?? 0) + ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
+          mslAltitude: (gps1.mslAltitude ?? 0) + ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
+          satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
+          satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
+          magneticDeclination: gps2.magneticDeclination ?? gps1.magneticDeclination,
+          gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
+          time: requestTimeMs,
+        );
+        break;
+      }
+      // Проверяем случай, когда время нажатия совпадает с одной из точек
+      else if (time1 == requestTimeMs) {
+        finalGps = gps1;
+        break;
+      } else if (time2 == requestTimeMs) {
+        finalGps = gps2;
+        break;
+      }
+
+      // Если не попали в интервал и не совпали – сдвигаем пару
+      gps1 = gps2;
+    }
+
+    // Если интерполяция не удалась и не нашли совпадения – используем последнюю валидную точку (gps1)
+    if (finalGps == null) {
+      if (gps1.latitude != null && gps1.longitude != null) {
+        finalGps = gps1;
+        // Время для fallback – время gps1 или текущее
+        final int fallbackTime = gps1.time ?? requestTimeMs;
+        // Создаём копию с корректным временем (на случай, если time не было)
+        finalGps = GpsData(
+          latitude: gps1.latitude,
+          longitude: gps1.longitude,
+          accuracy: gps1.accuracy,
+          speed: gps1.speed,
+          altitude: gps1.altitude,
+          mslAltitude: gps1.mslAltitude,
+          satellitesUsed: gps1.satellitesUsed,
+          satellitesInView: gps1.satellitesInView,
+          magneticDeclination: gps1.magneticDeclination,
+          gpsBearing: gps1.gpsBearing,
+          time: fallbackTime,
+        );
+        showSnackBar('Использована последняя точка GPS');
+      } else {
+        showSnackBar('Не удалось получить координаты GPS');
+        return;
+      }
+    }
+
+    // Добавляем якорь с вычисленными координатами и временем нажатия
+    await anchorManager.addAnchorFromGps(finalGps, crosshair);
+  }
   Future<void> addAnchorFromClipboard() async {
     await anchorManager.addAnchorFromClipboard();
   }
@@ -2962,9 +3078,13 @@ class MapScreenLogic {
     );
     final anchors = state.project?.anchors ?? [];
     // Перестраиваем трансформацию на основе текущих якорей и режима
-    print('🔁 before updateAnchors, used=${_calibrationService.usedAnchorCount}');
+    print(
+      '🔁 before updateAnchors, used=${_calibrationService.usedAnchorCount}',
+    );
     _calibrationService.updateAnchors(anchors);
-    print('🔁 after updateAnchors, used=${_calibrationService.usedAnchorCount}');
+    print(
+      '🔁 after updateAnchors, used=${_calibrationService.usedAnchorCount}',
+    );
     final newPair = _calibrationService.selectWorkingPair(anchors);
     final declinationRad = magneticDeclination * math.pi / 180;
 
@@ -2990,6 +3110,7 @@ class MapScreenLogic {
     );
     onAnchorsChangedForStatus?.call();
   }
+
   void _recalculateCanPlaceTarget() {
     setState(() {
       state.canPlaceTarget = true;
@@ -6914,47 +7035,70 @@ class GpxExportService {
     }
 
     // --- 2.5. Waypoints: Точки привязки (MapAnchorLogEntry) ---
+    // Фильтруем все записи журнала, оставляя только те, которые являются точками привязки карты (`MapAnchorLogEntry`).
     final anchorEntries = logItems.whereType<MapAnchorLogEntry>().toList();
-    anchorEntries.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    // Начинаем цикл для перебора каждой точки привязки.
     for (int i = 0; i < anchorEntries.length; i++) {
+      // Получаем текущую запись (точку привязки).
       final entry = anchorEntries[i];
+      // Преобразуем широту и долготу в строки с 6 знаками после запятой для точности.
       final lat = entry.latitude.toStringAsFixed(6);
       final lon = entry.longitude.toStringAsFixed(6);
-      // Берём дату из entry.timestamp (она корректная) и время из entry.timeStr
+
+      // --- Начало сложной обработки времени ---
+      // Цель: собрать правильную временную метку в формате UTC, комбинируя дату из одного поля и время из другого.
+      
+      // 1. Извлекаем только ДАТУ из `timestamp`, преобразовав его в UTC и стандартный формат ISO 8601.
       final datePart = entry.timestamp
           .toUtc()
-          .toIso8601String()
-          .split('T')
-          .first; // "2026-08-13"
-      final timePart = entry.timeStr.split(' ').first; // "13:35:22.00309"
-      // Разбираем локальное время (Минск, UTC+3)
+          .toIso8601String() // -> "2026-08-13T10:35:22.123Z"
+          .split('T')      // -> ["2026-08-13", "10:35:22.123Z"]
+          .first;         // -> "2026-08-13"
+
+      // 2. Извлекаем только ВРЕМЯ из `timeStr`, которое является более точным, но может содержать доп. информацию.
+      final timePart = entry.timeStr.split(' ').first; // -> "13:35:22.00309"
+      
+      // 3. Разбираем строку времени на компоненты: часы, минуты, секунды и миллисекунды.
       final parts = timePart.split(':');
       final hours = int.parse(parts[0]);
       final minutes = int.parse(parts[1]);
       final secParts = parts[2].split('.');
       final seconds = int.parse(secParts[0]);
+      // Приводим миллисекунды к стандартной длине в 3 знака.
       final millis = int.parse(secParts[1].padRight(3, '0').substring(0, 3));
-      // Создаём DateTime в локальном времени (без указания зоны, но мы знаем, что это UTC+3)
+      
+      // 4. Собираем новый объект DateTime, используя извлеченную ДАТУ и разобранное ВРЕМЯ.
+      // Предполагается, что `timeStr` представляет локальное время.
       final localDateTime = DateTime(
-        int.parse(datePart.split('-')[0]),
-        int.parse(datePart.split('-')[1]),
-        int.parse(datePart.split('-')[2]),
+        int.parse(datePart.split('-')[0]), // Год
+        int.parse(datePart.split('-')[1]), // Месяц
+        int.parse(datePart.split('-')[2]), // День
         hours,
         minutes,
         seconds,
         millis,
       );
-      // Переводим в UTC (вычитаем 3 часа)
+      
+      // 5. Преобразуем собранное локальное время в UTC, чтобы получить корректное время для GPX.
       final utcDateTime = localDateTime.toUtc();
-      final time = utcDateTime.toIso8601String();
+      final time = utcDateTime.toIso8601String(); // Форматируем в стандарт ISO 8601.
+
+      // --- Конец обработки времени ---
+
+      // Создаем имя для точки, используя ее порядковый номер (ТП1, ТП2 и т.д.).
       final name = 'ТП${i + 1}';
+      // Инициализируем пустое описание.
       String desc = '';
+      // Если для точки рассчитано расстояние от предыдущей, добавляем его в описание.
       if (entry.distanceFromPrevious != null) {
         desc = '${entry.distanceFromPrevious!.round()}м';
       }
+      
+      // Записываем в буфер XML-структуру для путевой точки (waypoint).
       buffer.writeln('  <wpt lat="$lat" lon="$lon">');
       buffer.writeln('    <time>$time</time>');
       buffer.writeln('    <name>$name</name>');
+      // Если описание не пустое, добавляем его в тег <desc>.
       if (desc.isNotEmpty) {
         buffer.writeln('    <desc><![CDATA[$desc]]></desc>');
       }
@@ -10670,6 +10814,7 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
         val data = HashMap<String, Any?>()
         data["satellitesUsed"] = satellitesUsed
         data["satellitesInView"] = satellitesInView
+        data["time"] = now
 
         lastLocation?.let {
             data["latitude"] = it.latitude
@@ -10842,7 +10987,8 @@ class GpsData {
   final int? satellitesUsed;
   final int? satellitesInView;
   final double? magneticDeclination;
-  final double? gpsBearing; // ✅ новое поле
+  final double? gpsBearing;
+  final int? time;
 
   GpsData({
     this.latitude,
@@ -10855,6 +11001,7 @@ class GpsData {
     this.satellitesInView,
     this.magneticDeclination,
     this.gpsBearing,
+    this.time,
   });
 
   factory GpsData.fromMap(Map<dynamic, dynamic> map) {
@@ -10869,6 +11016,7 @@ class GpsData {
       satellitesInView: map['satellitesInView'] as int?,
       magneticDeclination: map['magneticDeclination'] as double?,
       gpsBearing: map['gpsBearing'] as double?,
+      time: map['time'] as int?,
     );
   }
 }
