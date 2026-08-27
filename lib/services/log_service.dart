@@ -1,3 +1,6 @@
+// ignore_for_file: avoid_print
+
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -33,7 +36,7 @@ class LogService {
     required double latitude,
     required double longitude,
     required double? distanceFromPrevious,
-    required String timeStr,
+    required DateTime createdAt,
   }) async {
     return _synchronized(() async {
       final logItems = await loadLogEntries();
@@ -48,7 +51,7 @@ class LogService {
         latitude: latitude,
         longitude: longitude,
         distanceFromPrevious: distanceFromPrevious,
-        timeStr: timeStr,
+        createdAt: createdAt,
       );
 
       logItems.add(entry);
@@ -73,13 +76,12 @@ class LogService {
     return [];
   }
 
-  Future<void> saveLogEntries(List<LogItem> logItems) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'log_items',
-      jsonEncode(logItems.map((e) => e.toJson()).toList()),
-    );
-  }
+Future<void> saveLogEntries(List<LogItem> logItems) async {
+  final prefs = await SharedPreferences.getInstance(); // добавить эту строку
+  final jsonString = jsonEncode(logItems.map((e) => e.toJson()).toList());
+  print('saveLogEntries: JSON = $jsonString');
+  await prefs.setString('log_items', jsonString);
+}
 
   Future<SetWaypointResult?> setWaypoint({
     required List<LogItem> currentLogItems,

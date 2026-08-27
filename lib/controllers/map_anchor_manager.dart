@@ -14,20 +14,17 @@ import '../services/map_storage_service.dart';
 import 'map_screen_state.dart';
 import '../utils/geo_utils.dart';
 
+/// Управляет точками привязки (якорями) на карте: добавление, удаление,
+/// выбор режима калибровки, работа с GPX-файлами.
 class MapAnchorManager {
   final MapCalibrationService calibrationService;
   final MapStorageService storageService;
   final MapScreenState state;
   final void Function(VoidCallback fn) setState;
   final void Function(String message) showSnackBar;
-  final Function(double lat, double lon, double? distance, String timeStr)?
+  final Function(double lat, double lon, double? distance, DateTime createdAt)?
   onAnchorAdded;
   final VoidCallback? onStartPhotoSever;
-
-  String _formatTime(DateTime time) {
-    final millis = time.millisecond.toString().padLeft(5, '0');
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}.$millis';
-  }
 
   GpsData? lastGpsData;
   List<Map<String, String>>? cachedGpxPoints;
@@ -49,6 +46,8 @@ class MapAnchorManager {
     this.lastGpsData,
     this.onStartPhotoSever,
   });
+
+  /// Сохраняет список точек из GPX в проект для быстрого доступа.
   Future<void> _saveGpxCacheToProject(List<Map<String, String>> points) async {
     final project = state.project;
     if (project == null) return;
@@ -59,26 +58,28 @@ class MapAnchorManager {
     });
   }
 
-  Future<void> addAnchorFromGps(GpsData gpsData, Offset imagePoint) async {
+  /// Добавляет якорь по текущим GPS-координатам с интерполяцией.
+  /// [creationTime] – системное время нажатия кнопки «ЯЗдесь» (с микросекундами),
+  /// используется как время создания якоря.
+  Future<void> addAnchorFromGps(
+    GpsData gpsData,
+    Offset imagePoint,
+    DateTime creationTime,
+  ) async {
     if (gpsData.latitude == null || gpsData.longitude == null) {
       showSnackBar('Нет сигнала GPS');
       return;
     }
-    // Если время отсутствует – критическая ошибка, не добавляем якорь
-    if (gpsData.time == null) {
-      showSnackBar('Ошибка: время GPS не получено');
-      return;
-    }
-    final DateTime requestTime = DateTime.fromMillisecondsSinceEpoch(gpsData.time!);
-    final String timeStr = _formatTime(requestTime);
     await _addAnchor(
       imagePoint: imagePoint,
       latitude: gpsData.latitude!,
       longitude: gpsData.longitude!,
-      timeStr: timeStr,
+      creationTime: creationTime,
     );
   }
 
+  /// Добавляет якорь из координат, извлечённых из буфера обмена.
+  /// Время создания устанавливается в ноль (1970-01-01).
   Future<void> addAnchorFromClipboard() async {
     ClipboardData? clipboardData;
     try {
@@ -109,9 +110,11 @@ class MapAnchorManager {
       imagePoint: state.crosshairImagePoint!,
       latitude: lat,
       longitude: lon,
+      creationTime: null,
     );
   }
 
+  /// Показывает диалог выбора источника для добавления якоря.
   void showHereOptions(BuildContext context) {
     final hasCache = cachedGpxPoints != null;
     showDialog(
@@ -138,6 +141,7 @@ class MapAnchorManager {
                       imagePoint: state.crosshairImagePoint ?? Offset.zero,
                       latitude: lat,
                       longitude: lon,
+                      creationTime: null,
                     );
                   } else {
                     showSnackBar('Неверные координаты');
@@ -225,6 +229,7 @@ class MapAnchorManager {
                   imagePoint: state.crosshairImagePoint ?? Offset.zero,
                   latitude: lat,
                   longitude: lon,
+                  creationTime: null,
                 );
               } else {
                 showSnackBar('Неверные координаты');
@@ -237,11 +242,16 @@ class MapAnchorManager {
     );
   }
 
+  /// Внутренний метод добавления якоря.
+  /// [creationTime] – системное время нажатия кнопки «ЯЗдесь» (с микросекундами)
+  /// для GPS-точек; для импортированных точек передаётся null.
+  /// Время создания якоря: если передано – creationTime,
+  /// иначе – DateTime.fromMillisecondsSinceEpoch(0).
   Future<void> _addAnchor({
     required Offset imagePoint,
     required double latitude,
     required double longitude,
-    String? timeStr,
+    DateTime? creationTime,
   }) async {
     final project = state.project;
     if (project == null) return;
@@ -266,17 +276,27 @@ class MapAnchorManager {
         ),
       );
     }
+    /* Внутренний метод добавления якоря. [creationTime] – 
+системное время нажатия кнопки «ЯЗдесь» (с микросекундами) для GPS-точек; 
+для импортированных точек передаётся null. Время создания якоря: 
+если передано – creationTime, иначе – DateTime.fromMillisecondsSinceEpoch(0). */
+    final creationTimestamp =
+        creationTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+    print(
+      '🔔 ТП создана: время=$creationTimestamp (источник: ${creationTime != null ? 'GPS' : 'импорт'})',
+    );
 
     final anchor = MapAnchor(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
+      /* формируем уникальный id из текущего времени */
       imageX: imagePoint.dx,
       imageY: imagePoint.dy,
       latitude: latitude,
       longitude: longitude,
-      createdAt: DateTime.now(),
+      createdAt: creationTimestamp,
     );
 
-    // Если текущий режим ФотоСевер, делаем эту точку единственной активной
     if (calibrationService.currentMode == CalibrationMode.photoSever) {
       calibrationService.setPinnedAnchorIds([anchor.id]);
     }
@@ -295,32 +315,24 @@ class MapAnchorManager {
     setState(() {
       state.project = updatedProject;
     });
-    // else: проект уже обновлён внутри блока ФотоСевера, ничего не делаем
 
     calibrationService.updateAnchors(state.project!.anchors);
     onAnchorsChanged();
     await onRecalculateTargets(restartNavigation: true);
 
-    if (onAnchorAdded != null) {
-      final String finalTimeStr = timeStr ?? _formatTime(DateTime.now());
-      final anchorIndices = calibrationService.activeAnchorIndices;
-      final timeWithIndices = anchorIndices != null
-          ? '$finalTimeStr ($anchorIndices)'
-          : finalTimeStr;
-      await onAnchorAdded!(
-        latitude,
-        longitude,
-        distanceFromPrevious,
-        timeWithIndices,
-      );
-    }
+    print('Peredacha TP v zhurnal: vremia=$creationTimestamp');
+    onAnchorAdded?.call(
+      latitude,
+      longitude,
+      distanceFromPrevious,
+      creationTimestamp,
+    );
+
     final anchorNum = updatedAnchors.length;
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
   void handleTapOnMap(Offset screenPosition) {
-    // ✅ В автоматических режимах (A/F/N) тап на якорь игнорируется
-    // Переключение якорей работает только в режимах M и P
     final mode = calibrationService.currentMode;
     if (!calibrationService.isManualMode &&
         mode != CalibrationMode.photoSever) {
@@ -393,7 +405,6 @@ class MapAnchorManager {
     final anchorCount = anchors.length;
     final hasPhotoSever = project != null && project.photoSeverLinePixels > 0;
 
-    // Условия доступности режимов
     final canAffine = anchorCount >= 2;
     final canFarthest = anchorCount >= 2;
     final canNearest = anchorCount >= 2;
@@ -424,14 +435,13 @@ class MapAnchorManager {
       builder: (ctx) => SimpleDialog(
         title: const Text('Режим привязки'),
         children: [
-          // === ФотоСевер (P) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canPhotoSever) {
                 showHintAndClose('Нужно ФотоСевер & 1 якорь', ctx);
                 return;
               }
-              print('🔄 Выбран режим P');
+              print('Vybran rezhim P');
               calibrationService.setCalibrationMode(CalibrationMode.photoSever);
               calibrationService.updatePhotoSeverData(
                 lineMeters: project.photoSeverLineMeters,
@@ -446,7 +456,7 @@ class MapAnchorManager {
               'ФотоСевер (P)',
               style: TextStyle(color: canPhotoSever ? null : Colors.grey),
             ),
-          ), // === Ручной (M) ===
+          ),
           SimpleDialogOption(
             onPressed: () {
               if (!canManual) {
@@ -460,7 +470,6 @@ class MapAnchorManager {
               style: TextStyle(color: canManual ? null : Colors.grey),
             ),
           ),
-          // === Affine (A) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canAffine) {
@@ -474,7 +483,6 @@ class MapAnchorManager {
               style: TextStyle(color: canAffine ? null : Colors.grey),
             ),
           ),
-          // === Farthest (F) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canFarthest) {
@@ -488,7 +496,6 @@ class MapAnchorManager {
               style: TextStyle(color: canFarthest ? null : Colors.grey),
             ),
           ),
-          // === Nearest (N) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canNearest) {
@@ -522,10 +529,9 @@ class MapAnchorManager {
       setState(() {
         state.project = updated;
       });
-      // ✅ Обновляем статус привязки
-      print('💾 calling onAnchorsChanged()');
+      print('calling onAnchorsChanged()');
       onAnchorsChanged();
-      print('💾 after onAnchorsChanged()');
+      print('after onAnchorsChanged()');
     }
   }
 
@@ -553,5 +559,3 @@ class MapAnchorManager {
     return closest;
   }
 }
-
-

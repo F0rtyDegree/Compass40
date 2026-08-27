@@ -1,14 +1,19 @@
+// ignore_for_file: avoid_print
+
+
 // Базовый абстрактный класс для всех записей в журнале
 abstract class LogItem {
   final DateTime timestamp;
   final String type;
-  LogItem({required this.type}) : timestamp = DateTime.now();
+  // VZ: В конструкторе базового класса автоматически фиксируется время создания любой записи журнала.
+  LogItem({required this.type, DateTime? createdAt})
+    : timestamp = createdAt ?? DateTime.now();
   Map<String, dynamic> toJson();
 }
 
 // Класс для записей о создании цели
 class TargetCreationLogEntry extends LogItem {
-  final int id; // ✅ Уникальный идентификатор
+  final int id;
   final double baseLatitude;
   final double baseLongitude;
   final double azimuth;
@@ -17,20 +22,21 @@ class TargetCreationLogEntry extends LogItem {
   final double targetLongitude;
 
   TargetCreationLogEntry({
-    required this.id, // ✅ Требовать при создании
+    required this.id,
     required this.baseLatitude,
     required this.baseLongitude,
     required this.azimuth,
     required this.distance,
     required this.targetLatitude,
     required this.targetLongitude,
+    super.createdAt,
   }) : super(type: 'target_creation');
 
   @override
   Map<String, dynamic> toJson() => {
     'type': type,
     'timestamp': timestamp.toIso8601String(),
-    'id': id, // ✅ Сохранять id
+    'id': id,
     'baseLatitude': baseLatitude,
     'baseLongitude': baseLongitude,
     'azimuth': azimuth,
@@ -41,15 +47,14 @@ class TargetCreationLogEntry extends LogItem {
 
   factory TargetCreationLogEntry.fromJson(Map<String, dynamic> json) {
     return TargetCreationLogEntry(
-      id:
-          json['id'] ??
-          DateTime.now().millisecondsSinceEpoch, // ✅ Для старых записей
+      id: json['id'] as int,
       baseLatitude: json['baseLatitude'],
       baseLongitude: json['baseLongitude'],
       azimuth: json['azimuth'],
       distance: json['distance'],
       targetLatitude: json['targetLatitude'],
       targetLongitude: json['targetLongitude'],
+      createdAt: DateTime.parse(json['timestamp']),
     );
   }
 }
@@ -57,18 +62,17 @@ class TargetCreationLogEntry extends LogItem {
 // Добавляю после класса TargetCreationLogEntry
 
 class MapAnchorLogEntry extends LogItem {
-  final int id;  // ✅ добавляем id
+  final int id;
   final double latitude;
   final double longitude;
   final double? distanceFromPrevious;
-  final String timeStr;
 
   MapAnchorLogEntry({
     required this.id,
     required this.latitude,
     required this.longitude,
     this.distanceFromPrevious,
-    required this.timeStr,
+    super.createdAt,
   }) : super(type: 'map_anchor');
 
   @override
@@ -79,17 +83,18 @@ class MapAnchorLogEntry extends LogItem {
     'latitude': latitude,
     'longitude': longitude,
     'distanceFromPrevious': distanceFromPrevious,
-    'timeStr': timeStr,
   };
 
   factory MapAnchorLogEntry.fromJson(Map<String, dynamic> json) {
-    return MapAnchorLogEntry(
+    final entry = MapAnchorLogEntry(
       id: json['id'],
       latitude: json['latitude'],
       longitude: json['longitude'],
       distanceFromPrevious: json['distanceFromPrevious'],
-      timeStr: json['timeStr'],
+      createdAt: DateTime.parse(json['timestamp']),
     );
+    print('loadLogEntries: parsed timestamp = ${entry.timestamp}');
+    return entry;
   }
 }
 
@@ -107,6 +112,7 @@ class LogEntry extends LogItem {
     required this.longitude,
     this.distance,
     this.bearing,
+    super.createdAt,
   }) : super(type: 'track');
 
   @override
@@ -126,6 +132,7 @@ class LogEntry extends LogItem {
     longitude: json['longitude'],
     distance: json['distance'],
     bearing: json['bearing'],
+    createdAt: DateTime.parse(json['timestamp']),
   );
 }
 

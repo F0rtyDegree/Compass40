@@ -33,12 +33,14 @@ class MapTargetManager {
     );
 
     final target = MapTarget(
+      // Время создания используется как уникальный идентификатор для новой цели.
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       imageX: state.crosshairImagePoint!.dx,
       imageY: state.crosshairImagePoint!.dy,
       latitude: geo?.latitude,
       longitude: geo?.longitude,
       status: MapTargetStatus.planned,
+      // Фиксируем время создания цели.
       createdAt: DateTime.now(),
     );
 
@@ -87,12 +89,14 @@ class MapTargetManager {
     }
 
     final target = MapTarget(
+      // Время создания используется как уникальный идентификатор для новой цели.
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       imageX: imagePoint.dx,
       imageY: imagePoint.dy,
       latitude: lat,
       longitude: lon,
       status: MapTargetStatus.planned,
+      // Фиксируем время создания цели.
       createdAt: DateTime.now(),
     );
 

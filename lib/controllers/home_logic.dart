@@ -68,10 +68,9 @@ class HomeLogic {
     if (_disposed) return;
     _disposed = true;
 
-    print('dispose(): (7)');
-    print('dispose: (6)');
+    print('dispose: (5)');
     FileLogger.writeLog('Compass40 stop');
-    print('dispose(): (5)');
+    print('dispose(): (4)');
 
     // Остановка фонового сервиса
     stopBackgroundService();
@@ -80,9 +79,8 @@ class HomeLogic {
     _gpsSubscription = null;
     _gpsManager.dispose();
 
-    print('dispose(): (4)');
-    state.uiUpdateTimer?.cancel();
     print('dispose(): (3)');
+    state.uiUpdateTimer?.cancel();
     print('dispose(): (2)');
     state.compassSubscription.cancel();
     print('dispose(): (1)');
@@ -199,6 +197,17 @@ class HomeLogic {
           }
         }
 
+        /* 
+Этот код добавляет текущее значение направления (heading) вместе с точной временной меткой в список headingSamples.
+Проще говоря, он записывает историю показаний компаса.
+Это нужно для следующих целей:
+Сглаживание данных: Чтобы компас не "дергался", приложение может усреднять несколько последних значений направления, делая показания более стабильными и плавными.
+Анализ и вычисления: Накопленные данные могут использоваться для вычисления скорости поворота или для других более сложных расчетов, связанных с навигацией.
+Логирование: Для записи трека движения пользователя, чтобы позже можно было его просмотреть или проанализировать.
+Каждая запись в списке headingSamples — это пара, состоящая из:
+
+heading: само значение направления в градусах.
+DateTime.now().millisecondsSinceEpоch: момент времени, когда это значение было зафиксировано, с точностью до миллисекунды. */
         state.headingSamples.add((
           heading,
           DateTime.now().millisecondsSinceEpoch,
@@ -236,6 +245,7 @@ class HomeLogic {
   }
 
   Future<void> _updateHeading() async {
+    /* Эта функция _updateHeading предназначена для асинхронного получения и обновления текущего направления (heading) компаса. */
     final now = DateTime.now().millisecondsSinceEpoch;
 
     bool useGps = false;

@@ -23,8 +23,8 @@ class MapScreen extends StatefulWidget {
   final ValueNotifier<GpsData> gpsDataNotifier;
   final double magneticDeclination;
   final ValueNotifier<double> headingNotifier;
-  final Function(double lat, double lon, double? distance, String timeStr)?
-  onAnchorAdded;
+  final Function(double lat, double lon, double? distance, DateTime createdAt)?
+      onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
 
@@ -94,7 +94,7 @@ class _MapScreenState extends State<MapScreen> {
   void _updateStatusText() {
     final used = _logic.usedAnchorCount;
     final total = _logic.totalAnchorCount;
-    print('📊 _updateStatusText: used=$used, total=$total');
+    print('_updateStatusText: used=$used, total=$total');
     updateNotification(title: 'Режим - Карта $used/$total');
   }
 

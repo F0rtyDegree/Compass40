@@ -27,7 +27,7 @@ String _currentContent = '';
 void updateNotification({String? title, String? content}) {
   if (title != null) _currentTitle = title;
   if (content != null) _currentContent = content;
-  print('🔔 updateNotification called with title: $_currentTitle, content: $_currentContent');
+  print('updateNotification called with title: $_currentTitle, content: $_currentContent');
   _notificationChannel.invokeMethod('updateNotification', {
     'title': _currentTitle,
     'content': _currentContent,
@@ -49,10 +49,10 @@ void onStart(ServiceInstance service) {
   });
 
   service.on('startRecording').listen((_) {
-    print('[BackgroundService] ▶️ Запись (удержание процесса)');
+    print('[BackgroundService] Запись (удержание процесса)');
   });
 
   service.on('stopRecording').listen((_) {
-    print('[BackgroundService] ⏹️ Запись остановлена');
+    print('[BackgroundService] Запись остановлена');
   });
 }

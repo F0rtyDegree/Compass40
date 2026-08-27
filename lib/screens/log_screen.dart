@@ -1,6 +1,9 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../log_entry.dart';
 
@@ -11,7 +14,6 @@ class LogScreen extends StatefulWidget {
 
   @override
   State<LogScreen> createState() => _LogScreenState();
-  
 }
 
 class _LogScreenState extends State<LogScreen> {
@@ -45,11 +47,11 @@ class _LogScreenState extends State<LogScreen> {
                 'ЦЕЛЬ: ${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
             return '$startText\n$targetText';
           } else if (entry is MapAnchorLogEntry) {
-  final distanceText = entry.distanceFromPrevious != null
-      ? ' ${entry.distanceFromPrevious!.round()}m'
-      : ' ---';
-  return 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText ${entry.timeStr}';
-}
+            final distanceText = entry.distanceFromPrevious != null
+                ? ' ${entry.distanceFromPrevious!.round()}m'
+                : ' ---';
+            return 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText ${DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp)}';
+          }
           return '';
         })
         .join('\n');
@@ -84,8 +86,9 @@ class _LogScreenState extends State<LogScreen> {
       entryId = entry.id;
       entryType = 'target';
     } else if (entry is MapAnchorLogEntry) {
-      textToCopy = '${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}';
-      entryId = entry.id;  // ✅ сохраняем id
+      textToCopy =
+          '${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}';
+      entryId = entry.id;
       entryType = 'anchor';
     }
 
@@ -121,7 +124,6 @@ class _LogScreenState extends State<LogScreen> {
     if (entry is LogEntry) {
       final isCopied =
           entry.id == _copiedEntryId && _copiedEntryType == 'track';
-      // --- Исправлено ---
       final distanceText = entry.distance != null
           ? '${entry.distance!.round()}m'
           : '--m';
@@ -130,7 +132,6 @@ class _LogScreenState extends State<LogScreen> {
           : '--°';
       final text =
           '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
-      // --- Конец исправления ---
       return InkWell(
         onTap: () => _handleTap(entry),
         child: AnimatedContainer(
@@ -214,30 +215,39 @@ class _LogScreenState extends State<LogScreen> {
           ],
         ),
       );
-      } else if (entry is MapAnchorLogEntry) {
-        final isCopied = _copiedEntryId == entry.id && _copiedEntryType == 'anchor';  // ✅ проверяем по id
-        final distanceText = entry.distanceFromPrevious != null
-            ? ' ${entry.distanceFromPrevious!.round()}m'
-            : ' ---';
-        final text = 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText ${entry.timeStr}';
-        
-        return InkWell(
-          onTap: () => _handleTap(entry),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            color: isCopied ? originalTextColor : Colors.transparent,
-            child: Text(
-              text,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 16,
-                color: isCopied ? invertedTextColor : originalTextColor,
-              ),
+    } else if (entry is MapAnchorLogEntry) {
+      final isCopied =
+          _copiedEntryId == entry.id && _copiedEntryType == 'anchor';
+      final distanceText = entry.distanceFromPrevious != null
+          ? ' ${entry.distanceFromPrevious!.round()}m'
+          : ' ---';
+      print(
+        'log_screen: timestamp = ${entry.timestamp} (микросекунды: ${entry.timestamp.microsecond})',
+      );
+      print(
+        "Время с миллисекундами: ${DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp)}",
+      );
+  final timeStr = entry.timestamp.toIso8601String().substring(11, 26); // "HH:mm:ss.SSSSSS"
+  final text = 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText $timeStr';
+      print("🔔 переменная text: $text");
+
+      return InkWell(
+        onTap: () => _handleTap(entry),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          color: isCopied ? originalTextColor : Colors.transparent,
+          child: Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 16,
+              color: isCopied ? invertedTextColor : originalTextColor,
             ),
           ),
-        );
-      }
+        ),
+      );
+    }
     return const SizedBox.shrink();
   }
 

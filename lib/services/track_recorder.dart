@@ -70,12 +70,21 @@ class TrackRecorder {
   }
 
   void _onGpsData(GpsData data) {
+      
+    // ВАЖНО: 
+    // Все временные метки  включая точки трека и вручную созданные точки (ТП),
+    // должны быть в одной системе отсчета для корректной интерполяции и сопоставления.
+    // Использование разных источников времени (системного и GPS) привело бы к рассинхронизации.
+    // Потому используется системное время телефона (DateTime.now()), а не время из GPS-пакета (data.time).
+    // Это сделано намеренно для обеспечения единой временной шкалы во всем приложении.
+    
+    final time = DateTime.now().toUtc().toIso8601String();
+
     if (!_isRecording) return;
     if (data.latitude == null || data.longitude == null) return;
 
     final lat = data.latitude!;
     final lon = data.longitude!;
-    final time = DateTime.now().toUtc().toIso8601String();
 
     final line = '$time,$lat,$lon\n';
     final file = File(_csvPath!);

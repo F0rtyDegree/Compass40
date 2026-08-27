@@ -4,7 +4,7 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.2 пробуем все таки интерполяцию координат по времени . 
+ver. 6.5.2 все таки интерполяция координат по времени. 
 "
 
 ver. 6.5.1 точку привязки инициируем не текущей координатой, а следующей. 
@@ -314,6 +314,7 @@ dependencies:
   # НОВЫЕ ЗАВИСИМОСТИ ДЛЯ ФОНОВОЙ ЗАПИСИ ТРЕКА
   flutter_background_service: ^5.1.0
   flutter_local_notifications: ^17.0.0
+  intl: ^0.20.3
   
 dev_dependencies:
   flutter_test:
@@ -820,10 +821,9 @@ class HomeLogic {
     if (_disposed) return;
     _disposed = true;
 
-    print('dispose(): (7)');
-    print('dispose: (6)');
+    print('dispose: (5)');
     FileLogger.writeLog('Compass40 stop');
-    print('dispose(): (5)');
+    print('dispose(): (4)');
 
     // Остановка фонового сервиса
     stopBackgroundService();
@@ -832,9 +832,8 @@ class HomeLogic {
     _gpsSubscription = null;
     _gpsManager.dispose();
 
-    print('dispose(): (4)');
-    state.uiUpdateTimer?.cancel();
     print('dispose(): (3)');
+    state.uiUpdateTimer?.cancel();
     print('dispose(): (2)');
     state.compassSubscription.cancel();
     print('dispose(): (1)');
@@ -951,6 +950,17 @@ class HomeLogic {
           }
         }
 
+        /* 
+Этот код добавляет текущее значение направления (heading) вместе с точной временной меткой в список headingSamples.
+Проще говоря, он записывает историю показаний компаса.
+Это нужно для следующих целей:
+Сглаживание данных: Чтобы компас не "дергался", приложение может усреднять несколько последних значений направления, делая показания более стабильными и плавными.
+Анализ и вычисления: Накопленные данные могут использоваться для вычисления скорости поворота или для других более сложных расчетов, связанных с навигацией.
+Логирование: Для записи трека движения пользователя, чтобы позже можно было его просмотреть или проанализировать.
+Каждая запись в списке headingSamples — это пара, состоящая из:
+
+heading: само значение направления в градусах.
+DateTime.now().millisecondsSinceEpоch: момент времени, когда это значение было зафиксировано, с точностью до миллисекунды. */
         state.headingSamples.add((
           heading,
           DateTime.now().millisecondsSinceEpoch,
@@ -988,6 +998,7 @@ class HomeLogic {
   }
 
   Future<void> _updateHeading() async {
+    /* Эта функция _updateHeading предназначена для асинхронного получения и обновления текущего направления (heading) компаса. */
     final now = DateTime.now().millisecondsSinceEpoch;
 
     bool useGps = false;
@@ -1484,20 +1495,17 @@ import '../services/map_storage_service.dart';
 import 'map_screen_state.dart';
 import '../utils/geo_utils.dart';
 
+/// Управляет точками привязки (якорями) на карте: добавление, удаление,
+/// выбор режима калибровки, работа с GPX-файлами.
 class MapAnchorManager {
   final MapCalibrationService calibrationService;
   final MapStorageService storageService;
   final MapScreenState state;
   final void Function(VoidCallback fn) setState;
   final void Function(String message) showSnackBar;
-  final Function(double lat, double lon, double? distance, String timeStr)?
+  final Function(double lat, double lon, double? distance, DateTime createdAt)?
   onAnchorAdded;
   final VoidCallback? onStartPhotoSever;
-
-  String _formatTime(DateTime time) {
-    final millis = time.millisecond.toString().padLeft(5, '0');
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}.$millis';
-  }
 
   GpsData? lastGpsData;
   List<Map<String, String>>? cachedGpxPoints;
@@ -1519,6 +1527,8 @@ class MapAnchorManager {
     this.lastGpsData,
     this.onStartPhotoSever,
   });
+
+  /// Сохраняет список точек из GPX в проект для быстрого доступа.
   Future<void> _saveGpxCacheToProject(List<Map<String, String>> points) async {
     final project = state.project;
     if (project == null) return;
@@ -1529,26 +1539,28 @@ class MapAnchorManager {
     });
   }
 
-  Future<void> addAnchorFromGps(GpsData gpsData, Offset imagePoint) async {
+  /// Добавляет якорь по текущим GPS-координатам с интерполяцией.
+  /// [creationTime] – системное время нажатия кнопки «ЯЗдесь» (с микросекундами),
+  /// используется как время создания якоря.
+  Future<void> addAnchorFromGps(
+    GpsData gpsData,
+    Offset imagePoint,
+    DateTime creationTime,
+  ) async {
     if (gpsData.latitude == null || gpsData.longitude == null) {
       showSnackBar('Нет сигнала GPS');
       return;
     }
-    // Если время отсутствует – критическая ошибка, не добавляем якорь
-    if (gpsData.time == null) {
-      showSnackBar('Ошибка: время GPS не получено');
-      return;
-    }
-    final DateTime requestTime = DateTime.fromMillisecondsSinceEpoch(gpsData.time!);
-    final String timeStr = _formatTime(requestTime);
     await _addAnchor(
       imagePoint: imagePoint,
       latitude: gpsData.latitude!,
       longitude: gpsData.longitude!,
-      timeStr: timeStr,
+      creationTime: creationTime,
     );
   }
 
+  /// Добавляет якорь из координат, извлечённых из буфера обмена.
+  /// Время создания устанавливается в ноль (1970-01-01).
   Future<void> addAnchorFromClipboard() async {
     ClipboardData? clipboardData;
     try {
@@ -1579,9 +1591,11 @@ class MapAnchorManager {
       imagePoint: state.crosshairImagePoint!,
       latitude: lat,
       longitude: lon,
+      creationTime: null,
     );
   }
 
+  /// Показывает диалог выбора источника для добавления якоря.
   void showHereOptions(BuildContext context) {
     final hasCache = cachedGpxPoints != null;
     showDialog(
@@ -1608,6 +1622,7 @@ class MapAnchorManager {
                       imagePoint: state.crosshairImagePoint ?? Offset.zero,
                       latitude: lat,
                       longitude: lon,
+                      creationTime: null,
                     );
                   } else {
                     showSnackBar('Неверные координаты');
@@ -1695,6 +1710,7 @@ class MapAnchorManager {
                   imagePoint: state.crosshairImagePoint ?? Offset.zero,
                   latitude: lat,
                   longitude: lon,
+                  creationTime: null,
                 );
               } else {
                 showSnackBar('Неверные координаты');
@@ -1707,11 +1723,16 @@ class MapAnchorManager {
     );
   }
 
+  /// Внутренний метод добавления якоря.
+  /// [creationTime] – системное время нажатия кнопки «ЯЗдесь» (с микросекундами)
+  /// для GPS-точек; для импортированных точек передаётся null.
+  /// Время создания якоря: если передано – creationTime,
+  /// иначе – DateTime.fromMillisecondsSinceEpoch(0).
   Future<void> _addAnchor({
     required Offset imagePoint,
     required double latitude,
     required double longitude,
-    String? timeStr,
+    DateTime? creationTime,
   }) async {
     final project = state.project;
     if (project == null) return;
@@ -1736,17 +1757,27 @@ class MapAnchorManager {
         ),
       );
     }
+    /* Внутренний метод добавления якоря. [creationTime] – 
+системное время нажатия кнопки «ЯЗдесь» (с микросекундами) для GPS-точек; 
+для импортированных точек передаётся null. Время создания якоря: 
+если передано – creationTime, иначе – DateTime.fromMillisecondsSinceEpoch(0). */
+    final creationTimestamp =
+        creationTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+    print(
+      '🔔 ТП создана: время=$creationTimestamp (источник: ${creationTime != null ? 'GPS' : 'импорт'})',
+    );
 
     final anchor = MapAnchor(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
+      /* формируем уникальный id из текущего времени */
       imageX: imagePoint.dx,
       imageY: imagePoint.dy,
       latitude: latitude,
       longitude: longitude,
-      createdAt: DateTime.now(),
+      createdAt: creationTimestamp,
     );
 
-    // Если текущий режим ФотоСевер, делаем эту точку единственной активной
     if (calibrationService.currentMode == CalibrationMode.photoSever) {
       calibrationService.setPinnedAnchorIds([anchor.id]);
     }
@@ -1765,32 +1796,24 @@ class MapAnchorManager {
     setState(() {
       state.project = updatedProject;
     });
-    // else: проект уже обновлён внутри блока ФотоСевера, ничего не делаем
 
     calibrationService.updateAnchors(state.project!.anchors);
     onAnchorsChanged();
     await onRecalculateTargets(restartNavigation: true);
 
-    if (onAnchorAdded != null) {
-      final String finalTimeStr = timeStr ?? _formatTime(DateTime.now());
-      final anchorIndices = calibrationService.activeAnchorIndices;
-      final timeWithIndices = anchorIndices != null
-          ? '$finalTimeStr ($anchorIndices)'
-          : finalTimeStr;
-      await onAnchorAdded!(
-        latitude,
-        longitude,
-        distanceFromPrevious,
-        timeWithIndices,
-      );
-    }
+    print('Peredacha TP v zhurnal: vremia=$creationTimestamp');
+    onAnchorAdded?.call(
+      latitude,
+      longitude,
+      distanceFromPrevious,
+      creationTimestamp,
+    );
+
     final anchorNum = updatedAnchors.length;
     showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
   void handleTapOnMap(Offset screenPosition) {
-    // ✅ В автоматических режимах (A/F/N) тап на якорь игнорируется
-    // Переключение якорей работает только в режимах M и P
     final mode = calibrationService.currentMode;
     if (!calibrationService.isManualMode &&
         mode != CalibrationMode.photoSever) {
@@ -1863,7 +1886,6 @@ class MapAnchorManager {
     final anchorCount = anchors.length;
     final hasPhotoSever = project != null && project.photoSeverLinePixels > 0;
 
-    // Условия доступности режимов
     final canAffine = anchorCount >= 2;
     final canFarthest = anchorCount >= 2;
     final canNearest = anchorCount >= 2;
@@ -1894,14 +1916,13 @@ class MapAnchorManager {
       builder: (ctx) => SimpleDialog(
         title: const Text('Режим привязки'),
         children: [
-          // === ФотоСевер (P) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canPhotoSever) {
                 showHintAndClose('Нужно ФотоСевер & 1 якорь', ctx);
                 return;
               }
-              print('🔄 Выбран режим P');
+              print('Vybran rezhim P');
               calibrationService.setCalibrationMode(CalibrationMode.photoSever);
               calibrationService.updatePhotoSeverData(
                 lineMeters: project.photoSeverLineMeters,
@@ -1916,7 +1937,7 @@ class MapAnchorManager {
               'ФотоСевер (P)',
               style: TextStyle(color: canPhotoSever ? null : Colors.grey),
             ),
-          ), // === Ручной (M) ===
+          ),
           SimpleDialogOption(
             onPressed: () {
               if (!canManual) {
@@ -1930,7 +1951,6 @@ class MapAnchorManager {
               style: TextStyle(color: canManual ? null : Colors.grey),
             ),
           ),
-          // === Affine (A) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canAffine) {
@@ -1944,7 +1964,6 @@ class MapAnchorManager {
               style: TextStyle(color: canAffine ? null : Colors.grey),
             ),
           ),
-          // === Farthest (F) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canFarthest) {
@@ -1958,7 +1977,6 @@ class MapAnchorManager {
               style: TextStyle(color: canFarthest ? null : Colors.grey),
             ),
           ),
-          // === Nearest (N) ===
           SimpleDialogOption(
             onPressed: () {
               if (!canNearest) {
@@ -1992,10 +2010,9 @@ class MapAnchorManager {
       setState(() {
         state.project = updated;
       });
-      // ✅ Обновляем статус привязки
-      print('💾 calling onAnchorsChanged()');
+      print('calling onAnchorsChanged()');
       onAnchorsChanged();
-      print('💾 after onAnchorsChanged()');
+      print('after onAnchorsChanged()');
     }
   }
 
@@ -2023,8 +2040,6 @@ class MapAnchorManager {
     return closest;
   }
 }
-
-
 
 ============= lib/controllers/map_follow_controller.dart ===
 import 'dart:math' as math;
@@ -2304,8 +2319,8 @@ class MapScreenLogic {
   final MapCalibrationService _calibrationService = MapCalibrationService();
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
-  final Function(double lat, double lon, double? distance, String timeStr)?
-  onAnchorAdded;
+  final Function(double lat, double lon, double? distance, DateTime createdAt)?
+      onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   final VoidCallback? onAnchorsChangedForStatus;
@@ -2417,14 +2432,12 @@ class MapScreenLogic {
       imageToScreen: imageToScreen,
       magneticDeclination: magneticDeclination,
       onFinish: () {
-        // Переключаем режим на ФотоСевер
         _calibrationService.setCalibrationMode(CalibrationMode.photoSever);
         _calibrationService.updatePhotoSeverData(
           lineMeters: state.project!.photoSeverLineMeters,
           linePixels: state.project!.photoSeverLinePixels,
           northAngle: state.project!.photoSeverNorthAngle,
         );
-        // Обновляем UI (буква режима в левом верхнем углу)
         setState(() {});
       },
     );
@@ -2432,7 +2445,6 @@ class MapScreenLogic {
     _calibrationService.setMagneticDeclination(magneticDeclination);
     await _loadLastProject();
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
-    // Подписываемся на единый источник GPS
     gpsDataNotifier.addListener(_onGpsDataChanged);
     _lastGpsData = gpsDataNotifier.value;
     anchorManager.lastGpsData = gpsDataNotifier.value;
@@ -2501,7 +2513,6 @@ class MapScreenLogic {
       pinnedIds: project.pinnedAnchorIds,
     );
 
-    // Восстанавливаем данные ФотоСевера, если они есть
     if (project.photoSeverLinePixels > 0) {
       _calibrationService.updatePhotoSeverData(
         lineMeters: project.photoSeverLineMeters,
@@ -2587,7 +2598,6 @@ class MapScreenLogic {
       } catch (e) {
         print('pickImage(): Failed to delete temp file: $e');
       }
-
       final projectId = DateTime.now().millisecondsSinceEpoch.toString();
       final project = MapProject(
         id: projectId,
@@ -2625,7 +2635,7 @@ class MapScreenLogic {
 
   Future<void> closeMap() async {
     if (state.imagePath != null) {
-      removeImageFromCache(state.imagePath!); // очищаем кэш изображения
+      removeImageFromCache(state.imagePath!);
       final file = File(state.imagePath!);
       if (await file.exists()) {
         await file.delete();
@@ -2861,126 +2871,76 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
-    // Момент нажатия кнопки (время телефона с точностью до мс)
-    final int requestTimeMs = DateTime.now().millisecondsSinceEpoch;
+  // Фиксируем системное время нажатия кнопки с микросекундами
+  final DateTime anchorRequestTime = DateTime.now();
 
-    // Получаем позицию прицела на карте (в пикселях изображения)
-    final crosshair = state.crosshairImagePoint;
-    if (crosshair == null) {
-      showSnackBar('Прицел не определён');
-      return;
-    }
-
-    // Берём первую точку GPS (она может быть получена до нажатия)
-    GpsData gps1 = gpsDataNotifier.value;
-
-    // Если gps1 невалидна – ждём до 7 раз по 500 мс, пока не появится валидная точка
-    if (gps1.latitude == null || gps1.longitude == null) {
-      bool found = false;
-      for (int i = 0; i < 7; i++) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        final candidate = gpsDataNotifier.value;
-        if (candidate.latitude != null && candidate.longitude != null) {
-          gps1 = candidate;
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        showSnackBar('Нет сигнала GPS');
-        return;
-      }
-    }
-
-    showSnackBar('Ожидание GPS...');
-
-    // Цикл до 7 раз с шагом 500 мс
-    const int maxIterations = 7;
-    const Duration step = Duration(milliseconds: 500);
-
-    GpsData? finalGps;
-
-    for (int i = 0; i < maxIterations; i++) {
-      await Future.delayed(step);
-
-      final GpsData gps2 = gpsDataNotifier.value;
-
-      // Проверяем валидность gps2
-      if (gps2.latitude == null || gps2.longitude == null) {
-        // Точка невалидна – пропускаем итерацию, но запоминаем её как gps1 для следующего шага
-        gps1 = gps2;
-        continue;
-      }
-
-      // Получаем времена с fallback на текущее время, если поле time отсутствует
-      final int time1 = gps1.time ?? requestTimeMs;
-      final int time2 = gps2.time ?? DateTime.now().millisecondsSinceEpoch;
-
-      // Проверяем попадание requestTimeMs между time1 и time2
-      if (time1 < requestTimeMs && requestTimeMs < time2) {
-        // Линейная интерполяция
-        final double t = (requestTimeMs - time1) / (time2 - time1);
-        final double lat = gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
-        final double lon = gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
-
-        finalGps = GpsData(
-          latitude: lat,
-          longitude: lon,
-          accuracy: (gps1.accuracy ?? 0) + ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
-          speed: (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
-          altitude: (gps1.altitude ?? 0) + ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
-          mslAltitude: (gps1.mslAltitude ?? 0) + ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
-          satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
-          satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
-          magneticDeclination: gps2.magneticDeclination ?? gps1.magneticDeclination,
-          gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
-          time: requestTimeMs,
-        );
-        break;
-      }
-      // Проверяем случай, когда время нажатия совпадает с одной из точек
-      else if (time1 == requestTimeMs) {
-        finalGps = gps1;
-        break;
-      } else if (time2 == requestTimeMs) {
-        finalGps = gps2;
-        break;
-      }
-
-      // Если не попали в интервал и не совпали – сдвигаем пару
-      gps1 = gps2;
-    }
-
-    // Если интерполяция не удалась и не нашли совпадения – используем последнюю валидную точку (gps1)
-    if (finalGps == null) {
-      if (gps1.latitude != null && gps1.longitude != null) {
-        finalGps = gps1;
-        // Время для fallback – время gps1 или текущее
-        final int fallbackTime = gps1.time ?? requestTimeMs;
-        // Создаём копию с корректным временем (на случай, если time не было)
-        finalGps = GpsData(
-          latitude: gps1.latitude,
-          longitude: gps1.longitude,
-          accuracy: gps1.accuracy,
-          speed: gps1.speed,
-          altitude: gps1.altitude,
-          mslAltitude: gps1.mslAltitude,
-          satellitesUsed: gps1.satellitesUsed,
-          satellitesInView: gps1.satellitesInView,
-          magneticDeclination: gps1.magneticDeclination,
-          gpsBearing: gps1.gpsBearing,
-          time: fallbackTime,
-        );
-        showSnackBar('Использована последняя точка GPS');
-      } else {
-        showSnackBar('Не удалось получить координаты GPS');
-        return;
-      }
-    }
-
-    // Добавляем якорь с вычисленными координатами и временем нажатия
-    await anchorManager.addAnchorFromGps(finalGps, crosshair);
+  final crosshair = state.crosshairImagePoint;
+  if (crosshair == null) {
+    showSnackBar('Прицел не определён');
+    return;
   }
+
+  GpsData gps1 = gpsDataNotifier.value;
+  showSnackBar('Ожидание GPS...');
+
+  const int maxIterations = 7;
+  const Duration step = Duration(milliseconds: 500);
+
+  GpsData? finalGps;
+
+  for (int i = 0; i < maxIterations; i++) {
+    await Future.delayed(step);
+    final GpsData gps2 = gpsDataNotifier.value;
+
+    final int? time1 = gps1.time;
+    final int? time2 = gps2.time;
+
+    if (time1 == null || time2 == null) {
+      gps1 = gps2;
+      continue;
+    }
+
+    final int anchorRequestTimeMs = anchorRequestTime.millisecondsSinceEpoch;
+
+    if (time1 < anchorRequestTimeMs && anchorRequestTimeMs < time2) {
+      final double t = (anchorRequestTimeMs - time1) / (time2 - time1);
+      final double lat = gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
+      final double lon = gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
+
+      finalGps = GpsData(
+        latitude: lat,
+        longitude: lon,
+        accuracy: (gps1.accuracy ?? 0) + ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
+        speed: (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
+        altitude: (gps1.altitude ?? 0) + ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
+        mslAltitude: (gps1.mslAltitude ?? 0) + ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
+        satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
+        satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
+        magneticDeclination: gps2.magneticDeclination ?? gps1.magneticDeclination,
+        gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
+        time: anchorRequestTimeMs,
+      );
+      break;
+    } else if (time1 == anchorRequestTimeMs) {
+      finalGps = gps1;
+      break;
+    } else if (time2 == anchorRequestTimeMs) {
+      finalGps = gps2;
+      break;
+    }
+
+    gps1 = gps2;
+  }
+
+  if (finalGps == null) {
+    showSnackBar('Не удалось определить точное положение. Попробуйте еще раз.');
+    return;
+  }
+
+  // Передаём полное время с микросекундами
+  print('anchorRequestTime: $anchorRequestTime');
+  await anchorManager.addAnchorFromGps(finalGps, crosshair, anchorRequestTime);
+}
   Future<void> addAnchorFromClipboard() async {
     await anchorManager.addAnchorFromClipboard();
   }
@@ -3015,7 +2975,6 @@ class MapScreenLogic {
 
   Future<void> showModePicker(BuildContext context) async {
     await anchorManager.showModePicker(context);
-    // После выбора режима пересчитываем поворот и обновляем статус
     _recalculateWorkingPairAndRotation();
   }
 
@@ -3036,7 +2995,7 @@ class MapScreenLogic {
       if (candidate == CalibrationMode.photoSever) {
         final project = state.project;
         if (project == null || project.photoSeverLinePixels == 0) {
-          continue; // Пропускаем P, если нет данных
+          continue;
         }
       }
       _calibrationService.setCalibrationMode(candidate);
@@ -3074,16 +3033,15 @@ class MapScreenLogic {
 
   void _recalculateWorkingPairAndRotation() {
     print(
-      '🔁 _recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
+      '_recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
     );
     final anchors = state.project?.anchors ?? [];
-    // Перестраиваем трансформацию на основе текущих якорей и режима
     print(
-      '🔁 before updateAnchors, used=${_calibrationService.usedAnchorCount}',
+      'before updateAnchors, used=${_calibrationService.usedAnchorCount}',
     );
     _calibrationService.updateAnchors(anchors);
     print(
-      '🔁 after updateAnchors, used=${_calibrationService.usedAnchorCount}',
+      'after updateAnchors, used=${_calibrationService.usedAnchorCount}',
     );
     final newPair = _calibrationService.selectWorkingPair(anchors);
     final declinationRad = magneticDeclination * math.pi / 180;
@@ -3091,11 +3049,9 @@ class MapScreenLogic {
     setState(() {
       state.workingPair = newPair;
       if (newPair != null) {
-        // Обычные режимы: истинный угол минус склонение
         final trueRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
         state.mapRotation = trueRotation - declinationRad;
       } else {
-        // Режим P или отсутствие калибровки
         final project = state.project;
         if (project != null && project.photoSeverLinePixels > 0) {
           state.mapRotation = -math.pi / 2 - project.photoSeverNorthAngle;
@@ -3106,7 +3062,7 @@ class MapScreenLogic {
     });
 
     print(
-      '🔁 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
+      '🔔 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
     );
     onAnchorsChangedForStatus?.call();
   }
@@ -3118,7 +3074,6 @@ class MapScreenLogic {
   }
 
   void _recalculateUserImagePoint() {
-    // Если привязка отсутствует, скрываем маркер
     if (_calibrationService.usedAnchorCount == 0) {
       if (state.currentUserImagePoint != null) {
         setState(() {
@@ -3256,11 +3211,10 @@ class MapScreenLogic {
   }
 
   void _onHeadingChanged() {
-    // headingNotifier.value уже содержит магнитный курс
     final magneticHeading = headingNotifier.value;
     setState(() {
-      state.heading = magneticHeading; // теперь это магнитный курс
-      state.magneticHeading = magneticHeading; // без изменений
+      state.heading = magneticHeading;
+      state.magneticHeading = magneticHeading;
     });
     if (state.followMode) {
       followController.applyHeadingRotation();
@@ -3277,8 +3231,6 @@ class MapScreenLogic {
     });
   }
 
-  /// Обработчик обновлений от единого источника GPS (gpsDataNotifier).
-  /// Не создавать новых подписок на GpsManager!
   void _onGpsDataChanged() {
     final gpsData = gpsDataNotifier.value;
     if (gpsData.latitude == null || gpsData.longitude == null) return;
@@ -3297,17 +3249,14 @@ class MapScreenLogic {
     required double declinationRad,
   }) {
     if (photoSeverLinePixels > 0) {
-      // Режим P: угол уже магнитный, так как photoSeverNorthAngle магнитный
       return -math.pi / 2 - photoSeverNorthAngle;
     } else if (mapRotation != 0.0) {
-      // mapRotation уже магнитный, дополнительное склонение не вычитаем
       return mapRotation;
     } else {
       return 0.0;
     }
   }
 }
-
 ============= lib/controllers/map_screen_state.dart ===
 import 'dart:async';
 import 'package:flutter/widgets.dart';
@@ -3428,12 +3377,14 @@ class MapTargetManager {
     );
 
     final target = MapTarget(
+      // Время создания используется как уникальный идентификатор для новой цели.
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       imageX: state.crosshairImagePoint!.dx,
       imageY: state.crosshairImagePoint!.dy,
       latitude: geo?.latitude,
       longitude: geo?.longitude,
       status: MapTargetStatus.planned,
+      // Фиксируем время создания цели.
       createdAt: DateTime.now(),
     );
 
@@ -3482,12 +3433,14 @@ class MapTargetManager {
     }
 
     final target = MapTarget(
+      // Время создания используется как уникальный идентификатор для новой цели.
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       imageX: imagePoint.dx,
       imageY: imagePoint.dy,
       latitude: lat,
       longitude: lon,
       status: MapTargetStatus.planned,
+      // Фиксируем время создания цели.
       createdAt: DateTime.now(),
     );
 
@@ -3757,17 +3710,22 @@ Future<double?> showDistanceInputDialog(BuildContext context) async {
 }
 
 ============= lib/log_entry.dart ===
+// ignore_for_file: avoid_print
+
+
 // Базовый абстрактный класс для всех записей в журнале
 abstract class LogItem {
   final DateTime timestamp;
   final String type;
-  LogItem({required this.type}) : timestamp = DateTime.now();
+  // VZ: В конструкторе базового класса автоматически фиксируется время создания любой записи журнала.
+  LogItem({required this.type, DateTime? createdAt})
+    : timestamp = createdAt ?? DateTime.now();
   Map<String, dynamic> toJson();
 }
 
 // Класс для записей о создании цели
 class TargetCreationLogEntry extends LogItem {
-  final int id; // ✅ Уникальный идентификатор
+  final int id;
   final double baseLatitude;
   final double baseLongitude;
   final double azimuth;
@@ -3776,20 +3734,21 @@ class TargetCreationLogEntry extends LogItem {
   final double targetLongitude;
 
   TargetCreationLogEntry({
-    required this.id, // ✅ Требовать при создании
+    required this.id,
     required this.baseLatitude,
     required this.baseLongitude,
     required this.azimuth,
     required this.distance,
     required this.targetLatitude,
     required this.targetLongitude,
+    super.createdAt,
   }) : super(type: 'target_creation');
 
   @override
   Map<String, dynamic> toJson() => {
     'type': type,
     'timestamp': timestamp.toIso8601String(),
-    'id': id, // ✅ Сохранять id
+    'id': id,
     'baseLatitude': baseLatitude,
     'baseLongitude': baseLongitude,
     'azimuth': azimuth,
@@ -3800,15 +3759,14 @@ class TargetCreationLogEntry extends LogItem {
 
   factory TargetCreationLogEntry.fromJson(Map<String, dynamic> json) {
     return TargetCreationLogEntry(
-      id:
-          json['id'] ??
-          DateTime.now().millisecondsSinceEpoch, // ✅ Для старых записей
+      id: json['id'] as int,
       baseLatitude: json['baseLatitude'],
       baseLongitude: json['baseLongitude'],
       azimuth: json['azimuth'],
       distance: json['distance'],
       targetLatitude: json['targetLatitude'],
       targetLongitude: json['targetLongitude'],
+      createdAt: DateTime.parse(json['timestamp']),
     );
   }
 }
@@ -3816,18 +3774,17 @@ class TargetCreationLogEntry extends LogItem {
 // Добавляю после класса TargetCreationLogEntry
 
 class MapAnchorLogEntry extends LogItem {
-  final int id;  // ✅ добавляем id
+  final int id;
   final double latitude;
   final double longitude;
   final double? distanceFromPrevious;
-  final String timeStr;
 
   MapAnchorLogEntry({
     required this.id,
     required this.latitude,
     required this.longitude,
     this.distanceFromPrevious,
-    required this.timeStr,
+    super.createdAt,
   }) : super(type: 'map_anchor');
 
   @override
@@ -3838,17 +3795,18 @@ class MapAnchorLogEntry extends LogItem {
     'latitude': latitude,
     'longitude': longitude,
     'distanceFromPrevious': distanceFromPrevious,
-    'timeStr': timeStr,
   };
 
   factory MapAnchorLogEntry.fromJson(Map<String, dynamic> json) {
-    return MapAnchorLogEntry(
+    final entry = MapAnchorLogEntry(
       id: json['id'],
       latitude: json['latitude'],
       longitude: json['longitude'],
       distanceFromPrevious: json['distanceFromPrevious'],
-      timeStr: json['timeStr'],
+      createdAt: DateTime.parse(json['timestamp']),
     );
+    print('loadLogEntries: parsed timestamp = ${entry.timestamp}');
+    return entry;
   }
 }
 
@@ -3866,6 +3824,7 @@ class LogEntry extends LogItem {
     required this.longitude,
     this.distance,
     this.bearing,
+    super.createdAt,
   }) : super(type: 'track');
 
   @override
@@ -3885,6 +3844,7 @@ class LogEntry extends LogItem {
     longitude: json['longitude'],
     distance: json['distance'],
     bearing: json['bearing'],
+    createdAt: DateTime.parse(json['timestamp']),
   );
 }
 
@@ -3901,6 +3861,7 @@ LogItem logItemFromJson(Map<String, dynamic> json) {
       throw ArgumentError('Unknown log item type: ${json['type']}');
   }
 }
+
 ============= lib/main.dart ===
 // ignore_for_file: avoid_print
 
@@ -4564,7 +4525,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       // Таймаут на случай, если финализация зависнет
       Future.delayed(const Duration(seconds: 2), () {
         if (!completer.isCompleted) {
-          print('⚠️ finalizeTrackAndExport timeout, forcing exit');
+          print('finalizeTrackAndExport timeout, forcing exit');
           completer.complete();
         }
       });
@@ -4572,7 +4533,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       try {
         await _logic.finalizeTrackAndExport();
       } catch (e, stack) {
-        print('❌ Error finalizing track: $e');
+        print('Error finalizing track: $e');
         print(stack);
       } finally {
         if (!completer.isCompleted) {
@@ -4585,7 +4546,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       try {
         await _logic.clearWaypoint();
       } catch (e) {
-        print('❌ Error clearing waypoint: $e');
+        print('Error clearing waypoint: $e');
       }
 
       _logic.dispose();
@@ -4669,13 +4630,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                       gpsDataNotifier: _state.gpsDataNotifier,
                       magneticDeclination: _state.magneticDeclination,
                       headingNotifier: _state.headingNotifier,
-                      onAnchorAdded: (lat, lon, distance, timeStr) async {
+                      onAnchorAdded: (lat, lon, distance, createdAt) async {
                         final items = await _logService.addMapAnchorLogEntry(
                           currentLogItems: _state.logItems,
                           latitude: lat,
                           longitude: lon,
                           distanceFromPrevious: distance,
-                          timeStr: timeStr,
+                          createdAt: createdAt,
                         );
                         if (mounted) {
                           setState(() {
@@ -4712,9 +4673,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 }
 
 ============= lib/screens/log_screen.dart ===
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../log_entry.dart';
 
@@ -4725,7 +4689,6 @@ class LogScreen extends StatefulWidget {
 
   @override
   State<LogScreen> createState() => _LogScreenState();
-  
 }
 
 class _LogScreenState extends State<LogScreen> {
@@ -4759,11 +4722,11 @@ class _LogScreenState extends State<LogScreen> {
                 'ЦЕЛЬ: ${entry.targetLatitude.toStringAsFixed(6)},${entry.targetLongitude.toStringAsFixed(6)}';
             return '$startText\n$targetText';
           } else if (entry is MapAnchorLogEntry) {
-  final distanceText = entry.distanceFromPrevious != null
-      ? ' ${entry.distanceFromPrevious!.round()}m'
-      : ' ---';
-  return 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText ${entry.timeStr}';
-}
+            final distanceText = entry.distanceFromPrevious != null
+                ? ' ${entry.distanceFromPrevious!.round()}m'
+                : ' ---';
+            return 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText ${DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp)}';
+          }
           return '';
         })
         .join('\n');
@@ -4798,8 +4761,9 @@ class _LogScreenState extends State<LogScreen> {
       entryId = entry.id;
       entryType = 'target';
     } else if (entry is MapAnchorLogEntry) {
-      textToCopy = '${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}';
-      entryId = entry.id;  // ✅ сохраняем id
+      textToCopy =
+          '${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}';
+      entryId = entry.id;
       entryType = 'anchor';
     }
 
@@ -4835,7 +4799,6 @@ class _LogScreenState extends State<LogScreen> {
     if (entry is LogEntry) {
       final isCopied =
           entry.id == _copiedEntryId && _copiedEntryType == 'track';
-      // --- Исправлено ---
       final distanceText = entry.distance != null
           ? '${entry.distance!.round()}m'
           : '--m';
@@ -4844,7 +4807,6 @@ class _LogScreenState extends State<LogScreen> {
           : '--°';
       final text =
           '${entry.id} ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)} $distanceText $bearingText';
-      // --- Конец исправления ---
       return InkWell(
         onTap: () => _handleTap(entry),
         child: AnimatedContainer(
@@ -4928,30 +4890,39 @@ class _LogScreenState extends State<LogScreen> {
           ],
         ),
       );
-      } else if (entry is MapAnchorLogEntry) {
-        final isCopied = _copiedEntryId == entry.id && _copiedEntryType == 'anchor';  // ✅ проверяем по id
-        final distanceText = entry.distanceFromPrevious != null
-            ? ' ${entry.distanceFromPrevious!.round()}m'
-            : ' ---';
-        final text = 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText ${entry.timeStr}';
-        
-        return InkWell(
-          onTap: () => _handleTap(entry),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            color: isCopied ? originalTextColor : Colors.transparent,
-            child: Text(
-              text,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 16,
-                color: isCopied ? invertedTextColor : originalTextColor,
-              ),
+    } else if (entry is MapAnchorLogEntry) {
+      final isCopied =
+          _copiedEntryId == entry.id && _copiedEntryType == 'anchor';
+      final distanceText = entry.distanceFromPrevious != null
+          ? ' ${entry.distanceFromPrevious!.round()}m'
+          : ' ---';
+      print(
+        'log_screen: timestamp = ${entry.timestamp} (микросекунды: ${entry.timestamp.microsecond})',
+      );
+      print(
+        "Время с миллисекундами: ${DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp)}",
+      );
+  final timeStr = entry.timestamp.toIso8601String().substring(11, 26); // "HH:mm:ss.SSSSSS"
+  final text = 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText $timeStr';
+      print("🔔 переменная text: $text");
+
+      return InkWell(
+        onTap: () => _handleTap(entry),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          color: isCopied ? originalTextColor : Colors.transparent,
+          child: Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 16,
+              color: isCopied ? invertedTextColor : originalTextColor,
             ),
           ),
-        );
-      }
+        ),
+      );
+    }
     return const SizedBox.shrink();
   }
 
@@ -5014,6 +4985,7 @@ class _LogScreenState extends State<LogScreen> {
     );
   }
 }
+
 ============= lib/screens/map_screen.dart ===
 // ignore_for_file: avoid_print
 
@@ -5040,8 +5012,8 @@ class MapScreen extends StatefulWidget {
   final ValueNotifier<GpsData> gpsDataNotifier;
   final double magneticDeclination;
   final ValueNotifier<double> headingNotifier;
-  final Function(double lat, double lon, double? distance, String timeStr)?
-  onAnchorAdded;
+  final Function(double lat, double lon, double? distance, DateTime createdAt)?
+      onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
 
@@ -5111,7 +5083,7 @@ class _MapScreenState extends State<MapScreen> {
   void _updateStatusText() {
     final used = _logic.usedAnchorCount;
     final total = _logic.totalAnchorCount;
-    print('📊 _updateStatusText: used=$used, total=$total');
+    print('_updateStatusText: used=$used, total=$total');
     updateNotification(title: 'Режим - Карта $used/$total');
   }
 
@@ -6670,7 +6642,7 @@ String _currentContent = '';
 void updateNotification({String? title, String? content}) {
   if (title != null) _currentTitle = title;
   if (content != null) _currentContent = content;
-  print('🔔 updateNotification called with title: $_currentTitle, content: $_currentContent');
+  print('updateNotification called with title: $_currentTitle, content: $_currentContent');
   _notificationChannel.invokeMethod('updateNotification', {
     'title': _currentTitle,
     'content': _currentContent,
@@ -6692,11 +6664,11 @@ void onStart(ServiceInstance service) {
   });
 
   service.on('startRecording').listen((_) {
-    print('[BackgroundService] ▶️ Запись (удержание процесса)');
+    print('[BackgroundService] Запись (удержание процесса)');
   });
 
   service.on('stopRecording').listen((_) {
-    print('[BackgroundService] ⏹️ Запись остановлена');
+    print('[BackgroundService] Запись остановлена');
   });
 }
 
@@ -7035,75 +7007,30 @@ class GpxExportService {
     }
 
     // --- 2.5. Waypoints: Точки привязки (MapAnchorLogEntry) ---
-    // Фильтруем все записи журнала, оставляя только те, которые являются точками привязки карты (`MapAnchorLogEntry`).
     final anchorEntries = logItems.whereType<MapAnchorLogEntry>().toList();
-    // Начинаем цикл для перебора каждой точки привязки.
     for (int i = 0; i < anchorEntries.length; i++) {
-      // Получаем текущую запись (точку привязки).
       final entry = anchorEntries[i];
-      // Преобразуем широту и долготу в строки с 6 знаками после запятой для точности.
       final lat = entry.latitude.toStringAsFixed(6);
       final lon = entry.longitude.toStringAsFixed(6);
 
-      // --- Начало сложной обработки времени ---
-      // Цель: собрать правильную временную метку в формате UTC, комбинируя дату из одного поля и время из другого.
-      
-      // 1. Извлекаем только ДАТУ из `timestamp`, преобразовав его в UTC и стандартный формат ISO 8601.
-      final datePart = entry.timestamp
-          .toUtc()
-          .toIso8601String() // -> "2026-08-13T10:35:22.123Z"
-          .split('T')      // -> ["2026-08-13", "10:35:22.123Z"]
-          .first;         // -> "2026-08-13"
+      // Используем timestamp напрямую, так как timeStr удален
+      final time = entry.timestamp.toUtc().toIso8601String();
 
-      // 2. Извлекаем только ВРЕМЯ из `timeStr`, которое является более точным, но может содержать доп. информацию.
-      final timePart = entry.timeStr.split(' ').first; // -> "13:35:22.00309"
-      
-      // 3. Разбираем строку времени на компоненты: часы, минуты, секунды и миллисекунды.
-      final parts = timePart.split(':');
-      final hours = int.parse(parts[0]);
-      final minutes = int.parse(parts[1]);
-      final secParts = parts[2].split('.');
-      final seconds = int.parse(secParts[0]);
-      // Приводим миллисекунды к стандартной длине в 3 знака.
-      final millis = int.parse(secParts[1].padRight(3, '0').substring(0, 3));
-      
-      // 4. Собираем новый объект DateTime, используя извлеченную ДАТУ и разобранное ВРЕМЯ.
-      // Предполагается, что `timeStr` представляет локальное время.
-      final localDateTime = DateTime(
-        int.parse(datePart.split('-')[0]), // Год
-        int.parse(datePart.split('-')[1]), // Месяц
-        int.parse(datePart.split('-')[2]), // День
-        hours,
-        minutes,
-        seconds,
-        millis,
-      );
-      
-      // 5. Преобразуем собранное локальное время в UTC, чтобы получить корректное время для GPX.
-      final utcDateTime = localDateTime.toUtc();
-      final time = utcDateTime.toIso8601String(); // Форматируем в стандарт ISO 8601.
-
-      // --- Конец обработки времени ---
-
-      // Создаем имя для точки, используя ее порядковый номер (ТП1, ТП2 и т.д.).
       final name = 'ТП${i + 1}';
-      // Инициализируем пустое описание.
       String desc = '';
-      // Если для точки рассчитано расстояние от предыдущей, добавляем его в описание.
       if (entry.distanceFromPrevious != null) {
         desc = '${entry.distanceFromPrevious!.round()}м';
       }
       
-      // Записываем в буфер XML-структуру для путевой точки (waypoint).
       buffer.writeln('  <wpt lat="$lat" lon="$lon">');
       buffer.writeln('    <time>$time</time>');
       buffer.writeln('    <name>$name</name>');
-      // Если описание не пустое, добавляем его в тег <desc>.
       if (desc.isNotEmpty) {
         buffer.writeln('    <desc><![CDATA[$desc]]></desc>');
       }
       buffer.writeln('  </wpt>');
     }
+
     // --- 3. Трек (из CSV) ---
     if (trackPoints.isNotEmpty) {
       final fileName = DateTime.now()
@@ -7132,6 +7059,9 @@ class GpxExportService {
 }
 
 ============= lib/services/log_service.dart ===
+// ignore_for_file: avoid_print
+
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -7167,7 +7097,7 @@ class LogService {
     required double latitude,
     required double longitude,
     required double? distanceFromPrevious,
-    required String timeStr,
+    required DateTime createdAt,
   }) async {
     return _synchronized(() async {
       final logItems = await loadLogEntries();
@@ -7182,7 +7112,7 @@ class LogService {
         latitude: latitude,
         longitude: longitude,
         distanceFromPrevious: distanceFromPrevious,
-        timeStr: timeStr,
+        createdAt: createdAt,
       );
 
       logItems.add(entry);
@@ -7207,13 +7137,12 @@ class LogService {
     return [];
   }
 
-  Future<void> saveLogEntries(List<LogItem> logItems) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'log_items',
-      jsonEncode(logItems.map((e) => e.toJson()).toList()),
-    );
-  }
+Future<void> saveLogEntries(List<LogItem> logItems) async {
+  final prefs = await SharedPreferences.getInstance(); // добавить эту строку
+  final jsonString = jsonEncode(logItems.map((e) => e.toJson()).toList());
+  print('saveLogEntries: JSON = $jsonString');
+  await prefs.setString('log_items', jsonString);
+}
 
   Future<SetWaypointResult?> setWaypoint({
     required List<LogItem> currentLogItems,
@@ -8360,12 +8289,21 @@ class TrackRecorder {
   }
 
   void _onGpsData(GpsData data) {
+      
+    // ВАЖНО: 
+    // Все временные метки  включая точки трека и вручную созданные точки (ТП),
+    // должны быть в одной системе отсчета для корректной интерполяции и сопоставления.
+    // Использование разных источников времени (системного и GPS) привело бы к рассинхронизации.
+    // Потому используется системное время телефона (DateTime.now()), а не время из GPS-пакета (data.time).
+    // Это сделано намеренно для обеспечения единой временной шкалы во всем приложении.
+    
+    final time = DateTime.now().toUtc().toIso8601String();
+
     if (!_isRecording) return;
     if (data.latitude == null || data.longitude == null) return;
 
     final lat = data.latitude!;
     final lon = data.longitude!;
-    final time = DateTime.now().toUtc().toIso8601String();
 
     final line = '$time,$lat,$lon\n';
     final file = File(_csvPath!);

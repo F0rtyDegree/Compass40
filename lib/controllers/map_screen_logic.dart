@@ -36,8 +36,8 @@ class MapScreenLogic {
   final MapCalibrationService _calibrationService = MapCalibrationService();
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
-  final Function(double lat, double lon, double? distance, String timeStr)?
-  onAnchorAdded;
+  final Function(double lat, double lon, double? distance, DateTime createdAt)?
+      onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   final VoidCallback? onAnchorsChangedForStatus;
@@ -149,14 +149,12 @@ class MapScreenLogic {
       imageToScreen: imageToScreen,
       magneticDeclination: magneticDeclination,
       onFinish: () {
-        // Переключаем режим на ФотоСевер
         _calibrationService.setCalibrationMode(CalibrationMode.photoSever);
         _calibrationService.updatePhotoSeverData(
           lineMeters: state.project!.photoSeverLineMeters,
           linePixels: state.project!.photoSeverLinePixels,
           northAngle: state.project!.photoSeverNorthAngle,
         );
-        // Обновляем UI (буква режима в левом верхнем углу)
         setState(() {});
       },
     );
@@ -164,7 +162,6 @@ class MapScreenLogic {
     _calibrationService.setMagneticDeclination(magneticDeclination);
     await _loadLastProject();
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
-    // Подписываемся на единый источник GPS
     gpsDataNotifier.addListener(_onGpsDataChanged);
     _lastGpsData = gpsDataNotifier.value;
     anchorManager.lastGpsData = gpsDataNotifier.value;
@@ -233,7 +230,6 @@ class MapScreenLogic {
       pinnedIds: project.pinnedAnchorIds,
     );
 
-    // Восстанавливаем данные ФотоСевера, если они есть
     if (project.photoSeverLinePixels > 0) {
       _calibrationService.updatePhotoSeverData(
         lineMeters: project.photoSeverLineMeters,
@@ -319,7 +315,6 @@ class MapScreenLogic {
       } catch (e) {
         print('pickImage(): Failed to delete temp file: $e');
       }
-
       final projectId = DateTime.now().millisecondsSinceEpoch.toString();
       final project = MapProject(
         id: projectId,
@@ -357,7 +352,7 @@ class MapScreenLogic {
 
   Future<void> closeMap() async {
     if (state.imagePath != null) {
-      removeImageFromCache(state.imagePath!); // очищаем кэш изображения
+      removeImageFromCache(state.imagePath!);
       final file = File(state.imagePath!);
       if (await file.exists()) {
         await file.delete();
@@ -593,126 +588,76 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
-    // Фиксируем момент нажатия кнопки (системное время телефона)
-    final int anchorRequestTimeMs = DateTime.now().millisecondsSinceEpoch;
+  // Фиксируем системное время нажатия кнопки с микросекундами
+  final DateTime anchorRequestTime = DateTime.now();
 
-    // Получаем позицию прицела на карте (в пикселях изображения)
-    final crosshair = state.crosshairImagePoint;
-    if (crosshair == null) {
-      showSnackBar('Прицел не определён');
-      return;
-    }
-
-    // Берём первую точку GPS (она может быть получена до нажатия)
-    GpsData gps1 = gpsDataNotifier.value;
-
-    // Если gps1 невалидна – ждём до 7 раз по 500 мс, пока не появится валидная точка
-    if (gps1.latitude == null || gps1.longitude == null) {
-      bool found = false;
-      for (int i = 0; i < 7; i++) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        final candidate = gpsDataNotifier.value;
-        if (candidate.latitude != null && candidate.longitude != null) {
-          gps1 = candidate;
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        showSnackBar('Нет сигнала GPS');
-        return;
-      }
-    }
-
-    showSnackBar('Ожидание GPS...');
-
-    // Цикл до 7 раз с шагом 500 мс
-    const int maxIterations = 7;
-    const Duration step = Duration(milliseconds: 500);
-
-    GpsData? finalGps;
-
-    for (int i = 0; i < maxIterations; i++) {
-      await Future.delayed(step);
-
-      final GpsData gps2 = gpsDataNotifier.value;
-
-      // Проверяем валидность gps2
-      if (gps2.latitude == null || gps2.longitude == null) {
-        // Точка невалидна – пропускаем итерацию, но запоминаем её как gps1 для следующего шага
-        gps1 = gps2;
-        continue;
-      }
-
-      // Получаем времена с fallback на текущее время, если поле time отсутствует
-      final int time1 = gps1.time ?? anchorRequestTimeMs;
-      final int time2 = gps2.time ?? DateTime.now().millisecondsSinceEpoch;
-
-      // Проверяем попадание anchorRequestTimeMs между time1 и time2
-      if (time1 < anchorRequestTimeMs && anchorRequestTimeMs < time2) {
-        // Линейная интерполяция
-        final double t = (anchorRequestTimeMs - time1) / (time2 - time1);
-        final double lat = gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
-        final double lon = gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
-
-        finalGps = GpsData(
-          latitude: lat,
-          longitude: lon,
-          accuracy: (gps1.accuracy ?? 0) + ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
-          speed: (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
-          altitude: (gps1.altitude ?? 0) + ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
-          mslAltitude: (gps1.mslAltitude ?? 0) + ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
-          satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
-          satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
-          magneticDeclination: gps2.magneticDeclination ?? gps1.magneticDeclination,
-          gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
-          time: anchorRequestTimeMs,
-        );
-        break;
-      }
-      // Проверяем случай, когда время нажатия совпадает с одной из точек
-      else if (time1 == anchorRequestTimeMs) {
-        finalGps = gps1;
-        break;
-      } else if (time2 == anchorRequestTimeMs) {
-        finalGps = gps2;
-        break;
-      }
-
-      // Если не попали в интервал и не совпали – сдвигаем пару
-      gps1 = gps2;
-    }
-
-    // Если интерполяция не удалась и не нашли совпадения – используем последнюю валидную точку (gps1)
-    if (finalGps == null) {
-      if (gps1.latitude != null && gps1.longitude != null) {
-        finalGps = gps1;
-        // Время для fallback – время gps1 или текущее
-        final int fallbackTime = gps1.time ?? anchorRequestTimeMs;
-        // Создаём копию с корректным временем (на случай, если time не было)
-        finalGps = GpsData(
-          latitude: gps1.latitude,
-          longitude: gps1.longitude,
-          accuracy: gps1.accuracy,
-          speed: gps1.speed,
-          altitude: gps1.altitude,
-          mslAltitude: gps1.mslAltitude,
-          satellitesUsed: gps1.satellitesUsed,
-          satellitesInView: gps1.satellitesInView,
-          magneticDeclination: gps1.magneticDeclination,
-          gpsBearing: gps1.gpsBearing,
-          time: fallbackTime,
-        );
-        showSnackBar('Использована последняя точка GPS');
-      } else {
-        showSnackBar('Не удалось получить координаты GPS');
-        return;
-      }
-    }
-
-    // Добавляем якорь с вычисленными координатами и временем нажатия
-    await anchorManager.addAnchorFromGps(finalGps, crosshair);
+  final crosshair = state.crosshairImagePoint;
+  if (crosshair == null) {
+    showSnackBar('Прицел не определён');
+    return;
   }
+
+  GpsData gps1 = gpsDataNotifier.value;
+  showSnackBar('Ожидание GPS...');
+
+  const int maxIterations = 7;
+  const Duration step = Duration(milliseconds: 500);
+
+  GpsData? finalGps;
+
+  for (int i = 0; i < maxIterations; i++) {
+    await Future.delayed(step);
+    final GpsData gps2 = gpsDataNotifier.value;
+
+    final int? time1 = gps1.time;
+    final int? time2 = gps2.time;
+
+    if (time1 == null || time2 == null) {
+      gps1 = gps2;
+      continue;
+    }
+
+    final int anchorRequestTimeMs = anchorRequestTime.millisecondsSinceEpoch;
+
+    if (time1 < anchorRequestTimeMs && anchorRequestTimeMs < time2) {
+      final double t = (anchorRequestTimeMs - time1) / (time2 - time1);
+      final double lat = gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
+      final double lon = gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
+
+      finalGps = GpsData(
+        latitude: lat,
+        longitude: lon,
+        accuracy: (gps1.accuracy ?? 0) + ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
+        speed: (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
+        altitude: (gps1.altitude ?? 0) + ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
+        mslAltitude: (gps1.mslAltitude ?? 0) + ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
+        satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
+        satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
+        magneticDeclination: gps2.magneticDeclination ?? gps1.magneticDeclination,
+        gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
+        time: anchorRequestTimeMs,
+      );
+      break;
+    } else if (time1 == anchorRequestTimeMs) {
+      finalGps = gps1;
+      break;
+    } else if (time2 == anchorRequestTimeMs) {
+      finalGps = gps2;
+      break;
+    }
+
+    gps1 = gps2;
+  }
+
+  if (finalGps == null) {
+    showSnackBar('Не удалось определить точное положение. Попробуйте еще раз.');
+    return;
+  }
+
+  // Передаём полное время с микросекундами
+  print('anchorRequestTime: $anchorRequestTime');
+  await anchorManager.addAnchorFromGps(finalGps, crosshair, anchorRequestTime);
+}
   Future<void> addAnchorFromClipboard() async {
     await anchorManager.addAnchorFromClipboard();
   }
@@ -747,7 +692,6 @@ class MapScreenLogic {
 
   Future<void> showModePicker(BuildContext context) async {
     await anchorManager.showModePicker(context);
-    // После выбора режима пересчитываем поворот и обновляем статус
     _recalculateWorkingPairAndRotation();
   }
 
@@ -768,7 +712,7 @@ class MapScreenLogic {
       if (candidate == CalibrationMode.photoSever) {
         final project = state.project;
         if (project == null || project.photoSeverLinePixels == 0) {
-          continue; // Пропускаем P, если нет данных
+          continue;
         }
       }
       _calibrationService.setCalibrationMode(candidate);
@@ -806,16 +750,15 @@ class MapScreenLogic {
 
   void _recalculateWorkingPairAndRotation() {
     print(
-      '🔁 _recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
+      '_recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
     );
     final anchors = state.project?.anchors ?? [];
-    // Перестраиваем трансформацию на основе текущих якорей и режима
     print(
-      '🔁 before updateAnchors, used=${_calibrationService.usedAnchorCount}',
+      'before updateAnchors, used=${_calibrationService.usedAnchorCount}',
     );
     _calibrationService.updateAnchors(anchors);
     print(
-      '🔁 after updateAnchors, used=${_calibrationService.usedAnchorCount}',
+      'after updateAnchors, used=${_calibrationService.usedAnchorCount}',
     );
     final newPair = _calibrationService.selectWorkingPair(anchors);
     final declinationRad = magneticDeclination * math.pi / 180;
@@ -823,11 +766,9 @@ class MapScreenLogic {
     setState(() {
       state.workingPair = newPair;
       if (newPair != null) {
-        // Обычные режимы: истинный угол минус склонение
         final trueRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
         state.mapRotation = trueRotation - declinationRad;
       } else {
-        // Режим P или отсутствие калибровки
         final project = state.project;
         if (project != null && project.photoSeverLinePixels > 0) {
           state.mapRotation = -math.pi / 2 - project.photoSeverNorthAngle;
@@ -838,7 +779,7 @@ class MapScreenLogic {
     });
 
     print(
-      '🔁 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
+      '🔔 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
     );
     onAnchorsChangedForStatus?.call();
   }
@@ -850,7 +791,6 @@ class MapScreenLogic {
   }
 
   void _recalculateUserImagePoint() {
-    // Если привязка отсутствует, скрываем маркер
     if (_calibrationService.usedAnchorCount == 0) {
       if (state.currentUserImagePoint != null) {
         setState(() {
@@ -988,11 +928,10 @@ class MapScreenLogic {
   }
 
   void _onHeadingChanged() {
-    // headingNotifier.value уже содержит магнитный курс
     final magneticHeading = headingNotifier.value;
     setState(() {
-      state.heading = magneticHeading; // теперь это магнитный курс
-      state.magneticHeading = magneticHeading; // без изменений
+      state.heading = magneticHeading;
+      state.magneticHeading = magneticHeading;
     });
     if (state.followMode) {
       followController.applyHeadingRotation();
@@ -1009,8 +948,6 @@ class MapScreenLogic {
     });
   }
 
-  /// Обработчик обновлений от единого источника GPS (gpsDataNotifier).
-  /// Не создавать новых подписок на GpsManager!
   void _onGpsDataChanged() {
     final gpsData = gpsDataNotifier.value;
     if (gpsData.latitude == null || gpsData.longitude == null) return;
@@ -1029,10 +966,8 @@ class MapScreenLogic {
     required double declinationRad,
   }) {
     if (photoSeverLinePixels > 0) {
-      // Режим P: угол уже магнитный, так как photoSeverNorthAngle магнитный
       return -math.pi / 2 - photoSeverNorthAngle;
     } else if (mapRotation != 0.0) {
-      // mapRotation уже магнитный, дополнительное склонение не вычитаем
       return mapRotation;
     } else {
       return 0.0;

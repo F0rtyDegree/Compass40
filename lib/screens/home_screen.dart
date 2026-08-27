@@ -92,7 +92,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       // Таймаут на случай, если финализация зависнет
       Future.delayed(const Duration(seconds: 2), () {
         if (!completer.isCompleted) {
-          print('⚠️ finalizeTrackAndExport timeout, forcing exit');
+          print('finalizeTrackAndExport timeout, forcing exit');
           completer.complete();
         }
       });
@@ -100,7 +100,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       try {
         await _logic.finalizeTrackAndExport();
       } catch (e, stack) {
-        print('❌ Error finalizing track: $e');
+        print('Error finalizing track: $e');
         print(stack);
       } finally {
         if (!completer.isCompleted) {
@@ -113,7 +113,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       try {
         await _logic.clearWaypoint();
       } catch (e) {
-        print('❌ Error clearing waypoint: $e');
+        print('Error clearing waypoint: $e');
       }
 
       _logic.dispose();
@@ -197,13 +197,13 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                       gpsDataNotifier: _state.gpsDataNotifier,
                       magneticDeclination: _state.magneticDeclination,
                       headingNotifier: _state.headingNotifier,
-                      onAnchorAdded: (lat, lon, distance, timeStr) async {
+                      onAnchorAdded: (lat, lon, distance, createdAt) async {
                         final items = await _logService.addMapAnchorLogEntry(
                           currentLogItems: _state.logItems,
                           latitude: lat,
                           longitude: lon,
                           distanceFromPrevious: distance,
-                          timeStr: timeStr,
+                          createdAt: createdAt,
                         );
                         if (mounted) {
                           setState(() {
