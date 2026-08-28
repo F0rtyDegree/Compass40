@@ -110,8 +110,8 @@ class MapZoomButtons extends StatelessWidget {
         onTap: enabled ? onTap : null,
         onLongPress: enabled ? onLongPress : null,
         child: Container(
-          width: 48,
-          height: 48,
+          width: 60,
+          height: 60,
           decoration: BoxDecoration(
             color: color.withAlpha(220),
             borderRadius: BorderRadius.circular(12),

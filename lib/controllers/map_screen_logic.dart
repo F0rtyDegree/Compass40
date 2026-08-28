@@ -584,12 +584,12 @@ class MapScreenLogic {
   }
 
   // --------------------------------------------------------
-  // Якоря
+  // Точка привязки (Якорь)
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
-  // Фиксируем системное время нажатия кнопки с микросекундами
-  final DateTime anchorRequestTime = DateTime.now();
+  // Фиксируем системное время нажатия кнопки с микросекундами + поправка на отставание GPS
+  final DateTime anchorRequestTime = DateTime.now().add(const Duration(milliseconds: 1000));
 
   final crosshair = state.crosshairImagePoint;
   if (crosshair == null) {
@@ -600,8 +600,8 @@ class MapScreenLogic {
   GpsData gps1 = gpsDataNotifier.value;
   showSnackBar('Ожидание GPS...');
 
-  const int maxIterations = 7;
-  const Duration step = Duration(milliseconds: 500);
+  const int maxIterations = 100;
+  const Duration step = Duration(milliseconds: 50);
 
   GpsData? finalGps;
 
@@ -768,6 +768,9 @@ class MapScreenLogic {
       if (newPair != null) {
         final trueRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
         state.mapRotation = trueRotation - declinationRad;
+        /* showSnackBar('привязка завершена'); */
+        enableFollowMode();
+
       } else {
         final project = state.project;
         if (project != null && project.photoSeverLinePixels > 0) {
