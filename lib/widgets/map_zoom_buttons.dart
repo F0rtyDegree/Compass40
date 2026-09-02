@@ -37,7 +37,7 @@ class MapZoomButtons extends StatelessWidget {
     if (!visible) return const SizedBox.shrink();
 
     return Positioned(
-      right: 12,
+      right: 3,
       top: MediaQuery.of(context).size.height / 2 - 150,
       child: Column(
         children: [
@@ -113,7 +113,7 @@ class MapZoomButtons extends StatelessWidget {
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            color: color.withAlpha(220),
+            color: color.withAlpha(80),
             borderRadius: BorderRadius.circular(12),
             boxShadow: enabled
                 ? [

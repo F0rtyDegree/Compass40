@@ -19,6 +19,9 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.PluginRegistry
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     PluginRegistry.RequestPermissionsResultListener {
@@ -141,55 +144,108 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
         return false
     }
 
-    private fun sendDataUpdate() {
-        if (eventSink == null) return
+private fun sendDataUpdate() {
+    // Проверяем, существует ли подписчик на события (eventSink).
+    // Если eventSink равен null, значит, Flutter-часть не слушает обновления,
+    // и мы выходим из функции, чтобы не выполнять лишнюю работу.
+    if (eventSink == null) return
 
-        val now = System.currentTimeMillis()
-        if (now - lastSentTime < updateInterval) {
-            return
+    // Получаем текущее системное время в миллисекундах.
+    // Это используется для ограничения частоты отправки данных.
+    val now = System.currentTimeMillis()
+
+    // Проверяем, прошло ли достаточно времени с момента последней отправки.
+    // `updateInterval` - это минимальный интервал между обновлениями (в мс).
+    // Если времени прошло меньше, чем `updateInterval`, выходим из функции.
+    // Это предотвращает слишком частую отправку данных.
+    if (now - lastSentTime < updateInterval) {
+        return
+    }
+    // Обновляем время последней отправки на текущее.
+    lastSentTime = now
+
+    // Создаем HashMap для хранения данных, которые будут отправлены во Flutter.
+    val data = HashMap<String, Any?>()
+
+    // Добавляем данные о спутниках.
+    // Эти переменные (satellitesUsed, satellitesInView) обновляются в другом месте
+    // (в gnssStatusCallback).
+    data["satellitesUsed"] = satellitesUsed
+    data["satellitesInView"] = satellitesInView
+    // Добавляем временную метку
+    data["time"] = now
+    var gpsLatency: Long? = null
+
+    // Создаем форматер для времени, чтобы выводить его в лог в читаемом виде.
+    val sdf = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.getDefault())
+    val formattedAppTime = sdf.format(Date(now))
+    var formattedGpsTime = "N/A" // Значение по умолчанию, если данных GPS еще нет
+
+    // ШАГ 2: Использование сохраненных данных.
+    // `lastLocation` — это переменная, в которую мы сохранили данные от GPS на ШАГЕ 1.
+    // Конструкция `?.let` безопасно проверяет, что `lastLocation` не пуста.
+    // Внутри этого блока `lastLocation` для удобства называется `loc`.
+    lastLocation?.let { loc ->
+        // Добавляем в `data` основные GPS-параметры из объекта `location`.
+        data["latitude"] = loc.latitude
+        data["longitude"] = loc.longitude
+        data["accuracy"] = loc.accuracy
+        data["speed"] = loc.speed
+        data["altitude"] = loc.altitude // Высота над эллипсоидом WGS84
+
+        // Проверяем, есть ли данные о курсе (bearing).
+        // Если есть, добавляем их. Если нет, добавляем null.
+        data["gpsBearing"] = if (loc.hasBearing()) {
+            loc.bearing.toDouble()
+        } else {
+            null
         }
-        lastSentTime = now
 
-        val data = HashMap<String, Any?>()
-        data["satellitesUsed"] = satellitesUsed
-        data["satellitesInView"] = satellitesInView
-        data["time"] = now
+        // Вычисляем задержку GPS.
+        // Здесь мы используем `loc.time` — это и есть то самое время от GPS,
+        // которое система передала нам на ШАГЕ 1.
+        gpsLatency = now - loc.time
+        // Также форматируем время GPS для лога.
+        formattedGpsTime = sdf.format(Date(loc.time))
 
-        lastLocation?.let {
-            data["latitude"] = it.latitude
-            data["longitude"] = it.longitude
-            data["accuracy"] = it.accuracy
-            data["speed"] = it.speed
-            data["altitude"] = it.altitude
-
-            data["gpsBearing"] = if (it.hasBearing()) {
-                it.bearing.toDouble()
-            } else {
-                null
-            }
-
-            val geoField = GeomagneticField(
-                it.latitude.toFloat(),
-                it.longitude.toFloat(),
-                it.altitude.toFloat(),
-                System.currentTimeMillis()
-            )
-            magneticDeclination = geoField.declination
-            data["magneticDeclination"] = magneticDeclination
-        }
-
-        mslAltitude?.let {
-            data["msl_altitude"] = it
-        }
-
-        println("GpsInfoPlugin: sending data, lat=${data["latitude"]}, lon=${data["longitude"]}, time=${System.currentTimeMillis()}")
-        activity?.runOnUiThread {
-            eventSink?.success(data)
-        }
+        // Вычисляем магнитное склонение.
+        // Это разница между истинным севером и магнитным севером в данной точке.
+        val geoField = GeomagneticField(
+            loc.latitude.toFloat(),
+            loc.longitude.toFloat(),
+            loc.altitude.toFloat(),
+            now
+        )
+        magneticDeclination = geoField.declination
+        data["magneticDeclination"] = magneticDeclination
     }
 
+    // Проверяем, есть ли у нас данные о высоте над уровнем моря (mslAltitude).
+    // Эти данные получаются из NMEA-сообщений. Если они есть, добавляем их в `data`.
+    mslAltitude?.let {
+        data["msl_altitude"] = it
+    }
+
+    // Выводим отладочное сообщение в лог с форматированным временем и координатами.
+    println("GpsInfoPlugin: Update -> AppTime: $formattedAppTime | GPSTime: $formattedGpsTime | Latency: ${gpsLatency ?: "N/A"}ms | Coords: ${data["latitude"] ?: "N/A"}, ${data["longitude"] ?: "N/A"}")
+
+    // Отправляем данные во Flutter.
+    // `activity?.runOnUiThread` гарантирует, что отправка будет выполнена
+    // в основном (UI) потоке приложения, что является требованием для
+    // взаимодействия с Flutter EventChannel.
+    activity?.runOnUiThread {
+        eventSink?.success(data)
+    }
+}
+
     private val locationListener = object : LocationListener {
+        // ШАГ 1: Получение данных от системы.
+        // Этот метод вызывается системой Android каждый раз, когда GPS-чип получает новые координаты.
+        // `location` — это готовый объект от системы. Он содержит широту, долготу и, что важно,
+        // `location.time` — точное время, когда спутник зафиксировал эту координату.
         override fun onLocationChanged(location: Location) {
+            // Мы сохраняем полученный от системы объект `location` в нашу переменную `lastLocation`,
+            // чтобы использовать его позже.
             lastLocation = location
             sendDataUpdate()
         }

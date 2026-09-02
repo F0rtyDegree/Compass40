@@ -135,7 +135,8 @@ class _GpsSectionState extends State<GpsSection> {
                       _buildIconValue(
                         context,
                         Icons.height,
-                        '${gps.mslAltitude?.toStringAsFixed(1)} m',
+//                        '${gps.mslAltitude?.toStringAsFixed(1)} m', // высота по NMEA
+                        '${gps.altitude?.toStringAsFixed(1)} m',       // высота по WGS84                  
                         baseStyle,
                         iconColor,
                       ),
