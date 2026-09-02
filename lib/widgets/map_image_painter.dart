@@ -150,11 +150,15 @@ class _ImagePainter extends CustomPainter {
     canvas.rotate(rotation);
     canvas.scale(scale);
 
-    canvas.drawImage(
-      image!,
-      Offset(-imageSize.width / 2, -imageSize.height / 2),
-      Paint()..filterQuality = FilterQuality.high,
-    );
+    try {
+      canvas.drawImage(
+        image!,
+        Offset(-imageSize.width / 2, -imageSize.height / 2),
+        Paint()..filterQuality = FilterQuality.high,
+      );
+    } catch (_) {
+      // Image is disposed, ignore
+    }
 
     canvas.restore();
   }

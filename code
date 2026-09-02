@@ -4,7 +4,7 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.5 Кнопки Цель и Ядесь прозрачнее и правее. 
+ver. 6.5.5 Кнопки Цель и Ядесь прозрачнее и правее. Высота по WGS84. 
 "
 
 ver. 6.5.4 Фиксируем системное время нажатия кнопки с микросекундами + поправка на отставание GPS. 
@@ -9469,7 +9469,8 @@ class _GpsSectionState extends State<GpsSection> {
                       _buildIconValue(
                         context,
                         Icons.height,
-                        '${gps.mslAltitude?.toStringAsFixed(1)} m',
+//                        '${gps.mslAltitude?.toStringAsFixed(1)} m', // высота по NMEA
+                        '${gps.altitude?.toStringAsFixed(1)} m',       // высота по WGS84                  
                         baseStyle,
                         iconColor,
                       ),

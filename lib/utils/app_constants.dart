@@ -1,7 +1,7 @@
 class AppConstants {
   static const double minTriangleAngleDegrees = 15.0;
   static const double maxTriangleAngleDegrees = 165.0; // 180 - 15
-  static const double minAnchorDistanceMeters = 50.0;
+  static const double minAnchorDistanceMeters = 30.0;
   static const double metersPerDegreeLat = 111320.0;
   static const double earthRadiusMeters = 6371000.0;
 
