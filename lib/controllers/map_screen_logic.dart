@@ -24,6 +24,7 @@ import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../widgets/map_image_painter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -107,6 +108,10 @@ class MapScreenLogic {
     if (imageScale == null || state.transformState.scale == 0) return null;
     return imageScale / state.transformState.scale;
   }
+
+  // Динамическая компенсация (мс)
+  double _compensationMs = 1500.0;
+  static const String _compensationPrefKey = 'anchor_compensation_ms';
 
   Future<void> init() async {
     anchorManager = MapAnchorManager(
@@ -194,6 +199,7 @@ class MapScreenLogic {
 
   Future<void> _loadLastProject() async {
     final projectId = await storageService.getCurrentProjectId();
+    await _loadCompensation();
     if (projectId == null) return;
 
     final project = await storageService.loadProject(projectId);
@@ -592,9 +598,40 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
-    // Фиксируем системное время нажатия кнопки с микросекундами + поправка на отставание GPS
-    final DateTime anchorRequestTime = DateTime.now().add(
-      const Duration(milliseconds: 1000),
+    // Фиксируем СИСТЕМНОЕ время нажатия (БЕЗ компенсации)
+    final DateTime rawRequestTime = DateTime.now();
+
+/// ============================================================
+/// КОМПЕНСАЦИЯ ЗАДЕРЖКИ GPS (важно!)
+/// ============================================================
+/// При нажатии кнопки «Я здесь» мы фиксируем системное время (rawRequestTime).
+/// Однако GPS-координаты, которые мы получим в ближайшие секунды, соответствуют
+/// не этому моменту, а моменту на 1–2 секунды позже. Это связано с тем, что:
+///
+/// 1. GPS-чип и драйвер буферизируют и фильтруют данные, создавая задержку.
+/// 2. Обновления приходят дискретно (раз в секунду), и момент нажатия
+///    почти никогда не совпадает с моментом получения пакета.
+///
+/// Без компенсации точка привязки ложится ДО реального положения (например,
+/// до поворота), потому что интерполяция использует пакеты, которые были
+/// получены до и после нажатия, но эти пакеты соответствуют более раннему
+/// времени (из-за задержки обработки).
+///
+/// Решение: мы сдвигаем время интерполяции на величину _compensationMs
+/// (по умолчанию 1500 мс, но динамически уточняется на основе измерений).
+/// Это позволяет «заглянуть» в будущее и получить координаты, которые
+/// соответствуют реальному положению в момент нажатия.
+///
+/// Величина 1500 мс была подобрана эмпирически и подтверждена множеством
+/// тестов: в движении с компенсацией точки попадают точно в середину поворота,
+/// без компенсации — до поворота.
+///
+/// Динамическая компенсация (см. _updateCompensation) автоматически
+/// подстраивается под текущие условия, используя измеренную задержку
+/// между нажатием и получением следующего GPS-пакета.
+/// ============================================================
+    final DateTime anchorRequestTime = rawRequestTime.add(
+      Duration(milliseconds: _compensationMs.round()),
     );
 
     final crosshair = state.crosshairImagePoint;
@@ -610,16 +647,17 @@ class MapScreenLogic {
     const Duration step = Duration(milliseconds: 50);
 
     GpsData? finalGps;
+    GpsData? gps2; // сохраним второй пакет для расчёта дельты
 
     for (int i = 0; i < maxIterations; i++) {
       await Future.delayed(step);
-      final GpsData gps2 = gpsDataNotifier.value;
+      final GpsData gps2temp = gpsDataNotifier.value;
 
       final int? time1 = gps1.time;
-      final int? time2 = gps2.time;
+      final int? time2 = gps2temp.time;
 
       if (time1 == null || time2 == null) {
-        gps1 = gps2;
+        gps1 = gps2temp;
         continue;
       }
 
@@ -628,41 +666,46 @@ class MapScreenLogic {
       if (time1 < anchorRequestTimeMs && anchorRequestTimeMs < time2) {
         final double t = (anchorRequestTimeMs - time1) / (time2 - time1);
         final double lat =
-            gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
+            gps1.latitude! + (gps2temp.latitude! - gps1.latitude!) * t;
         final double lon =
-            gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
+            gps1.longitude! + (gps2temp.longitude! - gps1.longitude!) * t;
 
         finalGps = GpsData(
           latitude: lat,
           longitude: lon,
           accuracy:
               (gps1.accuracy ?? 0) +
-              ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
+              ((gps2temp.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
           speed:
-              (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
+              (gps1.speed ?? 0) +
+              ((gps2temp.speed ?? 0) - (gps1.speed ?? 0)) * t,
           altitude:
               (gps1.altitude ?? 0) +
-              ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
+              ((gps2temp.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
           mslAltitude:
               (gps1.mslAltitude ?? 0) +
-              ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
-          satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
-          satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
+              ((gps2temp.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
+          satellitesUsed: gps2temp.satellitesUsed ?? gps1.satellitesUsed,
+          satellitesInView: gps2temp.satellitesInView ?? gps1.satellitesInView,
           magneticDeclination:
-              gps2.magneticDeclination ?? gps1.magneticDeclination,
-          gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
+              gps2temp.magneticDeclination ?? gps1.magneticDeclination,
+          gpsBearing: gps2temp.gpsBearing ?? gps1.gpsBearing,
           time: anchorRequestTimeMs,
         );
+        gps2 = gps2temp; // запоминаем второй пакет
         break;
       } else if (time1 == anchorRequestTimeMs) {
         finalGps = gps1;
+        gps2 =
+            gps2temp; // в этом случае второй пакет может быть тем же или следующим
         break;
       } else if (time2 == anchorRequestTimeMs) {
-        finalGps = gps2;
+        finalGps = gps2temp;
+        gps2 = gps2temp;
         break;
       }
 
-      gps1 = gps2;
+      gps1 = gps2temp;
     }
 
     if (finalGps == null) {
@@ -672,12 +715,21 @@ class MapScreenLogic {
       return;
     }
 
-    // Передаём полное время с микросекундами
-    print('anchorRequestTime: $anchorRequestTime');
+    // Вычисляем дельту для обновления компенсации
+    if (gps2 != null && gps2.time != null) {
+      final double delta = (gps2.time! - rawRequestTime.millisecondsSinceEpoch)
+          .toDouble();
+      _updateCompensation(delta);
+      print(
+        '🔔 Компенсация обновлена: delta=$delta, new compensation=${_compensationMs.round()}мс',
+      );
+    }
+
+    print('anchorRequestTime (с компенсацией): $anchorRequestTime');
     await anchorManager.addAnchorFromGps(
       finalGps,
       crosshair,
-      anchorRequestTime,
+      anchorRequestTime, // время с компенсацией
     );
   }
 
@@ -993,5 +1045,23 @@ class MapScreenLogic {
     } else {
       return 0.0;
     }
+  }
+
+  Future<void> _loadCompensation() async {
+    final prefs = await SharedPreferences.getInstance();
+    _compensationMs = prefs.getDouble(_compensationPrefKey) ?? 1500.0;
+  }
+
+  Future<void> _saveCompensation() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_compensationPrefKey, _compensationMs);
+  }
+
+  void _updateCompensation(double delta) {
+    // Экспоненциальное скользящее среднее
+    _compensationMs = _compensationMs * 0.8 + delta * 0.1;
+    // Ограничиваем разумными пределами
+    _compensationMs = _compensationMs.clamp(500.0, 3000.0);
+    _saveCompensation();
   }
 }

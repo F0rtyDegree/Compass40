@@ -4,9 +4,11 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.5 Кнопки Цель и Ядесь прозрачнее и правее. Высота по WGS84. 
+ver. 6.5.7 Latency: 25229ms. Разбираемся с огромной задержкой
 "
 
+ver. 6.5.6 Исправлена ошибка рендеринга изображения карты   
+ver. 6.5.5 Кнопки Цель и Ядесь прозрачнее и правее. Высота по WGS84. 
 ver. 6.5.4 Фиксируем системное время нажатия кнопки с микросекундами + поправка на отставание GPS. 
 ver. 6.5.3 реализована интерполяция координат по времени. 
 ver. 6.5.2 все таки интерполяция координат по времени. 
@@ -288,7 +290,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 6.5.5
+version: 6.5.7
 environment:
   sdk: ^3.9.0
 
@@ -2323,7 +2325,7 @@ class MapScreenLogic {
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
   final Function(double lat, double lon, double? distance, DateTime createdAt)?
-      onAnchorAdded;
+  onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   final VoidCallback? onAnchorsChangedForStatus;
@@ -2637,19 +2639,8 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> closeMap() async {
-    if (state.imagePath != null) {
-      removeImageFromCache(state.imagePath!);
-      final file = File(state.imagePath!);
-      if (await file.exists()) {
-        await file.delete();
-      }
-    }
-
-    if (state.project != null) {
-      await storageService.deleteProject(state.project!.id);
-    } else {
-      await storageService.setCurrentProjectId(null);
-    }
+    final imagePathToDelete = state.imagePath;
+    final projectId = state.project?.id;
 
     setState(() {
       state.project = null;
@@ -2663,6 +2654,21 @@ class MapScreenLogic {
       state.currentUserImagePoint = null;
       state.currentUserScreenPoint = null;
     });
+
+    if (imagePathToDelete != null) {
+      removeImageFromCache(imagePathToDelete);
+      final file = File(imagePathToDelete);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+
+    if (projectId != null) {
+      await storageService.deleteProject(projectId);
+    } else {
+      await storageService.setCurrentProjectId(null);
+    }
+
     _calibrationService.updateAnchors([]);
     _calibrationService.setPinnedAnchorIds([]);
     anchorManager.cachedGpxPoints = null;
@@ -2874,76 +2880,95 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
-  // Фиксируем системное время нажатия кнопки с микросекундами + поправка на отставание GPS
-  final DateTime anchorRequestTime = DateTime.now().add(const Duration(milliseconds: 1000));
+    // Фиксируем системное время нажатия кнопки с микросекундами + поправка на отставание GPS
+    final DateTime anchorRequestTime = DateTime.now().add(
+      const Duration(milliseconds: 1500),
+    );
 
-  final crosshair = state.crosshairImagePoint;
-  if (crosshair == null) {
-    showSnackBar('Прицел не определён');
-    return;
-  }
+    final crosshair = state.crosshairImagePoint;
+    if (crosshair == null) {
+      showSnackBar('Прицел не определён');
+      return;
+    }
 
-  GpsData gps1 = gpsDataNotifier.value;
-  showSnackBar('Ожидание GPS...');
+    GpsData gps1 = gpsDataNotifier.value;
+    showSnackBar('Ожидание GPS...');
 
-  const int maxIterations = 100;
-  const Duration step = Duration(milliseconds: 50);
+    const int maxIterations = 100;
+    const Duration step = Duration(milliseconds: 50);
 
-  GpsData? finalGps;
+    GpsData? finalGps;
 
-  for (int i = 0; i < maxIterations; i++) {
-    await Future.delayed(step);
-    final GpsData gps2 = gpsDataNotifier.value;
+    for (int i = 0; i < maxIterations; i++) {
+      await Future.delayed(step);
+      final GpsData gps2 = gpsDataNotifier.value;
 
-    final int? time1 = gps1.time;
-    final int? time2 = gps2.time;
+      final int? time1 = gps1.time;
+      final int? time2 = gps2.time;
 
-    if (time1 == null || time2 == null) {
+      if (time1 == null || time2 == null) {
+        gps1 = gps2;
+        continue;
+      }
+
+      final int anchorRequestTimeMs = anchorRequestTime.millisecondsSinceEpoch;
+
+      if (time1 < anchorRequestTimeMs && anchorRequestTimeMs < time2) {
+        final double t = (anchorRequestTimeMs - time1) / (time2 - time1);
+        final double lat =
+            gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
+        final double lon =
+            gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
+
+        finalGps = GpsData(
+          latitude: lat,
+          longitude: lon,
+          accuracy:
+              (gps1.accuracy ?? 0) +
+              ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
+          speed:
+              (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
+          altitude:
+              (gps1.altitude ?? 0) +
+              ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
+          mslAltitude:
+              (gps1.mslAltitude ?? 0) +
+              ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
+          satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
+          satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
+          magneticDeclination:
+              gps2.magneticDeclination ?? gps1.magneticDeclination,
+          gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
+          time: anchorRequestTimeMs,
+        );
+        break;
+      } else if (time1 == anchorRequestTimeMs) {
+        finalGps = gps1;
+        break;
+      } else if (time2 == anchorRequestTimeMs) {
+        finalGps = gps2;
+        break;
+      }
+
       gps1 = gps2;
-      continue;
     }
 
-    final int anchorRequestTimeMs = anchorRequestTime.millisecondsSinceEpoch;
-
-    if (time1 < anchorRequestTimeMs && anchorRequestTimeMs < time2) {
-      final double t = (anchorRequestTimeMs - time1) / (time2 - time1);
-      final double lat = gps1.latitude! + (gps2.latitude! - gps1.latitude!) * t;
-      final double lon = gps1.longitude! + (gps2.longitude! - gps1.longitude!) * t;
-
-      finalGps = GpsData(
-        latitude: lat,
-        longitude: lon,
-        accuracy: (gps1.accuracy ?? 0) + ((gps2.accuracy ?? 0) - (gps1.accuracy ?? 0)) * t,
-        speed: (gps1.speed ?? 0) + ((gps2.speed ?? 0) - (gps1.speed ?? 0)) * t,
-        altitude: (gps1.altitude ?? 0) + ((gps2.altitude ?? 0) - (gps1.altitude ?? 0)) * t,
-        mslAltitude: (gps1.mslAltitude ?? 0) + ((gps2.mslAltitude ?? 0) - (gps1.mslAltitude ?? 0)) * t,
-        satellitesUsed: gps2.satellitesUsed ?? gps1.satellitesUsed,
-        satellitesInView: gps2.satellitesInView ?? gps1.satellitesInView,
-        magneticDeclination: gps2.magneticDeclination ?? gps1.magneticDeclination,
-        gpsBearing: gps2.gpsBearing ?? gps1.gpsBearing,
-        time: anchorRequestTimeMs,
+    if (finalGps == null) {
+      showSnackBar(
+        'Не удалось определить точное положение. Попробуйте еще раз.',
       );
-      break;
-    } else if (time1 == anchorRequestTimeMs) {
-      finalGps = gps1;
-      break;
-    } else if (time2 == anchorRequestTimeMs) {
-      finalGps = gps2;
-      break;
+      return;
     }
 
-    gps1 = gps2;
+    // Передаём полное время с микросекундами
+    print('anchorRequestTime: $anchorRequestTime');
+    await anchorManager.addAnchorFromGps(
+      finalGps,
+      crosshair,
+      anchorRequestTime,
+    );
   }
 
-  if (finalGps == null) {
-    showSnackBar('Не удалось определить точное положение. Попробуйте еще раз.');
-    return;
-  }
-
-  // Передаём полное время с микросекундами
-  print('anchorRequestTime: $anchorRequestTime');
-  await anchorManager.addAnchorFromGps(finalGps, crosshair, anchorRequestTime);
-}
   Future<void> addAnchorFromClipboard() async {
     await anchorManager.addAnchorFromClipboard();
   }
@@ -3039,13 +3064,9 @@ class MapScreenLogic {
       '_recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
     );
     final anchors = state.project?.anchors ?? [];
-    print(
-      'before updateAnchors, used=${_calibrationService.usedAnchorCount}',
-    );
+    print('before updateAnchors, used=${_calibrationService.usedAnchorCount}');
     _calibrationService.updateAnchors(anchors);
-    print(
-      'after updateAnchors, used=${_calibrationService.usedAnchorCount}',
-    );
+    print('after updateAnchors, used=${_calibrationService.usedAnchorCount}');
     final newPair = _calibrationService.selectWorkingPair(anchors);
     final declinationRad = magneticDeclination * math.pi / 180;
 
@@ -3056,7 +3077,6 @@ class MapScreenLogic {
         state.mapRotation = trueRotation - declinationRad;
         /* showSnackBar('привязка завершена'); */
         enableFollowMode();
-
       } else {
         final project = state.project;
         if (project != null && project.photoSeverLinePixels > 0) {
@@ -3922,7 +3942,7 @@ Future<void> _createNotificationChannel() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  print('Compass40 START');
+  print('🎥 Compass40 START');
 
   // Создаём канал уведомлений ДО запуска сервиса
   await _createNotificationChannel();
@@ -8749,7 +8769,7 @@ String formatBearing(double bearing) {
 class AppConstants {
   static const double minTriangleAngleDegrees = 15.0;
   static const double maxTriangleAngleDegrees = 165.0; // 180 - 15
-  static const double minAnchorDistanceMeters = 50.0;
+  static const double minAnchorDistanceMeters = 30.0;
   static const double metersPerDegreeLat = 111320.0;
   static const double earthRadiusMeters = 6371000.0;
 
@@ -9959,11 +9979,15 @@ class _ImagePainter extends CustomPainter {
     canvas.rotate(rotation);
     canvas.scale(scale);
 
-    canvas.drawImage(
-      image!,
-      Offset(-imageSize.width / 2, -imageSize.height / 2),
-      Paint()..filterQuality = FilterQuality.high,
-    );
+    try {
+      canvas.drawImage(
+        image!,
+        Offset(-imageSize.width / 2, -imageSize.height / 2),
+        Paint()..filterQuality = FilterQuality.high,
+      );
+    } catch (_) {
+      // Image is disposed, ignore
+    }
 
     canvas.restore();
   }

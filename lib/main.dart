@@ -50,7 +50,7 @@ Future<void> _createNotificationChannel() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  print('Compass40 START');
+  print('🎥 Compass40 START');
 
   // Создаём канал уведомлений ДО запуска сервиса
   await _createNotificationChannel();
