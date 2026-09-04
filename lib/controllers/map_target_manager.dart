@@ -103,7 +103,7 @@ class MapTargetManager {
     setState(() {
       state.plannedTarget = target;
     });
-    showSnackBar('Цель установлена из буфера обмена');
+//    showSnackBar('Цель установлена из буфера обмена');
   }
 
   Future<void> setTargetAndStartNavigation() async {
@@ -115,7 +115,7 @@ class MapTargetManager {
 
     if (onStartNavigation != null) {
       await onStartNavigation!(planned.latitude!, planned.longitude!);
-      showSnackBar('Ведение на цель в компасе запущено');
+//      showSnackBar('Ведение на цель в компасе запущено');
     }
   }
 

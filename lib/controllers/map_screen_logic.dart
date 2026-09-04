@@ -403,7 +403,7 @@ class MapScreenLogic {
       state.canPlaceTarget = false;
     });
     _calibrationService.updateAnchors([]);
-    showSnackBar('Все якоря удалены');
+//    showSnackBar('Все якоря удалены');
   }
 
   Future<void> clearUserPath() async {
@@ -414,7 +414,7 @@ class MapScreenLogic {
     setState(() {
       state.project = updatedProject;
     });
-    showSnackBar('Путь пользователя удалён');
+//    showSnackBar('Путь пользователя удалён');
   }
 
   // --------------------------------------------------------
@@ -641,7 +641,7 @@ class MapScreenLogic {
     }
 
     GpsData gps1 = gpsDataNotifier.value;
-    showSnackBar('Ожидание GPS...');
+//    showSnackBar('Ожидание GPS...');
 
     const int maxIterations = 100;
     const Duration step = Duration(milliseconds: 50);
@@ -968,7 +968,7 @@ class MapScreenLogic {
         newActiveTarget!.latitude!,
         newActiveTarget.longitude!,
       );
-      showSnackBar('Навигация перезапущена с новыми координатами цели');
+//      showSnackBar('Навигация перезапущена с новыми координатами цели');
     }
   }
 

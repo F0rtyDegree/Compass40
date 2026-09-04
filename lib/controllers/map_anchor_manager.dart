@@ -328,8 +328,8 @@ class MapAnchorManager {
       creationTimestamp,
     );
 
-    final anchorNum = updatedAnchors.length;
-    showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
+//    final anchorNum = updatedAnchors.length;
+//    showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
   void handleTapOnMap(Offset screenPosition) {

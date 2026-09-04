@@ -97,7 +97,7 @@ class PhotoSeverController {
         isActive = false;
         points.clear();
       });
-      showSnackBar('ФотоСевер отменён');
+//      showSnackBar('ФотоСевер отменён');
       return;
     }
     final project = state.project;
@@ -138,7 +138,7 @@ class PhotoSeverController {
     });
     // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
     state.mapRotation = -math.pi / 2 - northAngle;
-    showSnackBar('Калибровка ФотоСевер сохранена');
+//    showSnackBar('Калибровка ФотоСевер сохранена');
     
     // Вызываем callback после сохранения
     onFinish?.call();
