@@ -411,20 +411,6 @@ class MapAnchorManager {
     final canManual = anchorCount >= 3;
     final canPhotoSever = hasPhotoSever && anchorCount >= 1;
 
-    void switchTo(CalibrationMode mode, BuildContext dialogCtx) {
-      calibrationService.setCalibrationMode(mode);
-      Navigator.pop(dialogCtx);
-      _saveCalibrationState();
-      setState(() {});
-    }
-
-    void switchToManual(BuildContext dialogCtx) {
-      calibrationService.enableManualMode();
-      Navigator.pop(dialogCtx);
-      _saveCalibrationState();
-      setState(() {});
-    }
-
     void showHintAndClose(String hint, BuildContext dialogCtx) {
       Navigator.pop(dialogCtx);
       showSnackBar(hint);
@@ -459,11 +445,25 @@ class MapAnchorManager {
           ),
           SimpleDialogOption(
             onPressed: () {
+              Navigator.pop(ctx); // Закрываем диалог сразу
               if (!canManual) {
-                showHintAndClose('Нужно минимум 3 якоря', ctx);
+                showSnackBar('Нужно минимум 3 якоря');
                 return;
               }
-              switchToManual(ctx);
+
+              // Если мы уже в ручном режиме, переключаем все якоря
+              if (calibrationService.isManualMode) {
+                final changed = calibrationService.toggleAllAnchors(anchors);
+                if (changed) {
+                  _saveCalibrationState();
+                  setState(() {});
+                }
+              } else {
+                // Иначе, просто включаем ручной режим
+                calibrationService.enableManualMode();
+                _saveCalibrationState();
+                setState(() {});
+              }
             },
             child: Text(
               'Ручной (M)',
@@ -472,11 +472,14 @@ class MapAnchorManager {
           ),
           SimpleDialogOption(
             onPressed: () {
-              if (!canAffine) {
+                if (!canAffine) {
                 showHintAndClose('Нужно минимум 2 якоря', ctx);
                 return;
               }
-              switchTo(CalibrationMode.affine, ctx);
+              Navigator.pop(ctx);
+              calibrationService.setCalibrationMode(CalibrationMode.affine);
+              _saveCalibrationState();
+              setState(() {});
             },
             child: Text(
               'Affine (A)',
@@ -485,11 +488,14 @@ class MapAnchorManager {
           ),
           SimpleDialogOption(
             onPressed: () {
-              if (!canFarthest) {
+               if (!canFarthest) {
                 showHintAndClose('Нужно минимум 2 якоря', ctx);
                 return;
               }
-              switchTo(CalibrationMode.pairFarthest, ctx);
+              Navigator.pop(ctx);
+              calibrationService.setCalibrationMode(CalibrationMode.pairFarthest);
+              _saveCalibrationState();
+              setState(() {});
             },
             child: Text(
               'Farthest (F)',
@@ -502,7 +508,10 @@ class MapAnchorManager {
                 showHintAndClose('Нужно минимум 2 якоря', ctx);
                 return;
               }
-              switchTo(CalibrationMode.pairNearest, ctx);
+              Navigator.pop(ctx);
+              calibrationService.setCalibrationMode(CalibrationMode.pairNearest);
+              _saveCalibrationState();
+              setState(() {});
             },
             child: Text(
               'Nearest (N)',

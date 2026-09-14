@@ -213,6 +213,35 @@ class MapCalibrationService {
   CalibrationMode get currentMode => _mode;
   bool get isManualMode => _manualMode;
 
+  /// Переключает состояние всех якорей в ручном режиме.
+  /// Если все выключены -> включает все.
+  /// Если все включены -> выключает все.
+  /// Если часть включена -> ничего не делает.
+  /// Возвращает true, если состояние изменилось.
+  bool toggleAllAnchors(List<MapAnchor> allAnchors) {
+    if (allAnchors.isEmpty) return false;
+
+    final allIds = allAnchors.map((a) => a.id).toSet();
+    final pinnedCount = _pinnedAnchorIds.length;
+
+    if (pinnedCount == 0) {
+      // Все выключены -> включаем все
+      _pinnedAnchorIds.addAll(allIds);
+      _buildTransformFromAnchors();
+      return true;
+    }
+
+    if (pinnedCount == allAnchors.length) {
+      // Все включены -> выключаем все
+      _pinnedAnchorIds.clear();
+      _buildTransformFromAnchors();
+      return true;
+    }
+
+    // Часть включена -> ничего не делаем
+    return false;
+  }
+
   void restoreState({
     required CalibrationMode mode,
     required bool manual,
