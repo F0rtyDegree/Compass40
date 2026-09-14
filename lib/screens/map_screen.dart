@@ -57,6 +57,8 @@ class _MapScreenState extends State<MapScreen> {
   Offset? _gestureStartPivotImage;
   double _accumulatedRotation = 0.0;
   double _lastAngle = 0.0;
+  int _lastUsed = -1;
+  int _lastTotal = -1;
 
   @override
   void initState() {
@@ -94,7 +96,9 @@ class _MapScreenState extends State<MapScreen> {
   void _updateStatusText() {
     final used = _logic.usedAnchorCount;
     final total = _logic.totalAnchorCount;
-    print('_updateStatusText: used=$used, total=$total');
+    if (used == _lastUsed && total == _lastTotal) return;
+    _lastUsed = used;
+    _lastTotal = total;
     updateNotification(title: 'Режим - Карта $used/$total');
   }
 

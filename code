@@ -4,9 +4,10 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.8 ??? .
+ver. 6.5.9 вычислить длину пунктирной линии в метрах (в методе _drawUserPath).
 "
 
+ver. 6.5.8 отключил часть showSnackBar.
 ver. 6.5.7 Latency: 25229ms. Разбираемся с огромной задержкой - решено.
 ver. 6.5.5 Кнопки Цель и Ядесь прозрачнее и правее. Высота по WGS84. 
 ver. 6.5.4 Фиксируем системное время нажатия кнопки с микросекундами + поправка на отставание GPS. 
@@ -290,7 +291,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 6.5.8
+version: 6.5.9
 environment:
   sdk: ^3.9.0
 
@@ -2313,7 +2314,6 @@ import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../utils/geo_utils.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -2692,7 +2692,7 @@ class MapScreenLogic {
       state.canPlaceTarget = false;
     });
     _calibrationService.updateAnchors([]);
-    showSnackBar('Все якоря удалены');
+//    showSnackBar('Все якоря удалены');
   }
 
   Future<void> clearUserPath() async {
@@ -2703,7 +2703,7 @@ class MapScreenLogic {
     setState(() {
       state.project = updatedProject;
     });
-    showSnackBar('Путь пользователя удалён');
+//    showSnackBar('Путь пользователя удалён');
   }
 
   // --------------------------------------------------------
@@ -2890,35 +2890,35 @@ class MapScreenLogic {
     // Фиксируем СИСТЕМНОЕ время нажатия (БЕЗ компенсации)
     final DateTime rawRequestTime = DateTime.now();
 
-    /// ============================================================
-    /// КОМПЕНСАЦИЯ ЗАДЕРЖКИ GPS (важно!)
-    /// ============================================================
-    /// При нажатии кнопки «Я здесь» мы фиксируем системное время (rawRequestTime).
-    /// Однако GPS-координаты, которые мы получим в ближайшие секунды, соответствуют
-    /// не этому моменту, а моменту на 1–2 секунды позже. Это связано с тем, что:
-    ///
-    /// 1. GPS-чип и драйвер буферизируют и фильтруют данные, создавая задержку.
-    /// 2. Обновления приходят дискретно (раз в секунду), и момент нажатия
-    ///    почти никогда не совпадает с моментом получения пакета.
-    ///
-    /// Без компенсации точка привязки ложится ДО реального положения (например,
-    /// до поворота), потому что интерполяция использует пакеты, которые были
-    /// получены до и после нажатия, но эти пакеты соответствуют более раннему
-    /// времени (из-за задержки обработки).
-    ///
-    /// Решение: мы сдвигаем время интерполяции на величину _compensationMs
-    /// (по умолчанию 1500 мс, но динамически уточняется на основе измерений).
-    /// Это позволяет «заглянуть» в будущее и получить координаты, которые
-    /// соответствуют реальному положению в момент нажатия.
-    ///
-    /// Величина 1500 мс была подобрана эмпирически и подтверждена множеством
-    /// тестов: в движении с компенсацией точки попадают точно в середину поворота,
-    /// без компенсации — до поворота.
-    ///
-    /// Динамическая компенсация (см. _updateCompensation) автоматически
-    /// подстраивается под текущие условия, используя измеренную задержку
-    /// между нажатием и получением следующего GPS-пакета.
-    /// ============================================================
+/// ============================================================
+/// КОМПЕНСАЦИЯ ЗАДЕРЖКИ GPS (важно!)
+/// ============================================================
+/// При нажатии кнопки «Я здесь» мы фиксируем системное время (rawRequestTime).
+/// Однако GPS-координаты, которые мы получим в ближайшие секунды, соответствуют
+/// не этому моменту, а моменту на 1–2 секунды позже. Это связано с тем, что:
+///
+/// 1. GPS-чип и драйвер буферизируют и фильтруют данные, создавая задержку.
+/// 2. Обновления приходят дискретно (раз в секунду), и момент нажатия
+///    почти никогда не совпадает с моментом получения пакета.
+///
+/// Без компенсации точка привязки ложится ДО реального положения (например,
+/// до поворота), потому что интерполяция использует пакеты, которые были
+/// получены до и после нажатия, но эти пакеты соответствуют более раннему
+/// времени (из-за задержки обработки).
+///
+/// Решение: мы сдвигаем время интерполяции на величину _compensationMs
+/// (по умолчанию 1500 мс, но динамически уточняется на основе измерений).
+/// Это позволяет «заглянуть» в будущее и получить координаты, которые
+/// соответствуют реальному положению в момент нажатия.
+///
+/// Величина 1500 мс была подобрана эмпирически и подтверждена множеством
+/// тестов: в движении с компенсацией точки попадают точно в середину поворота,
+/// без компенсации — до поворота.
+///
+/// Динамическая компенсация (см. _updateCompensation) автоматически
+/// подстраивается под текущие условия, используя измеренную задержку
+/// между нажатием и получением следующего GPS-пакета.
+/// ============================================================
     final DateTime anchorRequestTime = rawRequestTime.add(
       Duration(milliseconds: _compensationMs.round()),
     );
@@ -2930,7 +2930,7 @@ class MapScreenLogic {
     }
 
     GpsData gps1 = gpsDataNotifier.value;
-    //   showSnackBar('Ожидание GPS...');
+//    showSnackBar('Ожидание GPS...');
 
     const int maxIterations = 100;
     const Duration step = Duration(milliseconds: 50);
@@ -3112,60 +3112,40 @@ class MapScreenLogic {
   // Пересчёты
   // --------------------------------------------------------
 
-void _recalculateWorkingPairAndRotation() {
-  // ---- Измерение прыжка (до обновления) ----
-  Offset? pivotPixel;
-  GeoPoint? oldGeoPoint;
-  if (state.currentUserImagePoint != null && _calibrationService.usedAnchorCount > 0) {
-    pivotPixel = state.currentUserImagePoint!;
-    oldGeoPoint = _calibrationService.imagePointToGeoFromCurrent(pivotPixel);
-  }
-
-  print('_recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}');
-  final anchors = state.project?.anchors ?? [];
-  print('before updateAnchors, used=${_calibrationService.usedAnchorCount}');
-  _calibrationService.updateAnchors(anchors);
-  print('after updateAnchors, used=${_calibrationService.usedAnchorCount}');
-  final newPair = _calibrationService.selectWorkingPair(anchors);
-  final declinationRad = magneticDeclination * math.pi / 180;
-
-  setState(() {
-    state.workingPair = newPair;
-    if (newPair != null) {
-      final trueRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
-      state.mapRotation = trueRotation - declinationRad;
-      enableFollowMode();
-    } else {
-      final project = state.project;
-      if (project != null && project.photoSeverLinePixels > 0) {
-        state.mapRotation = -math.pi / 2 - project.photoSeverNorthAngle;
-      } else {
-        state.mapRotation = 0.0;
-      }
-    }
-  });
-
-  // ---- Измерение прыжка (после обновления) ----
-  GeoPoint? newGeoPoint;
-  if (pivotPixel != null && _calibrationService.usedAnchorCount > 0) {
-    newGeoPoint = _calibrationService.imagePointToGeoFromCurrent(pivotPixel);
-  }
-
-  if (oldGeoPoint != null && newGeoPoint != null) {
-    final distance = calculateDistance(
-      oldGeoPoint.latitude,
-      oldGeoPoint.longitude,
-      newGeoPoint.latitude,
-      newGeoPoint.longitude,
+  void _recalculateWorkingPairAndRotation() {
+    print(
+      '_recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
     );
-    // Всегда показываем для отладки
-    showSnackBar('Точность привязки: ${distance.toStringAsFixed(1)} м');
-    // if (distance > 0.5) { ... } // можно раскомментировать позже
+    final anchors = state.project?.anchors ?? [];
+    print('before updateAnchors, used=${_calibrationService.usedAnchorCount}');
+    _calibrationService.updateAnchors(anchors);
+    print('after updateAnchors, used=${_calibrationService.usedAnchorCount}');
+    final newPair = _calibrationService.selectWorkingPair(anchors);
+    final declinationRad = magneticDeclination * math.pi / 180;
+
+    setState(() {
+      state.workingPair = newPair;
+      if (newPair != null) {
+        final trueRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
+        state.mapRotation = trueRotation - declinationRad;
+        /* showSnackBar('привязка завершена'); */
+        enableFollowMode();
+      } else {
+        final project = state.project;
+        if (project != null && project.photoSeverLinePixels > 0) {
+          state.mapRotation = -math.pi / 2 - project.photoSeverNorthAngle;
+        } else {
+          state.mapRotation = 0.0;
+        }
+      }
+    });
+
+    print(
+      '🔔 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
+    );
+    onAnchorsChangedForStatus?.call();
   }
 
-  print('🔔 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}');
-  onAnchorsChangedForStatus?.call();
-}
   void _recalculateCanPlaceTarget() {
     setState(() {
       state.canPlaceTarget = true;
@@ -3277,7 +3257,7 @@ void _recalculateWorkingPairAndRotation() {
         newActiveTarget!.latitude!,
         newActiveTarget.longitude!,
       );
-      //      showSnackBar('Навигация перезапущена с новыми координатами цели');
+//      showSnackBar('Навигация перезапущена с новыми координатами цели');
     }
   }
 
@@ -3368,7 +3348,7 @@ void _recalculateWorkingPairAndRotation() {
 
   void _updateCompensation(double delta) {
     // Экспоненциальное скользящее среднее
-    _compensationMs = _compensationMs * 0.85 + delta * 0.1;
+    _compensationMs = _compensationMs * 0.8 + delta * 0.1;
     // Ограничиваем разумными пределами
     _compensationMs = _compensationMs.clamp(500.0, 3000.0);
     _saveCompensation();
@@ -3565,7 +3545,7 @@ class MapTargetManager {
     setState(() {
       state.plannedTarget = target;
     });
-    showSnackBar('Цель установлена из буфера обмена');
+//    showSnackBar('Цель установлена из буфера обмена');
   }
 
   Future<void> setTargetAndStartNavigation() async {
@@ -3577,7 +3557,7 @@ class MapTargetManager {
 
     if (onStartNavigation != null) {
       await onStartNavigation!(planned.latitude!, planned.longitude!);
-      showSnackBar('Ведение на цель в компасе запущено');
+//      showSnackBar('Ведение на цель в компасе запущено');
     }
   }
 
@@ -4033,7 +4013,7 @@ Future<void> _createNotificationChannel() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  print('🎥  Compass40 START');
+  print('🎥 Compass40 START');
 
   // Создаём канал уведомлений ДО запуска сервиса
   await _createNotificationChannel();
@@ -10108,6 +10088,8 @@ class _ImagePainter extends CustomPainter {
 }
 
 ============= lib/widgets/map_overlay_painter.dart ===
+// ignore_for_file: avoid_print
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/map_anchor.dart';
@@ -10135,6 +10117,7 @@ class MapOverlayPainter extends CustomPainter {
   final bool isGpsActive;
   final double mapRotation;
   final double magneticDeclination;
+  final void Function(String)? onPathJump;
 
   const MapOverlayPainter({
     required this.imageSize,
@@ -10153,6 +10136,7 @@ class MapOverlayPainter extends CustomPainter {
     this.isGpsActive = false,
     this.mapRotation = 0.0,
     this.magneticDeclination = 0.0,
+    this.onPathJump,
   });
 
   @override
@@ -10192,6 +10176,8 @@ class MapOverlayPainter extends CustomPainter {
   void _drawUserPath(Canvas canvas) {
     if (userPath.length < 2) return;
 
+    double dashedLineLengthMeters = 0.0;
+
     final solidPathPaint = Paint()
       ..color = Colors.red.withAlpha((255 * 0.8).round())
       ..strokeWidth = 6.0
@@ -10212,6 +10198,17 @@ class MapOverlayPainter extends CustomPainter {
       final p2 = imageToScreen(userPath[i]);
 
       if (jumpIndicesSet.contains(i)) {
+        final p1Image = userPath[i - 1];
+        final p2Image = userPath[i];
+        final pixelDistance = (p2Image - p1Image).distance;
+        if (transformState.scale > 0) {
+          dashedLineLengthMeters += pixelDistance / transformState.scale;
+          onPathJump?.call('Прыжок: ${dashedLineLengthMeters.toStringAsFixed(1)} метров');
+          print('Прыжок: ${dashedLineLengthMeters.toStringAsFixed(1)} метров');
+        } else {
+          onPathJump?.call('Масштаб карты не определен');
+          print('Масштаб карты не определен');
+        }
         _drawDashedLine(canvas, p1, p2, dashedPathPaint);
       } else {
         canvas.drawLine(p1, p2, solidPathPaint);

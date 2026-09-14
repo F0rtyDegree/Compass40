@@ -863,38 +863,54 @@ class MapScreenLogic {
     });
   }
 
-  void _recalculateUserImagePoint() {
-    if (_calibrationService.usedAnchorCount == 0) {
-      if (state.currentUserImagePoint != null) {
-        setState(() {
-          state.currentUserImagePoint = null;
-        });
-      }
-      return;
+void _recalculateUserImagePoint() {
+  if (_calibrationService.usedAnchorCount == 0) {
+    if (state.currentUserImagePoint != null) {
+      setState(() {
+        state.currentUserImagePoint = null;
+      });
     }
-
-    final gps = _lastGpsData;
-    if (gps == null) return;
-    final lat = gps.latitude;
-    final lon = gps.longitude;
-    if (lat == null || lon == null || state.project == null) return;
-
-    final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
-
-    if (imagePoint == null || (imagePoint.dx == 0.0 && imagePoint.dy == 0.0)) {
-      return;
-    }
-
-    final updatedPath = [...state.project!.userPath, imagePoint];
-
-    setState(() {
-      state.currentUserImagePoint = imagePoint;
-      state.project = state.project!.copyWith(userPath: updatedPath);
-    });
-    _recalculateUserScreenPoint();
-    _recalculatePreview();
+    return;
   }
 
+  final gps = _lastGpsData;
+  if (gps == null) return;
+  final lat = gps.latitude;
+  final lon = gps.longitude;
+  if (lat == null || lon == null || state.project == null) return;
+
+  final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
+
+  if (imagePoint == null || (imagePoint.dx == 0.0 && imagePoint.dy == 0.0)) {
+    return;
+  }
+
+  final updatedPath = [...state.project!.userPath, imagePoint];
+
+  setState(() {
+    state.currentUserImagePoint = imagePoint;
+    state.project = state.project!.copyWith(userPath: updatedPath);
+  });
+
+  // Вычисление длины прыжка (один раз для новой точки)
+  final path = state.project!.userPath;
+  if (path.length >= 2) {
+    final newIndex = path.length - 1;
+    if (state.project!.pathJumpIndices.contains(newIndex)) {
+      final prevPoint = path[newIndex - 1];
+      final pixelDistance = (path[newIndex] - prevPoint).distance;
+      final metersPerPixel = _calibrationService.metersPerImagePixel;
+      if (metersPerPixel != null && metersPerPixel > 0) {
+        final jumpMeters = pixelDistance * metersPerPixel;
+        showSnackBar('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
+        print('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
+      }
+    }
+  }
+
+  _recalculateUserScreenPoint();
+  _recalculatePreview();
+}
   void _recalculateUserScreenPoint() {
     final imagePoint = state.currentUserImagePoint;
     if (imagePoint == null) return;
