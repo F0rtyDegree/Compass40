@@ -1,11 +1,10 @@
-import 'dart:async';
-import 'dart:developer' as developer;
+// ignore_for_file: avoid_print
 
+import 'dart:async';
 import 'package:gps_info/gps_info.dart';
 import 'package:my_compass/my_compass.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../controllers/home_state.dart';
 import '../utils/app_constants.dart';
 
@@ -73,12 +72,7 @@ class SensorService {
         .listen(
           onData,
           onError: (error, stack) {
-            developer.log(
-              'GPS stream error',
-              name: 'by.fortydegree.compass40',
-              error: error,
-              stackTrace: stack,
-            );
+            print('GPS stream error: $error\n$stack');
           },
         );
   }
@@ -97,12 +91,7 @@ class SensorService {
     return _getOrCreateCompassStream().listen(
       onData,
       onError: (error, stack) {
-        developer.log(
-          'Compass stream error',
-          name: 'by.fortydegree.compass40',
-          error: error,
-          stackTrace: stack,
-        );
+        print('Compass stream error: $error\n$stack');
       },
     );
   }
