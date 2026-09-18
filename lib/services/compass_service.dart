@@ -16,9 +16,8 @@ class CompassService {
   factory CompassService() => _instance;
   CompassService._internal();
 
-  int _lastDebugPrint = 0;
-  int _accEventCount = 0;
-
+  final List<double> _accFiltered = [0, 0, 9.81];
+  static const double _accAlpha = 0.3;
   final _controller = StreamController<CompassData>.broadcast();
   Stream<CompassData> get dataStream => _controller.stream;
 
@@ -26,7 +25,6 @@ class CompassService {
   StreamSubscription? _accSub;
 
   List<double> _mag = [0, 0, 0];
-  List<double> _acc = [0, 0, 0];
   bool _hasMag = false;
   bool _hasAcc = false;
 
@@ -49,12 +47,10 @@ class CompassService {
     _loadCalibration();
 
     _accSub = accelerometerEventStream().listen((e) {
-      _acc = [e.x, e.y, e.z];
+      _accFiltered[0] = _accFiltered[0] * (1 - _accAlpha) + e.x * _accAlpha;
+      _accFiltered[1] = _accFiltered[1] * (1 - _accAlpha) + e.y * _accAlpha;
+      _accFiltered[2] = _accFiltered[2] * (1 - _accAlpha) + e.z * _accAlpha;
       _hasAcc = true;
-      _accEventCount++;
-      if (_accEventCount % 50 == 0) {
-        print('ACC_RAW: x=${e.x} y=${e.y} z=${e.z} count=$_accEventCount');
-      }
     });
 
     _magSub = magnetometerEventStream().listen((e) {
@@ -120,8 +116,9 @@ class CompassService {
     final mx = _mag[0] - _cx;
     final my = _mag[1] - _cy;
     final mz = _mag[2] - _cz;
-    final ax = _acc[0], ay = _acc[1], az = _acc[2];
-
+    final ax = _accFiltered[0];
+    final ay = _accFiltered[1];
+    final az = _accFiltered[2];
     final aNorm = math.sqrt(ax * ax + ay * ay + az * az);
     if (aNorm < 1e-6) return;
     final gx = ax / aNorm, gy = ay / aNorm, gz = az / aNorm;
@@ -138,17 +135,6 @@ class CompassService {
     final ny = gz * ex - gx * ez;
 
     double heading = math.atan2(ey, ny) * 180 / math.pi;
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    if (now - _lastDebugPrint >= 1000) {
-      _lastDebugPrint = now;
-      final simple = math.atan2(-mx, my) * 180 / math.pi;
-      final simpleNorm = simple < 0 ? simple + 360 : simple;
-      print(
-        'COMPASS: mag=(${mx.toStringAsFixed(1)},${my.toStringAsFixed(1)},${mz.toStringAsFixed(1)}) acc=(${ax.toStringAsFixed(1)},${ay.toStringAsFixed(1)},${az.toStringAsFixed(1)}) heading=${heading.toStringAsFixed(1)} simple=${simpleNorm.toStringAsFixed(1)}',
-      );
-    }
-
     if (heading < 0) heading += 360;
 
     _headingBuffer.add(heading);
@@ -163,30 +149,18 @@ class CompassService {
 
   double _computeAccuracy() {
     if (_headingBuffer.length < 5) return 0.0;
-    final median = _circularMedian(_headingBuffer);
-    double maxDev = 0;
-    for (final h in _headingBuffer) {
-      double d = (h - median).abs();
+    final deviations = <double>[];
+    for (int i = 1; i < _headingBuffer.length; i++) {
+      double d = (_headingBuffer[i] - _headingBuffer[i - 1]).abs();
       if (d > 180) d = 360 - d;
-      if (d > maxDev) maxDev = d;
+      if (d <= 30) deviations.add(d);
     }
-    if (maxDev <= 2) return 3.0;
-    if (maxDev <= 5) return 2.0;
-    if (maxDev <= 10) return 1.0;
+    if (deviations.length < 3) return 2.0;
+    deviations.sort();
+    final median = deviations[deviations.length ~/ 2];
+    if (median <= 0.3) return 3.0;
+    if (median <= 1.0) return 2.0;
+    if (median <= 2.5) return 1.0;
     return 0.0;
-  }
-
-  double _circularMedian(List<double> angles) {
-    final sorted = List<double>.from(angles)..sort();
-    final n = sorted.length;
-    if (n % 2 == 1) return sorted[n ~/ 2];
-    final m1 = sorted[n ~/ 2 - 1];
-    final m2 = sorted[n ~/ 2];
-    if ((m2 - m1).abs() > 180) {
-      double med = (m1 + m2 + 360) / 2;
-      if (med >= 360) med -= 360;
-      return med;
-    }
-    return (m1 + m2) / 2;
   }
 }
