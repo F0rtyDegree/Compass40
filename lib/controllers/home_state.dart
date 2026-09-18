@@ -12,7 +12,7 @@ class HomeState {
   final GpsInfo gpsInfo = GpsInfo();
 
   late StreamSubscription<GpsData> gpsDataSubscription;
-  late StreamSubscription<List<double>> compassSubscription;
+  // late StreamSubscription<List<double>> compassSubscription; // <--- REMOVED
 
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);

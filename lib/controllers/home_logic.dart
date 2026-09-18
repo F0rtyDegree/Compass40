@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_manager.dart';
@@ -12,11 +13,10 @@ import '../services/gps_compass_service.dart';
 import '../services/track_recorder.dart';
 import '../services/gpx_export_service.dart';
 import '../utils/geo_utils.dart';
-import '../utils/angle_utils.dart';
-import '../utils/app_constants.dart';
 import 'home_state.dart';
 import '../services/file_logger.dart';
 import '../services/background_tracker.dart';
+import '../services/compass_service.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -24,11 +24,12 @@ class HomeLogic {
   final LogService logService;
   final SensorService sensorService;
   final GpsManager _gpsManager = GpsManager();
+  final CompassService _compassService = CompassService();
 
-  // Локальная подписка на GPS (через GpsManager)
   StreamSubscription<GpsData>? _gpsSubscription;
+  StreamSubscription? _headingSubscription;
+  StreamSubscription? _gyroscopeSubscription;
 
-  // Запись трека
   final TrackRecorder _trackRecorder = TrackRecorder();
   bool _wasTrackRecovered = false;
   bool get wasTrackRecovered => _wasTrackRecovered;
@@ -42,26 +43,24 @@ class HomeLogic {
   });
 
   Future<void> init() async {
-    // Сначала запрашиваем разрешения в основном потоке
     final status = await Permission.storage.request();
     if (!status.isGranted) {
       await Permission.manageExternalStorage.request();
     }
 
-    // Инициализируем лог-файл (очищаем старый)
     await FileLogger.init();
-
-    // Теперь можно писать логи
     FileLogger.writeLog('Compass40 start');
 
-    // Продолжаем инициализацию
     await _loadAllSettings();
     await loadLogEntries();
-
-    // Восстановление трека после падения
     await _checkAndRecoverTrack();
-
     await _initServicesAndPermissions();
+
+    _compassService.start();
+    _headingSubscription = _compassService.dataStream.listen((data) {
+      state.headingNotifier.value = data.heading;
+      state.accuracyNotifier.value = data.accuracy;
+    });
   }
 
   void dispose() {
@@ -72,25 +71,22 @@ class HomeLogic {
     FileLogger.writeLog('Compass40 stop');
     print('dispose(): (4)');
 
-    // Остановка фонового сервиса
     stopBackgroundService();
 
     _gpsSubscription?.cancel();
     _gpsSubscription = null;
-    _gpsManager.dispose();
+    _headingSubscription?.cancel();
+    _gyroscopeSubscription?.cancel();
 
+    _gpsManager.dispose();
+    // _sensorFusionService.dispose();
+    _compassService.stop();
     print('dispose(): (3)');
     state.uiUpdateTimer?.cancel();
-    print('dispose(): (2)');
-    state.compassSubscription.cancel();
     print('dispose(): (1)');
     state.disposeNotifiers();
     print('dispose(): exit');
   }
-
-  // ----------------------------------------------------------------------
-  // Настройки
-  // ----------------------------------------------------------------------
 
   Future<void> _loadAllSettings() async {
     final settings = await sensorService.loadSettings();
@@ -126,16 +122,11 @@ class HomeLogic {
     await sensorService.saveAutoSwitchSpeed(speedKmh);
   }
 
-  // ----------------------------------------------------------------------
-  // Сенсоры
-  // ----------------------------------------------------------------------
-
   Future<void> _initServicesAndPermissions() async {
-    _subscribeToCompassStream();
+    _subscribeToSensorStreams();
 
     if (await sensorService.requestLocationPermission()) {
       final settings = await sensorService.loadSettings();
-      // GpsCompassService теперь сам подписывается на GpsManager
       GpsCompassService.instance.start(settings);
       _subscribeToGpsDataStream();
     }
@@ -143,20 +134,15 @@ class HomeLogic {
 
   void _subscribeToGpsDataStream() async {
     final settings = await sensorService.loadSettings();
-
-    // Подписываемся через GpsManager
     _gpsSubscription = _gpsManager.subscribe(
       intervalSeconds: settings.gpsInterval,
       onData: (gpsData) {
         state.gpsDataNotifier.value = gpsData;
-
         if (!state.useManualDeclination) {
           setState(() {
             state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
           });
         }
-        // Данные уже передаются в GpsCompassService через его собственную подписку,
-        // поэтому здесь ничего не вызываем.
       },
       onError: (error) {
         print('GPS error in HomeLogic: $error');
@@ -167,130 +153,34 @@ class HomeLogic {
     );
   }
 
-  void _subscribeToCompassStream() {
-    state.compassSubscription = sensorService.subscribeToCompass(
-      onData: (data) {
-        if (data.isEmpty) return;
+  void _subscribeToSensorStreams() {
+    userAccelerometerEventStream().listen((UserAccelerometerEvent event) {
+      print(
+          'Raw Accelerometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+    });
 
-        final heading = data[0];
-        final accuracy = data.length > 1 ? data[1] : 0.0;
-        if (accuracy == 0) {
-          state.accuracyNotifier.value = 0;
-          return;
-        }
+    magnetometerEventStream().listen((MagnetometerEvent event) {
+      print(
+          'Raw Magnetometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+    });
 
-        // Фильтр выбросов
-        if (state.headingSamples.isNotEmpty) {
-          double lastHeading = state.headingSamples.last.$1;
-          double diff = (heading - lastHeading).abs();
-          if (diff > 180) diff = 360 - diff;
-          if (diff > AppConstants.spikeThresholdDegrees) {
-            state.headingSamples.add((
-              lastHeading,
-              DateTime.now().millisecondsSinceEpoch,
-            ));
-            if (state.headingSamples.length > HomeState.maxSamples) {
-              state.headingSamples.removeAt(0);
-            }
-            state.accuracyNotifier.value = accuracy;
-            return;
-          }
-        }
-
-        /* 
-Этот код добавляет текущее значение направления (heading) вместе с точной временной меткой в список headingSamples.
-Проще говоря, он записывает историю показаний компаса.
-Это нужно для следующих целей:
-Сглаживание данных: Чтобы компас не "дергался", приложение может усреднять несколько последних значений направления, делая показания более стабильными и плавными.
-Анализ и вычисления: Накопленные данные могут использоваться для вычисления скорости поворота или для других более сложных расчетов, связанных с навигацией.
-Логирование: Для записи трека движения пользователя, чтобы позже можно было его просмотреть или проанализировать.
-Каждая запись в списке headingSamples — это пара, состоящая из:
-
-heading: само значение направления в градусах.
-DateTime.now().millisecondsSinceEpоch: момент времени, когда это значение было зафиксировано, с точностью до миллисекунды. */
-        state.headingSamples.add((
-          heading,
-          DateTime.now().millisecondsSinceEpoch,
-        ));
-
-        if (state.headingSamples.length > HomeState.maxSamples) {
-          state.headingSamples.removeAt(0);
-        }
-
-        state.accuracyNotifier.value = accuracy;
-
-        if (state.headingSamples.length == 1) {
-          final normalizedHeading = normalizeBearing(heading);
-          state.filteredHeading = normalizedHeading;
-          state.headingNotifier.value = normalizedHeading;
-        }
-      },
-    );
+    _gyroscopeSubscription =
+        gyroscopeEventStream().listen((GyroscopeEvent event) {
+      print(
+          'Raw Gyroscope: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+    });
   }
-
-  // ----------------------------------------------------------------------
-  // Таймер и обновление heading
-  // ----------------------------------------------------------------------
 
   void startUiUpdateTimer() {
     state.uiUpdateTimer?.cancel();
     state.uiUpdateTimer = Timer.periodic(
       Duration(milliseconds: state.uiUpdatePeriod),
       (timer) {
-        _updateHeading();
         _calculateWaypointData();
         _calculateTargetData();
       },
     );
   }
-
-  Future<void> _updateHeading() async {
-    /* Эта функция _updateHeading предназначена для асинхронного получения и обновления текущего направления (heading) компаса. */
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    bool useGps = false;
-
-    switch (state.compassMode) {
-      case CompassMode.magnetic:
-        useGps = false;
-        break;
-      case CompassMode.gps:
-        useGps = GpsCompassService.instance.isActiveNotifier.value;
-        break;
-      case CompassMode.auto:
-        useGps = GpsCompassService.instance.isActiveNotifier.value;
-        break;
-    }
-
-    state.isGpsCompassActiveNotifier.value = useGps;
-
-    double newHeading;
-
-    if (useGps) {
-      final gpsBearing = GpsCompassService.instance.bearingNotifier.value;
-      if (gpsBearing == null) return;
-      newHeading = normalizeBearing(gpsBearing - state.magneticDeclination);
-    } else {
-      state.headingSamples.removeWhere(
-        (s) => now - s.$2 > state.averagingPeriod,
-      );
-      if (state.headingSamples.isEmpty) return;
-      final headings = state.headingSamples.map((s) => s.$1).toList();
-      newHeading = await calculateCircularMedian(headings);
-    }
-
-    double diff = newHeading - state.filteredHeading;
-    if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
-
-    state.filteredHeading += state.smoothingFactor * diff;
-    state.filteredHeading = normalizeBearing(state.filteredHeading);
-
-    state.headingNotifier.value = state.filteredHeading;
-  }
-
-  // ----------------------------------------------------------------------
-  // Расчёты навигации
-  // ----------------------------------------------------------------------
 
   void _calculateWaypointData() {
     if (state.waypoint == null ||
@@ -333,10 +223,6 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
     state.distanceToTarget.value = navData.distanceMeters;
     state.bearingToTarget.value = navData.magneticBearing;
   }
-
-  // ----------------------------------------------------------------------
-  // Логи и КП
-  // ----------------------------------------------------------------------
 
   Future<void> loadLogEntries() async {
     final items = await logService.loadLogEntries();
@@ -440,14 +326,9 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
     clearTarget();
   }
 
-  // ----------------------------------------------------------------------
-  // Управление записью трека
-  // ----------------------------------------------------------------------
-
   Future<void> _checkAndRecoverTrack() async {
     final wasRecording = await TrackRecorder.recoverIfNeeded();
     if (wasRecording) {
-      // Инициализируем экземпляр для работы с существующим CSV
       await _trackRecorder.initializeForRecovery();
       setState(() {
         state.isRecordingTrack = true;
@@ -464,7 +345,6 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
         state.isRecordingTrack = false;
         state.isRecordingTrackNotifier.value = false;
       });
-      // Уведомление: запись остановлена
       print(
         '🔔 toggleTrackRecording: calling updateNotification with "stop Record"',
       );
@@ -475,7 +355,6 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
         state.isRecordingTrack = true;
         state.isRecordingTrackNotifier.value = true;
       });
-      // Уведомление: запись началась
       print(
         '🔔 toggleTrackRecording: calling updateNotification with "start Record"',
       );
@@ -508,10 +387,6 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
 
     await _trackRecorder.clear();
   }
-
-  // ----------------------------------------------------------------------
-  // Вспомогательные методы для UI
-  // ----------------------------------------------------------------------
 
   String getAccuracyText(double accuracy) {
     switch (accuracy.toInt()) {

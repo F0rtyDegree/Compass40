@@ -4,9 +4,11 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.9 вычислить длину пунктирной линии в метрах (в методе _drawUserPath).
+ver. 6.5.11 поиск решения как улучшить магнитный компас .
 "
 
+ver. 6.5.10 включение\выключение всех ТП повторным выбором режима M.
+ver. 6.5.9 вычислить длину пунктирной линии в метрах (в методе _drawUserPath).
 ver. 6.5.8 отключил часть showSnackBar.
 ver. 6.5.7 Latency: 25229ms. Разбираемся с огромной задержкой - решено.
 ver. 6.5.5 Кнопки Цель и Ядесь прозрачнее и правее. Высота по WGS84. 
@@ -291,7 +293,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 6.5.9
+version: 6.5.11
 environment:
   sdk: ^3.9.0
 
@@ -304,8 +306,6 @@ dependencies:
 
   gps_info:
     path: packages/gps_info
-  my_compass:
-    path: packages/my_compass
   shared_preferences: ^2.5.4
   provider: ^6.1.5+1
   package_info_plus: ^9.0.0
@@ -321,6 +321,8 @@ dependencies:
   flutter_background_service: ^5.1.0
   flutter_local_notifications: ^17.0.0
   intl: ^0.20.3
+  sensors_plus: ^7.1.0
+  vector_math: ^2.2.0
   
 dev_dependencies:
   flutter_test:
@@ -764,6 +766,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_manager.dart';
@@ -771,11 +774,11 @@ import '../services/gps_compass_service.dart';
 import '../services/track_recorder.dart';
 import '../services/gpx_export_service.dart';
 import '../utils/geo_utils.dart';
-import '../utils/angle_utils.dart';
-import '../utils/app_constants.dart';
 import 'home_state.dart';
 import '../services/file_logger.dart';
 import '../services/background_tracker.dart';
+// import '../services/sensor_fusion_service.dart';
+import '../services/magnetometer_only_service.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -783,11 +786,14 @@ class HomeLogic {
   final LogService logService;
   final SensorService sensorService;
   final GpsManager _gpsManager = GpsManager();
+  // final SensorFusionService _sensorFusionService = SensorFusionService();
+  final MagnetometerOnlyService _magnetometerOnlyService =
+      MagnetometerOnlyService();
 
-  // Локальная подписка на GPS (через GpsManager)
   StreamSubscription<GpsData>? _gpsSubscription;
+  StreamSubscription<MagnetometerData>? _headingSubscription;
+  StreamSubscription? _gyroscopeSubscription;
 
-  // Запись трека
   final TrackRecorder _trackRecorder = TrackRecorder();
   bool _wasTrackRecovered = false;
   bool get wasTrackRecovered => _wasTrackRecovered;
@@ -801,26 +807,25 @@ class HomeLogic {
   });
 
   Future<void> init() async {
-    // Сначала запрашиваем разрешения в основном потоке
     final status = await Permission.storage.request();
     if (!status.isGranted) {
       await Permission.manageExternalStorage.request();
     }
 
-    // Инициализируем лог-файл (очищаем старый)
     await FileLogger.init();
-
-    // Теперь можно писать логи
     FileLogger.writeLog('Compass40 start');
 
-    // Продолжаем инициализацию
     await _loadAllSettings();
     await loadLogEntries();
-
-    // Восстановление трека после падения
     await _checkAndRecoverTrack();
-
     await _initServicesAndPermissions();
+
+    // _sensorFusionService.start();
+    _magnetometerOnlyService.start();
+    _headingSubscription = _magnetometerOnlyService.dataStream.listen((data) {
+      state.headingNotifier.value = data.heading;
+      state.accuracyNotifier.value = data.accuracy;
+    });
   }
 
   void dispose() {
@@ -831,25 +836,23 @@ class HomeLogic {
     FileLogger.writeLog('Compass40 stop');
     print('dispose(): (4)');
 
-    // Остановка фонового сервиса
     stopBackgroundService();
 
     _gpsSubscription?.cancel();
     _gpsSubscription = null;
+    _headingSubscription?.cancel();
+    _gyroscopeSubscription?.cancel();
+
     _gpsManager.dispose();
+    // _sensorFusionService.dispose();
+    _magnetometerOnlyService.dispose();
 
     print('dispose(): (3)');
     state.uiUpdateTimer?.cancel();
-    print('dispose(): (2)');
-    state.compassSubscription.cancel();
     print('dispose(): (1)');
     state.disposeNotifiers();
     print('dispose(): exit');
   }
-
-  // ----------------------------------------------------------------------
-  // Настройки
-  // ----------------------------------------------------------------------
 
   Future<void> _loadAllSettings() async {
     final settings = await sensorService.loadSettings();
@@ -885,16 +888,11 @@ class HomeLogic {
     await sensorService.saveAutoSwitchSpeed(speedKmh);
   }
 
-  // ----------------------------------------------------------------------
-  // Сенсоры
-  // ----------------------------------------------------------------------
-
   Future<void> _initServicesAndPermissions() async {
-    _subscribeToCompassStream();
+    _subscribeToSensorStreams();
 
     if (await sensorService.requestLocationPermission()) {
       final settings = await sensorService.loadSettings();
-      // GpsCompassService теперь сам подписывается на GpsManager
       GpsCompassService.instance.start(settings);
       _subscribeToGpsDataStream();
     }
@@ -902,20 +900,15 @@ class HomeLogic {
 
   void _subscribeToGpsDataStream() async {
     final settings = await sensorService.loadSettings();
-
-    // Подписываемся через GpsManager
     _gpsSubscription = _gpsManager.subscribe(
       intervalSeconds: settings.gpsInterval,
       onData: (gpsData) {
         state.gpsDataNotifier.value = gpsData;
-
         if (!state.useManualDeclination) {
           setState(() {
             state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
           });
         }
-        // Данные уже передаются в GpsCompassService через его собственную подписку,
-        // поэтому здесь ничего не вызываем.
       },
       onError: (error) {
         print('GPS error in HomeLogic: $error');
@@ -926,130 +919,34 @@ class HomeLogic {
     );
   }
 
-  void _subscribeToCompassStream() {
-    state.compassSubscription = sensorService.subscribeToCompass(
-      onData: (data) {
-        if (data.isEmpty) return;
+  void _subscribeToSensorStreams() {
+    userAccelerometerEventStream().listen((UserAccelerometerEvent event) {
+      print(
+          'Raw Accelerometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+    });
 
-        final heading = data[0];
-        final accuracy = data.length > 1 ? data[1] : 0.0;
-        if (accuracy == 0) {
-          state.accuracyNotifier.value = 0;
-          return;
-        }
+    magnetometerEventStream().listen((MagnetometerEvent event) {
+      print(
+          'Raw Magnetometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+    });
 
-        // Фильтр выбросов
-        if (state.headingSamples.isNotEmpty) {
-          double lastHeading = state.headingSamples.last.$1;
-          double diff = (heading - lastHeading).abs();
-          if (diff > 180) diff = 360 - diff;
-          if (diff > AppConstants.spikeThresholdDegrees) {
-            state.headingSamples.add((
-              lastHeading,
-              DateTime.now().millisecondsSinceEpoch,
-            ));
-            if (state.headingSamples.length > HomeState.maxSamples) {
-              state.headingSamples.removeAt(0);
-            }
-            state.accuracyNotifier.value = accuracy;
-            return;
-          }
-        }
-
-        /* 
-Этот код добавляет текущее значение направления (heading) вместе с точной временной меткой в список headingSamples.
-Проще говоря, он записывает историю показаний компаса.
-Это нужно для следующих целей:
-Сглаживание данных: Чтобы компас не "дергался", приложение может усреднять несколько последних значений направления, делая показания более стабильными и плавными.
-Анализ и вычисления: Накопленные данные могут использоваться для вычисления скорости поворота или для других более сложных расчетов, связанных с навигацией.
-Логирование: Для записи трека движения пользователя, чтобы позже можно было его просмотреть или проанализировать.
-Каждая запись в списке headingSamples — это пара, состоящая из:
-
-heading: само значение направления в градусах.
-DateTime.now().millisecondsSinceEpоch: момент времени, когда это значение было зафиксировано, с точностью до миллисекунды. */
-        state.headingSamples.add((
-          heading,
-          DateTime.now().millisecondsSinceEpoch,
-        ));
-
-        if (state.headingSamples.length > HomeState.maxSamples) {
-          state.headingSamples.removeAt(0);
-        }
-
-        state.accuracyNotifier.value = accuracy;
-
-        if (state.headingSamples.length == 1) {
-          final normalizedHeading = normalizeBearing(heading);
-          state.filteredHeading = normalizedHeading;
-          state.headingNotifier.value = normalizedHeading;
-        }
-      },
-    );
+    _gyroscopeSubscription =
+        gyroscopeEventStream().listen((GyroscopeEvent event) {
+      print(
+          'Raw Gyroscope: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+    });
   }
-
-  // ----------------------------------------------------------------------
-  // Таймер и обновление heading
-  // ----------------------------------------------------------------------
 
   void startUiUpdateTimer() {
     state.uiUpdateTimer?.cancel();
     state.uiUpdateTimer = Timer.periodic(
       Duration(milliseconds: state.uiUpdatePeriod),
       (timer) {
-        _updateHeading();
         _calculateWaypointData();
         _calculateTargetData();
       },
     );
   }
-
-  Future<void> _updateHeading() async {
-    /* Эта функция _updateHeading предназначена для асинхронного получения и обновления текущего направления (heading) компаса. */
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    bool useGps = false;
-
-    switch (state.compassMode) {
-      case CompassMode.magnetic:
-        useGps = false;
-        break;
-      case CompassMode.gps:
-        useGps = GpsCompassService.instance.isActiveNotifier.value;
-        break;
-      case CompassMode.auto:
-        useGps = GpsCompassService.instance.isActiveNotifier.value;
-        break;
-    }
-
-    state.isGpsCompassActiveNotifier.value = useGps;
-
-    double newHeading;
-
-    if (useGps) {
-      final gpsBearing = GpsCompassService.instance.bearingNotifier.value;
-      if (gpsBearing == null) return;
-      newHeading = normalizeBearing(gpsBearing - state.magneticDeclination);
-    } else {
-      state.headingSamples.removeWhere(
-        (s) => now - s.$2 > state.averagingPeriod,
-      );
-      if (state.headingSamples.isEmpty) return;
-      final headings = state.headingSamples.map((s) => s.$1).toList();
-      newHeading = await calculateCircularMedian(headings);
-    }
-
-    double diff = newHeading - state.filteredHeading;
-    if (diff.abs() > 180) diff += (diff > 0) ? -360 : 360;
-
-    state.filteredHeading += state.smoothingFactor * diff;
-    state.filteredHeading = normalizeBearing(state.filteredHeading);
-
-    state.headingNotifier.value = state.filteredHeading;
-  }
-
-  // ----------------------------------------------------------------------
-  // Расчёты навигации
-  // ----------------------------------------------------------------------
 
   void _calculateWaypointData() {
     if (state.waypoint == null ||
@@ -1092,10 +989,6 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
     state.distanceToTarget.value = navData.distanceMeters;
     state.bearingToTarget.value = navData.magneticBearing;
   }
-
-  // ----------------------------------------------------------------------
-  // Логи и КП
-  // ----------------------------------------------------------------------
 
   Future<void> loadLogEntries() async {
     final items = await logService.loadLogEntries();
@@ -1199,14 +1092,9 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
     clearTarget();
   }
 
-  // ----------------------------------------------------------------------
-  // Управление записью трека
-  // ----------------------------------------------------------------------
-
   Future<void> _checkAndRecoverTrack() async {
     final wasRecording = await TrackRecorder.recoverIfNeeded();
     if (wasRecording) {
-      // Инициализируем экземпляр для работы с существующим CSV
       await _trackRecorder.initializeForRecovery();
       setState(() {
         state.isRecordingTrack = true;
@@ -1223,7 +1111,6 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
         state.isRecordingTrack = false;
         state.isRecordingTrackNotifier.value = false;
       });
-      // Уведомление: запись остановлена
       print(
         '🔔 toggleTrackRecording: calling updateNotification with "stop Record"',
       );
@@ -1234,7 +1121,6 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
         state.isRecordingTrack = true;
         state.isRecordingTrackNotifier.value = true;
       });
-      // Уведомление: запись началась
       print(
         '🔔 toggleTrackRecording: calling updateNotification with "start Record"',
       );
@@ -1267,10 +1153,6 @@ DateTime.now().millisecondsSinceEpоch: момент времени, когда 
 
     await _trackRecorder.clear();
   }
-
-  // ----------------------------------------------------------------------
-  // Вспомогательные методы для UI
-  // ----------------------------------------------------------------------
 
   String getAccuracyText(double accuracy) {
     switch (accuracy.toInt()) {
@@ -1432,7 +1314,7 @@ class HomeState {
   final GpsInfo gpsInfo = GpsInfo();
 
   late StreamSubscription<GpsData> gpsDataSubscription;
-  late StreamSubscription<List<double>> compassSubscription;
+  // late StreamSubscription<List<double>> compassSubscription; // <--- REMOVED
 
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
@@ -1898,20 +1780,6 @@ class MapAnchorManager {
     final canManual = anchorCount >= 3;
     final canPhotoSever = hasPhotoSever && anchorCount >= 1;
 
-    void switchTo(CalibrationMode mode, BuildContext dialogCtx) {
-      calibrationService.setCalibrationMode(mode);
-      Navigator.pop(dialogCtx);
-      _saveCalibrationState();
-      setState(() {});
-    }
-
-    void switchToManual(BuildContext dialogCtx) {
-      calibrationService.enableManualMode();
-      Navigator.pop(dialogCtx);
-      _saveCalibrationState();
-      setState(() {});
-    }
-
     void showHintAndClose(String hint, BuildContext dialogCtx) {
       Navigator.pop(dialogCtx);
       showSnackBar(hint);
@@ -1946,11 +1814,25 @@ class MapAnchorManager {
           ),
           SimpleDialogOption(
             onPressed: () {
+              Navigator.pop(ctx); // Закрываем диалог сразу
               if (!canManual) {
-                showHintAndClose('Нужно минимум 3 якоря', ctx);
+                showSnackBar('Нужно минимум 3 якоря');
                 return;
               }
-              switchToManual(ctx);
+
+              // Если мы уже в ручном режиме, переключаем все якоря
+              if (calibrationService.isManualMode) {
+                final changed = calibrationService.toggleAllAnchors(anchors);
+                if (changed) {
+                  _saveCalibrationState();
+                  setState(() {});
+                }
+              } else {
+                // Иначе, просто включаем ручной режим
+                calibrationService.enableManualMode();
+                _saveCalibrationState();
+                setState(() {});
+              }
             },
             child: Text(
               'Ручной (M)',
@@ -1959,11 +1841,14 @@ class MapAnchorManager {
           ),
           SimpleDialogOption(
             onPressed: () {
-              if (!canAffine) {
+                if (!canAffine) {
                 showHintAndClose('Нужно минимум 2 якоря', ctx);
                 return;
               }
-              switchTo(CalibrationMode.affine, ctx);
+              Navigator.pop(ctx);
+              calibrationService.setCalibrationMode(CalibrationMode.affine);
+              _saveCalibrationState();
+              setState(() {});
             },
             child: Text(
               'Affine (A)',
@@ -1972,11 +1857,14 @@ class MapAnchorManager {
           ),
           SimpleDialogOption(
             onPressed: () {
-              if (!canFarthest) {
+               if (!canFarthest) {
                 showHintAndClose('Нужно минимум 2 якоря', ctx);
                 return;
               }
-              switchTo(CalibrationMode.pairFarthest, ctx);
+              Navigator.pop(ctx);
+              calibrationService.setCalibrationMode(CalibrationMode.pairFarthest);
+              _saveCalibrationState();
+              setState(() {});
             },
             child: Text(
               'Farthest (F)',
@@ -1989,7 +1877,10 @@ class MapAnchorManager {
                 showHintAndClose('Нужно минимум 2 якоря', ctx);
                 return;
               }
-              switchTo(CalibrationMode.pairNearest, ctx);
+              Navigator.pop(ctx);
+              calibrationService.setCalibrationMode(CalibrationMode.pairNearest);
+              _saveCalibrationState();
+              setState(() {});
             },
             child: Text(
               'Nearest (N)',
@@ -3152,38 +3043,54 @@ class MapScreenLogic {
     });
   }
 
-  void _recalculateUserImagePoint() {
-    if (_calibrationService.usedAnchorCount == 0) {
-      if (state.currentUserImagePoint != null) {
-        setState(() {
-          state.currentUserImagePoint = null;
-        });
-      }
-      return;
+void _recalculateUserImagePoint() {
+  if (_calibrationService.usedAnchorCount == 0) {
+    if (state.currentUserImagePoint != null) {
+      setState(() {
+        state.currentUserImagePoint = null;
+      });
     }
-
-    final gps = _lastGpsData;
-    if (gps == null) return;
-    final lat = gps.latitude;
-    final lon = gps.longitude;
-    if (lat == null || lon == null || state.project == null) return;
-
-    final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
-
-    if (imagePoint == null || (imagePoint.dx == 0.0 && imagePoint.dy == 0.0)) {
-      return;
-    }
-
-    final updatedPath = [...state.project!.userPath, imagePoint];
-
-    setState(() {
-      state.currentUserImagePoint = imagePoint;
-      state.project = state.project!.copyWith(userPath: updatedPath);
-    });
-    _recalculateUserScreenPoint();
-    _recalculatePreview();
+    return;
   }
 
+  final gps = _lastGpsData;
+  if (gps == null) return;
+  final lat = gps.latitude;
+  final lon = gps.longitude;
+  if (lat == null || lon == null || state.project == null) return;
+
+  final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
+
+  if (imagePoint == null || (imagePoint.dx == 0.0 && imagePoint.dy == 0.0)) {
+    return;
+  }
+
+  final updatedPath = [...state.project!.userPath, imagePoint];
+
+  setState(() {
+    state.currentUserImagePoint = imagePoint;
+    state.project = state.project!.copyWith(userPath: updatedPath);
+  });
+
+  // Вычисление длины прыжка (один раз для новой точки)
+  final path = state.project!.userPath;
+  if (path.length >= 2) {
+    final newIndex = path.length - 1;
+    if (state.project!.pathJumpIndices.contains(newIndex)) {
+      final prevPoint = path[newIndex - 1];
+      final pixelDistance = (path[newIndex] - prevPoint).distance;
+      final metersPerPixel = _calibrationService.metersPerImagePixel;
+      if (metersPerPixel != null && metersPerPixel > 0) {
+        final jumpMeters = pixelDistance * metersPerPixel;
+        showSnackBar('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
+        print('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
+      }
+    }
+  }
+
+  _recalculateUserScreenPoint();
+  _recalculatePreview();
+}
   void _recalculateUserScreenPoint() {
     final imagePoint = state.currentUserImagePoint;
     if (imagePoint == null) return;
@@ -5144,6 +5051,8 @@ class _MapScreenState extends State<MapScreen> {
   Offset? _gestureStartPivotImage;
   double _accumulatedRotation = 0.0;
   double _lastAngle = 0.0;
+  int _lastUsed = -1;
+  int _lastTotal = -1;
 
   @override
   void initState() {
@@ -5181,7 +5090,9 @@ class _MapScreenState extends State<MapScreen> {
   void _updateStatusText() {
     final used = _logic.usedAnchorCount;
     final total = _logic.totalAnchorCount;
-    print('_updateStatusText: used=$used, total=$total');
+    if (used == _lastUsed && total == _lastTotal) return;
+    _lastUsed = used;
+    _lastTotal = total;
     updateNotification(title: 'Режим - Карта $used/$total');
   }
 
@@ -7391,6 +7302,85 @@ class ClearWaypointResult {
     required this.clearedOnly,
   });
 }
+============= lib/services/magnetometer_only_service.dart ===
+import 'dart:async';
+import 'dart:math';
+import 'package:sensors_plus/sensors_plus.dart';
+import 'package:vector_math/vector_math_64.dart';
+
+/// Data class to hold combined magnetometer data.
+class MagnetometerData {
+  final double heading;
+  final double accuracy;
+
+  MagnetometerData({required this.heading, required this.accuracy});
+}
+
+class MagnetometerOnlyService {
+  static final MagnetometerOnlyService _instance =
+      MagnetometerOnlyService._internal();
+  factory MagnetometerOnlyService() => _instance;
+  MagnetometerOnlyService._internal();
+
+  final _controller = StreamController<MagnetometerData>.broadcast();
+  Stream<MagnetometerData> get dataStream => _controller.stream;
+
+  StreamSubscription? _magnetSubscription;
+
+  void start() {
+    if (_magnetSubscription != null) {
+      stop();
+    }
+
+    _magnetSubscription = magnetometerEventStream().listen((event) {
+      // Correct formula for heading based on X and Y components.
+      double headingRadians = -atan2(event.x, event.y);
+
+      // Convert radians to degrees
+      double headingDegrees = degrees(headingRadians);
+
+      // Normalize to 0-360 degrees
+      if (headingDegrees < 0) {
+        headingDegrees += 360;
+      }
+
+      // Convert the accuracy enum to a double value that our UI understands.
+      double accuracyValue;
+      switch (event.accuracy) {
+        case MagnetometerAccuracy.unreliable:
+          accuracyValue = 0.0;
+          break;
+        case MagnetometerAccuracy.low:
+          accuracyValue = 1.0;
+          break;
+        case MagnetometerAccuracy.medium:
+          accuracyValue = 2.0;
+          break;
+        case MagnetometerAccuracy.high:
+          accuracyValue = 3.0;
+          break;
+        default:
+          accuracyValue = -1.0; // Represents "Unknown"
+      }
+
+      // Create the data object and add it to the single stream.
+      final data =
+          MagnetometerData(heading: headingDegrees, accuracy: accuracyValue);
+      _controller.add(data);
+    });
+  }
+
+  void stop() {
+    _magnetSubscription?.cancel();
+    _magnetSubscription = null;
+  }
+
+  void dispose() {
+    stop();
+    _controller.close();
+  }
+}
+
 ============= lib/services/map_calibration_service.dart ===
 // ignore_for_file: avoid_print
 import '../utils/app_constants.dart';
@@ -7606,6 +7596,35 @@ class MapCalibrationService {
 
   CalibrationMode get currentMode => _mode;
   bool get isManualMode => _manualMode;
+
+  /// Переключает состояние всех якорей в ручном режиме.
+  /// Если все выключены -> включает все.
+  /// Если все включены -> выключает все.
+  /// Если часть включена -> ничего не делает.
+  /// Возвращает true, если состояние изменилось.
+  bool toggleAllAnchors(List<MapAnchor> allAnchors) {
+    if (allAnchors.isEmpty) return false;
+
+    final allIds = allAnchors.map((a) => a.id).toSet();
+    final pinnedCount = _pinnedAnchorIds.length;
+
+    if (pinnedCount == 0) {
+      // Все выключены -> включаем все
+      _pinnedAnchorIds.addAll(allIds);
+      _buildTransformFromAnchors();
+      return true;
+    }
+
+    if (pinnedCount == allAnchors.length) {
+      // Все включены -> выключаем все
+      _pinnedAnchorIds.clear();
+      _buildTransformFromAnchors();
+      return true;
+    }
+
+    // Часть включена -> ничего не делаем
+    return false;
+  }
 
   void restoreState({
     required CalibrationMode mode,
@@ -8178,15 +8197,139 @@ class PointSelector {
   }
 }
 
-============= lib/services/sensor_service.dart ===
+============= lib/services/sensor_fusion_service.dart ===
 import 'dart:async';
-import 'dart:developer' as developer;
+import 'dart:math';
+import 'package:sensors_plus/sensors_plus.dart';
+import 'package:vector_math/vector_math_64.dart';
 
+class SensorFusionService {
+  static final SensorFusionService _instance = SensorFusionService._internal();
+  factory SensorFusionService() => _instance;
+  SensorFusionService._internal();
+
+  final _headingController = StreamController<double>.broadcast();
+  Stream<double> get headingStream => _headingController.stream;
+
+  StreamSubscription? _accelSubscription;
+  StreamSubscription? _magnetSubscription;
+
+  Vector3? _accelerometerValues;
+  Vector3? _magnetometerValues;
+
+  void start() {
+    // Prevent multiple subscriptions
+    if (_accelSubscription != null || _magnetSubscription != null) {
+      stop();
+    }
+
+    _accelSubscription = userAccelerometerEventStream().listen((event) {
+      _accelerometerValues = Vector3(event.x, event.y, event.z);
+      _updateHeading();
+    });
+
+    _magnetSubscription = magnetometerEventStream().listen((event) {
+      _magnetometerValues = Vector3(event.x, event.y, event.z);
+      _updateHeading();
+    });
+  }
+
+  void stop() {
+    _accelSubscription?.cancel();
+    _magnetSubscription?.cancel();
+    _accelSubscription = null;
+    _magnetSubscription = null;
+  }
+
+  void _updateHeading() {
+    if (_accelerometerValues == null || _magnetometerValues == null) {
+      return;
+    }
+
+    // This logic is a Dart implementation of Android's SensorManager.getRotationMatrix
+    // and SensorManager.getOrientation to calculate the device's orientation.
+    final rotationMatrix = <double>[0, 0, 0, 0, 0, 0, 0, 0, 0];
+    
+    // We don't use the inclination matrix, but it's part of the original API.
+    final inclinationMatrix = <double>[0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+    bool success = SensorManager.getRotationMatrix(
+      rotationMatrix,
+      inclinationMatrix,
+      _accelerometerValues!,
+      _magnetometerValues!,
+    );
+
+    if (success) {
+      final orientation = <double>[0, 0, 0];
+      SensorManager.getOrientation(rotationMatrix, orientation);
+
+      // orientation[0] contains the azimuth in radians.
+      double azimuthRadians = orientation[0];
+      double azimuthDegrees = degrees(azimuthRadians);
+
+      // Normalize to 0-360
+      if (azimuthDegrees < 0) {
+        azimuthDegrees += 360;
+      }
+
+      _headingController.add(azimuthDegrees);
+    }
+  }
+
+  void dispose() {
+    stop();
+    _headingController.close();
+  }
+}
+
+// A helper class that mimics parts of Android's SensorManager to perform calculations.
+class SensorManager {
+  static bool getRotationMatrix(
+    List<double> R,
+    List<double> I, // Not used, but kept for compatibility with the concept.
+    Vector3 gravity,
+    Vector3 geomagnetic,
+  ) {
+    Vector3 a = gravity.normalized();
+    Vector3 e = geomagnetic.normalized();
+    Vector3 h = e.cross(a);
+    
+    // Check for the singularity case: when the device is close to parallel to the
+    // magnetic field vector.
+    if (h.length2 < 0.1) {
+      return false; // Cannot compute rotation matrix.
+    }
+
+    h.normalize();
+    a = h.cross(e);
+
+    R[0] = h.x; R[1] = h.y; R[2] = h.z;
+    R[3] = a.x; R[4] = a.y; R[5] = a.z;
+    R[6] = e.x; R[7] = e.y; R[8] = e.z;
+
+    return true;
+  }
+
+  static List<double> getOrientation(List<double> R, List<double> values) {
+    // Azimuth (yaw)
+    values[0] = atan2(R[1], R[4]);
+    // Pitch
+    values[1] = asin(-R[7]);
+    // Roll
+    values[2] = atan2(-R[6], R[8]);
+    return values;
+  }
+}
+
+============= lib/services/sensor_service.dart ===
+// ignore_for_file: avoid_print
+
+import 'dart:async';
 import 'package:gps_info/gps_info.dart';
-import 'package:my_compass/my_compass.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../controllers/home_state.dart';
 import '../utils/app_constants.dart';
 
@@ -8197,8 +8340,11 @@ class SensorService {
 
   final GpsInfo _gpsInfo = GpsInfo();
 
-  // Компас
-  Stream<List<double>>? _compassBroadcastStream;
+  // Expose sensor streams by calling the new recommended methods
+  Stream<MagnetometerEvent> get magnetometerEvents => magnetometerEventStream();
+  Stream<UserAccelerometerEvent> get userAccelerometerEvents =>
+      userAccelerometerEventStream();
+  Stream<GyroscopeEvent> get gyroscopeEvents => gyroscopeEventStream();
 
   Future<SensorSettings> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -8254,38 +8400,9 @@ class SensorService {
         .listen(
           onData,
           onError: (error, stack) {
-            developer.log(
-              'GPS stream error',
-              name: 'by.fortydegree.compass40',
-              error: error,
-              stackTrace: stack,
-            );
+            print('GPS stream error: $error\n$stack');
           },
         );
-  }
-
-  // ------------------------------------------------------------
-  // Компас
-  // ------------------------------------------------------------
-  Stream<List<double>> _getOrCreateCompassStream() {
-    _compassBroadcastStream ??= MyCompass.events.asBroadcastStream();
-    return _compassBroadcastStream!;
-  }
-
-  StreamSubscription<List<double>> subscribeToCompass({
-    required void Function(List<double> data) onData,
-  }) {
-    return _getOrCreateCompassStream().listen(
-      onData,
-      onError: (error, stack) {
-        developer.log(
-          'Compass stream error',
-          name: 'by.fortydegree.compass40',
-          error: error,
-          stackTrace: stack,
-        );
-      },
-    );
   }
 }
 
@@ -10088,8 +10205,6 @@ class _ImagePainter extends CustomPainter {
 }
 
 ============= lib/widgets/map_overlay_painter.dart ===
-// ignore_for_file: avoid_print
-
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/map_anchor.dart';
@@ -10117,7 +10232,6 @@ class MapOverlayPainter extends CustomPainter {
   final bool isGpsActive;
   final double mapRotation;
   final double magneticDeclination;
-  final void Function(String)? onPathJump;
 
   const MapOverlayPainter({
     required this.imageSize,
@@ -10136,7 +10250,6 @@ class MapOverlayPainter extends CustomPainter {
     this.isGpsActive = false,
     this.mapRotation = 0.0,
     this.magneticDeclination = 0.0,
-    this.onPathJump,
   });
 
   @override
@@ -10176,8 +10289,6 @@ class MapOverlayPainter extends CustomPainter {
   void _drawUserPath(Canvas canvas) {
     if (userPath.length < 2) return;
 
-    double dashedLineLengthMeters = 0.0;
-
     final solidPathPaint = Paint()
       ..color = Colors.red.withAlpha((255 * 0.8).round())
       ..strokeWidth = 6.0
@@ -10198,17 +10309,6 @@ class MapOverlayPainter extends CustomPainter {
       final p2 = imageToScreen(userPath[i]);
 
       if (jumpIndicesSet.contains(i)) {
-        final p1Image = userPath[i - 1];
-        final p2Image = userPath[i];
-        final pixelDistance = (p2Image - p1Image).distance;
-        if (transformState.scale > 0) {
-          dashedLineLengthMeters += pixelDistance / transformState.scale;
-          onPathJump?.call('Прыжок: ${dashedLineLengthMeters.toStringAsFixed(1)} метров');
-          print('Прыжок: ${dashedLineLengthMeters.toStringAsFixed(1)} метров');
-        } else {
-          onPathJump?.call('Масштаб карты не определен');
-          print('Масштаб карты не определен');
-        }
         _drawDashedLine(canvas, p1, p2, dashedPathPaint);
       } else {
         canvas.drawLine(p1, p2, solidPathPaint);

@@ -3,7 +3,7 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.11 поиск решения как улучшить магнитный компас .
+ver. 7.0.0 новый магнитный компас (свой) .
 "
 
 ver. 6.5.10 включение\выключение всех ТП повторным выбором режима M.

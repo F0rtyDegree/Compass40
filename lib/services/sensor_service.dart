@@ -2,7 +2,7 @@
 
 import 'dart:async';
 import 'package:gps_info/gps_info.dart';
-import 'package:my_compass/my_compass.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/home_state.dart';
@@ -15,8 +15,11 @@ class SensorService {
 
   final GpsInfo _gpsInfo = GpsInfo();
 
-  // Компас
-  Stream<List<double>>? _compassBroadcastStream;
+  // Expose sensor streams by calling the new recommended methods
+  Stream<MagnetometerEvent> get magnetometerEvents => magnetometerEventStream();
+  Stream<UserAccelerometerEvent> get userAccelerometerEvents =>
+      userAccelerometerEventStream();
+  Stream<GyroscopeEvent> get gyroscopeEvents => gyroscopeEventStream();
 
   Future<SensorSettings> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
@@ -75,25 +78,6 @@ class SensorService {
             print('GPS stream error: $error\n$stack');
           },
         );
-  }
-
-  // ------------------------------------------------------------
-  // Компас
-  // ------------------------------------------------------------
-  Stream<List<double>> _getOrCreateCompassStream() {
-    _compassBroadcastStream ??= MyCompass.events.asBroadcastStream();
-    return _compassBroadcastStream!;
-  }
-
-  StreamSubscription<List<double>> subscribeToCompass({
-    required void Function(List<double> data) onData,
-  }) {
-    return _getOrCreateCompassStream().listen(
-      onData,
-      onError: (error, stack) {
-        print('Compass stream error: $error\n$stack');
-      },
-    );
   }
 }
 
