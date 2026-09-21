@@ -21,7 +21,7 @@ class TrackRecorder {
   bool get isRecording => _isRecording;
 
   String? _csvPath;
-  int _pointCount = 0;
+  final List<String> _pendingLines = [];
   static const int _saveThreshold = 20;
 
   Future<void> start() async {
@@ -35,16 +35,15 @@ class TrackRecorder {
       await dir.create(recursive: true);
     }
 
+    _pendingLines.clear();
+
     final existingCsv = File('${dir.path}/track_points.csv');
     if (await existingCsv.exists()) {
       _csvPath = existingCsv.path;
-      final lines = await existingCsv.readAsLines();
-      _pointCount = lines.length;
     } else {
       _csvPath = '${dir.path}/track_points.csv';
       await existingCsv.create(recursive: true);
       await existingCsv.writeAsString('');
-      _pointCount = 0;
     }
 
     _isRecording = true;
@@ -90,15 +89,20 @@ class TrackRecorder {
     final lat = data.latitude!;
     final lon = data.longitude!;
 
-    final line = '$time,$lat,$lon\n';
-    final file = File(_csvPath!);
-    file.writeAsStringSync(line, mode: FileMode.append);
-    print('[TrackRecorder] wrote point: $line');
+    _pendingLines.add('$time,$lat,$lon\n');
+    print('[TrackRecorder] buffered point, buffer=${_pendingLines.length}');
 
-    _pointCount++;
-    if (_pointCount >= _saveThreshold) {
-      _pointCount = 0;
+    if (_pendingLines.length >= _saveThreshold) {
+      _flushBuffer();
     }
+  }
+
+  void _flushBuffer() {
+    if (_pendingLines.isEmpty || _csvPath == null) return;
+    final file = File(_csvPath!);
+    file.writeAsStringSync(_pendingLines.join(), mode: FileMode.append);
+    print('[TrackRecorder] flushed ${_pendingLines.length} points');
+    _pendingLines.clear();
   }
 
   Future<void> stop() async {
@@ -106,6 +110,7 @@ class TrackRecorder {
     _isRecording = false;
     await _subscription?.cancel();
     _subscription = null;
+    _flushBuffer();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isRecordingTrack', false);
   }
@@ -153,7 +158,7 @@ class TrackRecorder {
       await file.delete();
     }
     _csvPath = null;
-    _pointCount = 0;
+    _pendingLines.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isRecordingTrack', false);
   }
@@ -169,8 +174,6 @@ class TrackRecorder {
     final csvFile = File('${dir.path}/track_points.csv');
     if (await csvFile.exists()) {
       _csvPath = csvFile.path;
-      final lines = await csvFile.readAsLines();
-      _pointCount = lines.length;
     }
   }
 

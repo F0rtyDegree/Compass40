@@ -386,6 +386,7 @@ class HomeLogic {
   }
 
   Future<void> finalizeTrackAndExport() async {
+    await _trackRecorder.stop();
     final trackPoints = await _trackRecorder.getTrackPoints();
     if (trackPoints.isEmpty) {
       await _trackRecorder.clear();

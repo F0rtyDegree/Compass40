@@ -83,9 +83,9 @@ class GpxExportService {
       for (final (time, lat, lon) in trackPoints) {
         final latStr = lat.toStringAsFixed(6);
         final lonStr = lon.toStringAsFixed(6);
-        buffer.writeln('      <trkpt lat="$latStr" lon="$lonStr">');
-        buffer.writeln('        <time>$time</time>');
-        buffer.writeln('      </trkpt>');
+        buffer.writeln(
+          '<trkpt lat="$latStr" lon="$lonStr"><time>$time</time></trkpt>',
+        );
       }
       buffer.writeln('    </trkseg>');
       buffer.writeln('  </trk>');
