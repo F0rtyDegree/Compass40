@@ -530,13 +530,8 @@ class MapScreenLogic {
   }
 
   void _recalculateCrosshairImagePoint() {
-    if (state.imageSize == null || state.viewportSize == null) return;
-
-    final screenPoint = state.crosshairScreenPoint;
-    final imagePoint = screenToImage(screenPoint);
-
     setState(() {
-      state.crosshairImagePoint = imagePoint;
+      state.recalculateCrosshairImagePoint(screenToImage);
     });
   }
 
@@ -881,7 +876,7 @@ void _recalculateUserImagePoint() {
 
   final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
 
-  if (imagePoint == null || (imagePoint.dx == 0.0 && imagePoint.dy == 0.0)) {
+  if (imagePoint == null) {
     return;
   }
 
@@ -912,11 +907,8 @@ void _recalculateUserImagePoint() {
   _recalculatePreview();
 }
   void _recalculateUserScreenPoint() {
-    final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null) return;
-
     setState(() {
-      state.currentUserScreenPoint = imageToScreen(imagePoint);
+      state.recalculateUserScreenPoint(imageToScreen);
     });
   }
 

@@ -35,6 +35,8 @@ class MapProject extends Equatable {
     this.calibrationMode = 'affine',
   });
 
+  static const Object _unset = Object();
+
   MapProject copyWith({
     String? id,
     String? imagePath,
@@ -45,7 +47,7 @@ class MapProject extends Equatable {
     double? photoSeverLineMeters,
     double? photoSeverLinePixels,
     double? photoSeverNorthAngle,
-    List<Map<String, String>>? cachedGpxPoints,
+    Object? cachedGpxPoints = _unset,
     List<String>? pinnedAnchorIds,
     bool? manualMode,
     String? calibrationMode,
@@ -60,7 +62,9 @@ class MapProject extends Equatable {
       photoSeverLineMeters: photoSeverLineMeters ?? this.photoSeverLineMeters,
       photoSeverLinePixels: photoSeverLinePixels ?? this.photoSeverLinePixels,
       photoSeverNorthAngle: photoSeverNorthAngle ?? this.photoSeverNorthAngle,
-      cachedGpxPoints: cachedGpxPoints ?? this.cachedGpxPoints,
+      cachedGpxPoints: identical(cachedGpxPoints, _unset)
+          ? this.cachedGpxPoints
+          : cachedGpxPoints as List<Map<String, String>>?,
       pinnedAnchorIds: pinnedAnchorIds ?? this.pinnedAnchorIds,
       manualMode: manualMode ?? this.manualMode,
       calibrationMode: calibrationMode ?? this.calibrationMode,

@@ -1,4 +1,8 @@
 class AppConstants {
+  static const String externalDownloadDir = '/storage/emulated/0/Download';
+  static const String externalDownloadFallback = '/sdcard/Download';
+  static const String compassFolderName = 'Compass40';
+
   static const double minTriangleAngleDegrees = 15.0;
   static const double maxTriangleAngleDegrees = 165.0; // 180 - 15
   static const double minAnchorDistanceMeters = 30.0;

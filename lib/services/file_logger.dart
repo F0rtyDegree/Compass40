@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../utils/app_constants.dart';
 
 // Эта функция выполняется в изоляте.
 // Она БОЛЬШЕ НЕ запрашивает разрешения. Предполагается, что они уже есть.
@@ -11,9 +12,9 @@ Future<void> _writeLogInternal(String message) async {
 
     Directory? downloadsDir;
     if (Platform.isAndroid) {
-      downloadsDir = Directory('/storage/emulated/0/Download');
+      downloadsDir = Directory(AppConstants.externalDownloadDir);
       if (!await downloadsDir.exists()) {
-        downloadsDir = Directory('/sdcard/Download'); // Fallback
+        downloadsDir = Directory(AppConstants.externalDownloadFallback);
       }
     } else {
       print('writeLog (isolate): Not on Android, exiting.');
@@ -25,8 +26,8 @@ Future<void> _writeLogInternal(String message) async {
       return;
     }
 
-    const String folderName = 'Compass40';
-    final compassDir = Directory('${downloadsDir.path}/$folderName');
+    final compassDir =
+        Directory('${downloadsDir.path}/${AppConstants.compassFolderName}');
     if (!await compassDir.exists()) {
       await compassDir.create(recursive: true);
     }
@@ -55,9 +56,9 @@ class FileLogger {
     try {
       Directory? downloadsDir;
       if (Platform.isAndroid) {
-        downloadsDir = Directory('/storage/emulated/0/Download');
+        downloadsDir = Directory(AppConstants.externalDownloadDir);
         if (!await downloadsDir.exists()) {
-          downloadsDir = Directory('/sdcard/Download');
+          downloadsDir = Directory(AppConstants.externalDownloadFallback);
         }
       }
       if (downloadsDir == null || !await downloadsDir.exists()) {
@@ -65,8 +66,8 @@ class FileLogger {
         return;
       }
 
-      const String folderName = 'Compass40';
-      final compassDir = Directory('${downloadsDir.path}/$folderName');
+      final compassDir =
+          Directory('${downloadsDir.path}/${AppConstants.compassFolderName}');
       if (!await compassDir.exists()) {
         await compassDir.create(recursive: true);
       }

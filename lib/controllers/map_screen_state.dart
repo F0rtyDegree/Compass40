@@ -79,4 +79,15 @@ class MapScreenState {
       [];
 
   List<MapTarget> get allTargets => project?.targets ?? [];
+
+  void recalculateCrosshairImagePoint(Offset Function(Offset) screenToImage) {
+    if (imageSize == null || viewportSize == null) return;
+    crosshairImagePoint = screenToImage(crosshairScreenPoint);
+  }
+
+  void recalculateUserScreenPoint(Offset Function(Offset) imageToScreen) {
+    final imagePoint = currentUserImagePoint;
+    if (imagePoint == null) return;
+    currentUserScreenPoint = imageToScreen(imagePoint);
+  }
 }

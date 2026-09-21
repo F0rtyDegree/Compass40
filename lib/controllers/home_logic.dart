@@ -17,6 +17,7 @@ import 'home_state.dart';
 import '../services/file_logger.dart';
 import '../services/background_tracker.dart';
 import '../services/compass_service.dart';
+import '../utils/app_constants.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -391,7 +392,9 @@ class HomeLogic {
       return;
     }
 
-    final dir = Directory('/storage/emulated/0/Download/Compass40');
+    final dir = Directory(
+      '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
+    );
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }

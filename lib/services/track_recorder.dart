@@ -28,7 +28,9 @@ class TrackRecorder {
     if (_isRecording) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final dir = Directory('/storage/emulated/0/Download/Compass40');
+     final dir = Directory(
+      '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
+    );
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -112,7 +114,9 @@ class TrackRecorder {
     final prefs = await SharedPreferences.getInstance();
     final wasRecording = prefs.getBool('isRecordingTrack') ?? false;
 
-    final dir = Directory('/storage/emulated/0/Download/Compass40');
+    final dir = Directory(
+      '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
+    );
     if (!await dir.exists()) return false;
 
     final csvFile = File('${dir.path}/track_points.csv');
@@ -157,7 +161,9 @@ class TrackRecorder {
   /// Инициализирует состояние для восстановления записи после сбоя.
   /// Устанавливает путь к существующему CSV-файлу, чтобы последующий экспорт работал.
   Future<void> initializeForRecovery() async {
-    final dir = Directory('/storage/emulated/0/Download/Compass40');
+    final dir = Directory(
+      '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
+    );
     if (!await dir.exists()) return;
 
     final csvFile = File('${dir.path}/track_points.csv');

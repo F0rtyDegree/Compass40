@@ -176,23 +176,14 @@ class MapFollowController {
     isAutoRotating = false;
   }
   void _recalculateCrosshairImagePoint() {
-    if (state.imageSize == null || state.viewportSize == null) return;
-
-    final screenPoint = state.crosshairScreenPoint;
-    final imagePoint = screenToImage(screenPoint);
-
     setState(() {
-      
-      state.crosshairImagePoint = imagePoint;
+      state.recalculateCrosshairImagePoint(screenToImage);
     });
   }
 
   void _recalculateUserScreenPoint() {
-    final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null) return;
-
     setState(() {
-      state.currentUserScreenPoint = imageToScreen(imagePoint);
+      state.recalculateUserScreenPoint(imageToScreen);
     });
   }
     bool _isPhotoSeverActive() {
