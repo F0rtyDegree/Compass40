@@ -4,9 +4,12 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 6.5.11 поиск решения как улучшить магнитный компас .
+ver. 7.0.3 новый магнитный компас (свой) доработка еще доработки .
 "
 
+ver. 7.0.2 новый магнитный компас (свой) еще доработка .
+ver. 7.0.1 новый магнитный компас (свой) доработка.
+ver. 7.0.0 новый магнитный компас (свой) .
 ver. 6.5.10 включение\выключение всех ТП повторным выбором режима M.
 ver. 6.5.9 вычислить длину пунктирной линии в метрах (в методе _drawUserPath).
 ver. 6.5.8 отключил часть showSnackBar.
@@ -293,7 +296,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 6.5.11
+version: 7.0.3
 environment:
   sdk: ^3.9.0
 
@@ -777,8 +780,7 @@ import '../utils/geo_utils.dart';
 import 'home_state.dart';
 import '../services/file_logger.dart';
 import '../services/background_tracker.dart';
-// import '../services/sensor_fusion_service.dart';
-import '../services/magnetometer_only_service.dart';
+import '../services/compass_service.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -786,12 +788,10 @@ class HomeLogic {
   final LogService logService;
   final SensorService sensorService;
   final GpsManager _gpsManager = GpsManager();
-  // final SensorFusionService _sensorFusionService = SensorFusionService();
-  final MagnetometerOnlyService _magnetometerOnlyService =
-      MagnetometerOnlyService();
+  final CompassService _compassService = CompassService();
 
   StreamSubscription<GpsData>? _gpsSubscription;
-  StreamSubscription<MagnetometerData>? _headingSubscription;
+  StreamSubscription? _headingSubscription;
   StreamSubscription? _gyroscopeSubscription;
 
   final TrackRecorder _trackRecorder = TrackRecorder();
@@ -820,10 +820,13 @@ class HomeLogic {
     await _checkAndRecoverTrack();
     await _initServicesAndPermissions();
 
-    // _sensorFusionService.start();
-    _magnetometerOnlyService.start();
-    _headingSubscription = _magnetometerOnlyService.dataStream.listen((data) {
-      state.headingNotifier.value = data.heading;
+    _compassService.start();
+    _headingSubscription = _compassService.dataStream.listen((data) {
+      final useGps = _useGpsCompass();
+      print('MAG: heading=${data.heading.toStringAsFixed(1)} useGps=$useGps');
+      if (!useGps) {
+        state.headingNotifier.value = data.heading;
+      }
       state.accuracyNotifier.value = data.accuracy;
     });
   }
@@ -844,12 +847,16 @@ class HomeLogic {
     _gyroscopeSubscription?.cancel();
 
     _gpsManager.dispose();
-    // _sensorFusionService.dispose();
-    _magnetometerOnlyService.dispose();
-
+    _compassService.stop();
     print('dispose(): (3)');
     state.uiUpdateTimer?.cancel();
     print('dispose(): (1)');
+    GpsCompassService.instance.bearingNotifier.removeListener(
+      _onGpsBearingChanged,
+    );
+    GpsCompassService.instance.isActiveNotifier.removeListener(
+      _onGpsActiveChanged,
+    );
     state.disposeNotifiers();
     print('dispose(): exit');
   }
@@ -866,6 +873,7 @@ class HomeLogic {
       state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
     });
     startUiUpdateTimer();
+    _onGpsActiveChanged();
   }
 
   Future<void> reloadSettings() async {
@@ -879,6 +887,7 @@ class HomeLogic {
       state.compassMode = mode;
     });
     await sensorService.saveCompassMode(mode);
+    _onGpsActiveChanged();
   }
 
   Future<void> setAutoSwitchSpeed(double speedKmh) async {
@@ -894,6 +903,12 @@ class HomeLogic {
     if (await sensorService.requestLocationPermission()) {
       final settings = await sensorService.loadSettings();
       GpsCompassService.instance.start(settings);
+      GpsCompassService.instance.bearingNotifier.addListener(
+        _onGpsBearingChanged,
+      );
+      GpsCompassService.instance.isActiveNotifier.addListener(
+        _onGpsActiveChanged,
+      );
       _subscribeToGpsDataStream();
     }
   }
@@ -922,18 +937,22 @@ class HomeLogic {
   void _subscribeToSensorStreams() {
     userAccelerometerEventStream().listen((UserAccelerometerEvent event) {
       print(
-          'Raw Accelerometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+        'Raw Accelerometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
+      );
     });
 
     magnetometerEventStream().listen((MagnetometerEvent event) {
       print(
-          'Raw Magnetometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+        'Raw Magnetometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
+      );
     });
 
-    _gyroscopeSubscription =
-        gyroscopeEventStream().listen((GyroscopeEvent event) {
+    _gyroscopeSubscription = gyroscopeEventStream().listen((
+      GyroscopeEvent event,
+    ) {
       print(
-          'Raw Gyroscope: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+        'Raw Gyroscope: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
+      );
     });
   }
 
@@ -1154,35 +1173,35 @@ class HomeLogic {
     await _trackRecorder.clear();
   }
 
-  String getAccuracyText(double accuracy) {
-    switch (accuracy.toInt()) {
-      case 0:
-        return 'Инициализация...';
-      case 1:
-        return 'Средняя (калибруйте)';
-      case 2:
-        return 'Высокая';
-      case 3:
-        return 'Отличная';
-      default:
-        return 'Неизвестно';
-    }
+String getAccuracyText(double accuracy) {
+  switch (accuracy.toInt()) {
+    case 0:
+      return 'СБИТ (Данные неверны)'; // UNRELIABLE
+    case 1:
+      return 'НИЗКАЯ (8ку)'; // LOW -> Требуется калибровка! [health]
+    case 2:
+      return 'Точность: Средняя';      // MEDIUM
+    case 3:
+      return 'Точность: Отличная';     // HIGH
+    default:
+      return 'Инициализация...';
   }
+}
 
-  Color getAccuracyStatusColor(double accuracy) {
-    switch (accuracy.toInt()) {
-      case 0:
-        return Colors.grey;
-      case 1:
-        return Colors.orange;
-      case 2:
-        return Colors.yellow;
-      case 3:
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
+Color getAccuracyStatusColor(double accuracy) {
+  switch (accuracy.toInt()) {
+    case 0:
+    case 1: 
+      return Colors.redAccent;    // Красный флаг для сбитого компаса [health]
+    case 2: 
+      return Colors.orangeAccent; // Оранжевый для средних помех
+    case 3: 
+      return Colors.green;        // Зеленый — всё идеально
+    default: 
+      return Colors.grey;
   }
+}
+
 
   String getCardinalDirection(double heading) {
     if (heading >= 337.5 || heading < 22.5) return 'Север';
@@ -1204,6 +1223,38 @@ class HomeLogic {
         return 'GPS';
       case CompassMode.auto:
         return 'Авто';
+    }
+  }
+
+  bool _useGpsCompass() {
+    final result = switch (state.compassMode) {
+      CompassMode.magnetic => false,
+      CompassMode.gps => true,
+      CompassMode.auto => GpsCompassService.instance.isActiveNotifier.value,
+    };
+    print('USE_GPS: mode=${state.compassMode} active=${GpsCompassService.instance.isActiveNotifier.value} → $result');
+    return result;
+  }
+
+  void _onGpsBearingChanged() {
+    final bearing = GpsCompassService.instance.bearingNotifier.value;
+    final useGps = _useGpsCompass();
+    print('GPS_BEARING: $bearing useGps=$useGps');
+    if (!useGps) return;
+    if (bearing != null) {
+      state.headingNotifier.value = bearing;
+    }
+  }
+
+  void _onGpsActiveChanged() {
+    final useGps = _useGpsCompass();
+    print('GPS_ACTIVE: useGps=$useGps');
+    state.isGpsCompassActiveNotifier.value = useGps;
+    if (useGps) {
+      final bearing = GpsCompassService.instance.bearingNotifier.value;
+      if (bearing != null) {
+        state.headingNotifier.value = bearing;
+      }
     }
   }
 }
@@ -6047,10 +6098,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) {
-          _saveSettings();
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _saveSettings();
+        if (context.mounted) {
+          Navigator.of(context).pop();
         }
       },
       child: Scaffold(
@@ -6681,6 +6734,202 @@ void onStart(ServiceInstance service) {
   });
 }
 
+============= lib/services/compass_service.dart ===
+// ignore_for_file: avoid_print
+
+import 'dart:async';
+import 'dart:math' as math;
+import 'package:sensors_plus/sensors_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class CompassData {
+  final double heading;
+  /// Статус калибровки: 3.0 (отличная), 2.0 (средняя), 1.0 (плохая), 0.0 (неизвестно)
+  final double accuracy;
+  CompassData({required this.heading, required this.accuracy});
+}
+
+class CompassService {
+  static final CompassService _instance = CompassService._internal();
+  factory CompassService() => _instance;
+  CompassService._internal();
+
+  final List<double> _accFiltered = [0, 0, 9.81];
+  static const double _accAlpha = 0.25;
+
+  final _controller = StreamController<CompassData>.broadcast();
+  Stream<CompassData> get dataStream => _controller.stream;
+
+  StreamSubscription? _magSub;
+  StreamSubscription? _accSub;
+
+  List<double> _mag = [0.0, 0.0, 0.0];
+
+  bool _hasMag = false;
+  bool _hasAcc = false;
+
+  static const _prefKeyX = 'compass_calib_x';
+  static const _prefKeyY = 'compass_calib_y';
+  static const _prefKeyZ = 'compass_calib_z';
+  static const _prefKeyCalibrated = 'compass_calibrated';
+  double _cx = 0, _cy = 0, _cz = 0;
+  bool _isCalibrated = false;
+
+  bool _isCalibrating = false;
+  double _minX = double.infinity, _maxX = -double.infinity;
+  double _minY = double.infinity, _maxY = -double.infinity;
+  double _minZ = double.infinity, _maxZ = -double.infinity;
+
+  // Сглаживание курса через cos/sin. Убирает скачок на стыке 359° -> 0°.
+  double _smoothCos = 0.0;
+  double _smoothSin = 0.0;
+  static const double _headingAlpha = 0.2;
+
+  void start() {
+    if (_magSub != null) stop();
+
+    _loadCalibration();
+
+    _accSub = accelerometerEventStream().listen((e) {
+      _accFiltered[0] = _accFiltered[0] * (1 - _accAlpha) + e.x * _accAlpha;
+      _accFiltered[1] = _accFiltered[1] * (1 - _accAlpha) + e.y * _accAlpha;
+      _accFiltered[2] = _accFiltered[2] * (1 - _accAlpha) + e.z * _accAlpha;
+      _hasAcc = true;
+    });
+
+    _magSub = magnetometerEventStream().listen((e) {
+      _mag = [e.x, e.y, e.z];
+      _hasMag = true;
+      if (_isCalibrating) _updateCalibrationBounds(e.x, e.y, e.z);
+      _tryEmit();
+    });
+  }
+
+  void stop() {
+    _magSub?.cancel();
+    _accSub?.cancel();
+    _magSub = null;
+    _accSub = null;
+    _hasMag = false;
+    _hasAcc = false;
+  }
+
+  Future<void> _loadCalibration() async {
+    final p = await SharedPreferences.getInstance();
+    _cx = p.getDouble(_prefKeyX) ?? 0;
+    _cy = p.getDouble(_prefKeyY) ?? 0;
+    _cz = p.getDouble(_prefKeyZ) ?? 0;
+    _isCalibrated = p.getBool(_prefKeyCalibrated) ?? false;
+  }
+
+  void startCalibration() {
+    _isCalibrating = true;
+    _minX = _minY = _minZ = double.infinity;
+    _maxX = _maxY = _maxZ = -double.infinity;
+  }
+
+  Future<void> finishCalibration() async {
+    if (!_isCalibrating) return;
+    _isCalibrating = false;
+
+    if (_minX == double.infinity || _maxX == -double.infinity) return;
+
+    _cx = (_minX + _maxX) / 2;
+    _cy = (_minY + _maxY) / 2;
+    _cz = (_minZ + _maxZ) / 2;
+
+    final p = await SharedPreferences.getInstance();
+    await p.setDouble(_prefKeyX, _cx);
+    await p.setDouble(_prefKeyY, _cy);
+    await p.setDouble(_prefKeyZ, _cz);
+    await p.setBool(_prefKeyCalibrated, true);
+    _isCalibrated = true;
+  }
+
+  void cancelCalibration() {
+    _isCalibrating = false;
+  }
+
+  bool get isCalibrating => _isCalibrating;
+
+  void _updateCalibrationBounds(double x, double y, double z) {
+    if (x < _minX) _minX = x;
+    if (x > _maxX) _maxX = x;
+    if (y < _minY) _minY = y;
+    if (y > _maxY) _maxY = y;
+    if (z < _minZ) _minZ = z;
+    if (z > _maxZ) _maxZ = z;
+  }
+
+  void _tryEmit() {
+    if (!_hasMag || !_hasAcc) return;
+
+    // 1. Офсеты hard iron
+    final mx = _mag[0] - _cx;
+    final my = _mag[1] - _cy;
+    final mz = _mag[2] - _cz;
+
+    final ax = _accFiltered[0];
+    final ay = _accFiltered[1];
+    final az = _accFiltered[2];
+
+    final aNorm = math.sqrt(ax * ax + ay * ay + az * az);
+    if (aNorm < 1e-6) return;
+
+    final gx = ax / aNorm;
+    final gy = ay / aNorm;
+    final gz = az / aNorm;
+
+    // 2. East = Magnetometer x Gravity
+    var ex = my * gz - mz * gy;
+    var ey = mz * gx - mx * gz;
+    var ez = mx * gy - my * gx;
+    final eNorm = math.sqrt(ex * ex + ey * ey + ez * ez);
+    if (eNorm < 1e-6) return;
+    ex /= eNorm;
+    ey /= eNorm;
+    ez /= eNorm;
+
+    // 3. North = Gravity x East (нужна только Y-компонента)
+    final ny = gz * ex - gx * ez;
+
+    // 4. Курс
+    double rawHeading = math.atan2(ey, ny) * 180 / math.pi;
+    if (rawHeading < 0) rawHeading += 360;
+
+    // 5. Сглаживание через cos/sin
+    final rad = rawHeading * math.pi / 180;
+    _smoothCos =
+        _smoothCos * (1 - _headingAlpha) + math.cos(rad) * _headingAlpha;
+    _smoothSin =
+        _smoothSin * (1 - _headingAlpha) + math.sin(rad) * _headingAlpha;
+
+    double filteredHeading = math.atan2(_smoothSin, _smoothCos) * 180 / math.pi;
+    if (filteredHeading < 0) filteredHeading += 360;
+
+    _controller.add(
+      CompassData(
+        heading: filteredHeading,
+        accuracy: _computeAccuracy(mx, my, mz),
+      ),
+    );
+  }
+
+  /// Оценка точности по модулю вектора магнитного поля.
+  /// Геомагнитное поле Земли ~ 25-65 мкТл.
+  double _computeAccuracy(double mx, double my, double mz) {
+    final magnitude = math.sqrt(mx * mx + my * my + mz * mz);
+
+    if (!_isCalibrated) return 1.0;
+
+    if (magnitude >= 20.0 && magnitude <= 100.0) {
+      return 3.0;
+    } else if (magnitude >= 10.0 && magnitude <= 120.0) {
+      return 2.0;
+    }
+    return 1.0;
+  }
+}
 ============= lib/services/computation_service.dart ===
 double calculateCircularMedian(List<double> angles) {
   if (angles.isEmpty) {
@@ -6800,6 +7049,8 @@ class FileLogger {
   }
 }
 ============= lib/services/gps_compass_service.dart ===
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
@@ -6848,6 +7099,7 @@ class GpsCompassService {
     final speedKmh = (data.speed ?? 0) * 3.6;
     final bearing = data.gpsBearing;
     final threshold = _settings?.autoSwitchSpeedKmh ?? 3.0;
+     print('GPS_RAW: speed=${speedKmh.toStringAsFixed(1)}km/h bearing=$bearing threshold=$threshold');
 
     if (bearing != null && speedKmh >= threshold) {
       _samples.add(bearing);
@@ -7302,85 +7554,6 @@ class ClearWaypointResult {
     required this.clearedOnly,
   });
 }
-============= lib/services/magnetometer_only_service.dart ===
-import 'dart:async';
-import 'dart:math';
-import 'package:sensors_plus/sensors_plus.dart';
-import 'package:vector_math/vector_math_64.dart';
-
-/// Data class to hold combined magnetometer data.
-class MagnetometerData {
-  final double heading;
-  final double accuracy;
-
-  MagnetometerData({required this.heading, required this.accuracy});
-}
-
-class MagnetometerOnlyService {
-  static final MagnetometerOnlyService _instance =
-      MagnetometerOnlyService._internal();
-  factory MagnetometerOnlyService() => _instance;
-  MagnetometerOnlyService._internal();
-
-  final _controller = StreamController<MagnetometerData>.broadcast();
-  Stream<MagnetometerData> get dataStream => _controller.stream;
-
-  StreamSubscription? _magnetSubscription;
-
-  void start() {
-    if (_magnetSubscription != null) {
-      stop();
-    }
-
-    _magnetSubscription = magnetometerEventStream().listen((event) {
-      // Correct formula for heading based on X and Y components.
-      double headingRadians = -atan2(event.x, event.y);
-
-      // Convert radians to degrees
-      double headingDegrees = degrees(headingRadians);
-
-      // Normalize to 0-360 degrees
-      if (headingDegrees < 0) {
-        headingDegrees += 360;
-      }
-
-      // Convert the accuracy enum to a double value that our UI understands.
-      double accuracyValue;
-      switch (event.accuracy) {
-        case MagnetometerAccuracy.unreliable:
-          accuracyValue = 0.0;
-          break;
-        case MagnetometerAccuracy.low:
-          accuracyValue = 1.0;
-          break;
-        case MagnetometerAccuracy.medium:
-          accuracyValue = 2.0;
-          break;
-        case MagnetometerAccuracy.high:
-          accuracyValue = 3.0;
-          break;
-        default:
-          accuracyValue = -1.0; // Represents "Unknown"
-      }
-
-      // Create the data object and add it to the single stream.
-      final data =
-          MagnetometerData(heading: headingDegrees, accuracy: accuracyValue);
-      _controller.add(data);
-    });
-  }
-
-  void stop() {
-    _magnetSubscription?.cancel();
-    _magnetSubscription = null;
-  }
-
-  void dispose() {
-    stop();
-    _controller.close();
-  }
-}
-
 ============= lib/services/map_calibration_service.dart ===
 // ignore_for_file: avoid_print
 import '../utils/app_constants.dart';
@@ -8194,131 +8367,6 @@ class PointSelector {
     }
 
     return <MapAnchor>[latest, farthest, bestThird];
-  }
-}
-
-============= lib/services/sensor_fusion_service.dart ===
-import 'dart:async';
-import 'dart:math';
-import 'package:sensors_plus/sensors_plus.dart';
-import 'package:vector_math/vector_math_64.dart';
-
-class SensorFusionService {
-  static final SensorFusionService _instance = SensorFusionService._internal();
-  factory SensorFusionService() => _instance;
-  SensorFusionService._internal();
-
-  final _headingController = StreamController<double>.broadcast();
-  Stream<double> get headingStream => _headingController.stream;
-
-  StreamSubscription? _accelSubscription;
-  StreamSubscription? _magnetSubscription;
-
-  Vector3? _accelerometerValues;
-  Vector3? _magnetometerValues;
-
-  void start() {
-    // Prevent multiple subscriptions
-    if (_accelSubscription != null || _magnetSubscription != null) {
-      stop();
-    }
-
-    _accelSubscription = userAccelerometerEventStream().listen((event) {
-      _accelerometerValues = Vector3(event.x, event.y, event.z);
-      _updateHeading();
-    });
-
-    _magnetSubscription = magnetometerEventStream().listen((event) {
-      _magnetometerValues = Vector3(event.x, event.y, event.z);
-      _updateHeading();
-    });
-  }
-
-  void stop() {
-    _accelSubscription?.cancel();
-    _magnetSubscription?.cancel();
-    _accelSubscription = null;
-    _magnetSubscription = null;
-  }
-
-  void _updateHeading() {
-    if (_accelerometerValues == null || _magnetometerValues == null) {
-      return;
-    }
-
-    // This logic is a Dart implementation of Android's SensorManager.getRotationMatrix
-    // and SensorManager.getOrientation to calculate the device's orientation.
-    final rotationMatrix = <double>[0, 0, 0, 0, 0, 0, 0, 0, 0];
-    
-    // We don't use the inclination matrix, but it's part of the original API.
-    final inclinationMatrix = <double>[0, 0, 0, 0, 0, 0, 0, 0, 0];
-
-    bool success = SensorManager.getRotationMatrix(
-      rotationMatrix,
-      inclinationMatrix,
-      _accelerometerValues!,
-      _magnetometerValues!,
-    );
-
-    if (success) {
-      final orientation = <double>[0, 0, 0];
-      SensorManager.getOrientation(rotationMatrix, orientation);
-
-      // orientation[0] contains the azimuth in radians.
-      double azimuthRadians = orientation[0];
-      double azimuthDegrees = degrees(azimuthRadians);
-
-      // Normalize to 0-360
-      if (azimuthDegrees < 0) {
-        azimuthDegrees += 360;
-      }
-
-      _headingController.add(azimuthDegrees);
-    }
-  }
-
-  void dispose() {
-    stop();
-    _headingController.close();
-  }
-}
-
-// A helper class that mimics parts of Android's SensorManager to perform calculations.
-class SensorManager {
-  static bool getRotationMatrix(
-    List<double> R,
-    List<double> I, // Not used, but kept for compatibility with the concept.
-    Vector3 gravity,
-    Vector3 geomagnetic,
-  ) {
-    Vector3 a = gravity.normalized();
-    Vector3 e = geomagnetic.normalized();
-    Vector3 h = e.cross(a);
-    
-    // Check for the singularity case: when the device is close to parallel to the
-    // magnetic field vector.
-    if (h.length2 < 0.1) {
-      return false; // Cannot compute rotation matrix.
-    }
-
-    h.normalize();
-    a = h.cross(e);
-
-    R[0] = h.x; R[1] = h.y; R[2] = h.z;
-    R[3] = a.x; R[4] = a.y; R[5] = a.z;
-    R[6] = e.x; R[7] = e.y; R[8] = e.z;
-
-    return true;
-  }
-
-  static List<double> getOrientation(List<double> R, List<double> values) {
-    // Azimuth (yaw)
-    values[0] = atan2(R[1], R[4]);
-    // Pitch
-    values[1] = asin(-R[7]);
-    // Roll
-    values[2] = atan2(-R[6], R[8]);
-    return values;
   }
 }
 

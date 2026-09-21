@@ -17,6 +17,7 @@ class HomeState {
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
   final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
+  final ValueNotifier<int> calibrationProgressNotifier = ValueNotifier(0);
   final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
 
   // Режим компаса
@@ -56,6 +57,7 @@ class HomeState {
     gpsDataNotifier.dispose();
     headingNotifier.dispose();
     accuracyNotifier.dispose();
+    calibrationProgressNotifier.dispose();
     distanceToWaypoint.dispose();
     bearingToWaypoint.dispose();
     distanceToTarget.dispose();

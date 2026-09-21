@@ -7,6 +7,7 @@ import '../utils/angle_utils.dart';
 class CompassSection extends StatelessWidget {
   final ValueNotifier<double> headingNotifier;
   final ValueNotifier<double> accuracyNotifier;
+  final ValueNotifier<int> calibrationProgressNotifier;
   final ValueNotifier<bool> isGpsCompassActiveNotifier;
   final ValueNotifier<double?> bearingToTarget;
   final ValueNotifier<double?> bearingToWaypoint;
@@ -23,6 +24,7 @@ class CompassSection extends StatelessWidget {
     super.key,
     required this.headingNotifier,
     required this.accuracyNotifier,
+    required this.calibrationProgressNotifier,
     required this.isGpsCompassActiveNotifier,
     required this.bearingToTarget,
     required this.bearingToWaypoint,
@@ -132,22 +134,46 @@ class CompassSection extends StatelessWidget {
                                   ? 'GPS компас'
                                   : getAccuracyText(acc);
 
-                              return Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.shield_outlined,
-                                    color: color,
-                                    size: 28,
-                                  ),
-                                  Text(
-                                    text,
-                                    style: TextStyle(
-                                      color: color,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
+                              return ValueListenableBuilder<int>(
+                                valueListenable:
+                                    calibrationProgressNotifier,
+                                builder: (context, progress, _) {
+                                  final showHint =
+                                      !isGpsActive && acc < 3;
+                                  final hintText = showHint
+                                      ? 'Поворачивайте экран вверх/вниз/боком ($progress/8)'
+                                      : '';
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.shield_outlined,
+                                        color: color,
+                                        size: 28,
+                                      ),
+                                      Text(
+                                        text,
+                                        style: TextStyle(
+                                          color: color,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                      if (showHint)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 2,
+                                          ),
+                                          child: Text(
+                                            hintText,
+                                            style: TextStyle(
+                                              color: color,
+                                              fontSize: 9,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
                               );
                             },
                           );

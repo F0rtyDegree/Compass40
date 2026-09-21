@@ -64,6 +64,7 @@ class HomeLogic {
         state.headingNotifier.value = data.heading;
       }
       state.accuracyNotifier.value = data.accuracy;
+      state.calibrationProgressNotifier.value = data.calibrationProgress;
     });
   }
 
@@ -83,7 +84,6 @@ class HomeLogic {
     _gyroscopeSubscription?.cancel();
 
     _gpsManager.dispose();
-    // _sensorFusionService.dispose();
     _compassService.stop();
     print('dispose(): (3)');
     state.uiUpdateTimer?.cancel();
@@ -410,35 +410,35 @@ class HomeLogic {
     await _trackRecorder.clear();
   }
 
-  String getAccuracyText(double accuracy) {
-    switch (accuracy.toInt()) {
-      case 0:
-        return 'Инициализация...';
-      case 1:
-        return 'Средняя (калибруйте)';
-      case 2:
-        return 'Высокая';
-      case 3:
-        return 'Отличная';
-      default:
-        return 'Неизвестно';
-    }
+String getAccuracyText(double accuracy) {
+  switch (accuracy.toInt()) {
+    case 0:
+      return 'нет данных';
+    case 1:
+      return 'Калибровка: нет';
+    case 2:
+      return 'Калибровка: средняя';
+    case 3:
+      return 'Калибровка: ОК';
+    default:
+      return 'Инициализация...';
   }
+}
 
-  Color getAccuracyStatusColor(double accuracy) {
-    switch (accuracy.toInt()) {
-      case 0:
-        return Colors.grey;
-      case 1:
-        return Colors.orange;
-      case 2:
-        return Colors.yellow;
-      case 3:
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
+Color getAccuracyStatusColor(double accuracy) {
+  switch (accuracy.toInt()) {
+    case 0:
+    case 1: 
+      return Colors.redAccent;    // Красный флаг для сбитого компаса [health]
+    case 2: 
+      return Colors.orangeAccent; // Оранжевый для средних помех
+    case 3: 
+      return Colors.green;        // Зеленый — всё идеально
+    default: 
+      return Colors.grey;
   }
+}
+
 
   String getCardinalDirection(double heading) {
     if (heading >= 337.5 || heading < 22.5) return 'Север';
