@@ -5,8 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
 import 'gps_manager.dart';
-import '../utils/angle_utils.dart';
+import '../utils/angle_utils.dart' hide calculateCircularMedian;
 import '../utils/app_constants.dart';
+import 'computation_service.dart';
 
 class GpsCompassService {
   static final GpsCompassService instance = GpsCompassService._();
@@ -82,7 +83,7 @@ class GpsCompassService {
     isActiveNotifier.value = true;
 
     final recent = _samples.sublist(_samples.length - windowSize);
-    final median = await calculateCircularMedian(List.from(recent));
+    final median = calculateCircularMedian(List.from(recent));
     final s = (_settings?.compassSmoothness ?? AppConstants.compassSmoothnessDefault)
         .clamp(0, 100) / 100.0;
     final smoothing = 0.05 + 0.85 * s;

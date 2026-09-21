@@ -11,9 +11,6 @@ enum CompassMode { auto, magnetic, gps }
 class HomeState {
   final GpsInfo gpsInfo = GpsInfo();
 
-  late StreamSubscription<GpsData> gpsDataSubscription;
-  // late StreamSubscription<List<double>> compassSubscription; // <--- REMOVED
-
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
   final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
@@ -39,7 +36,6 @@ class HomeState {
   final ValueNotifier<double?> bearingToTarget = ValueNotifier(null);
 
   List<LogItem> logItems = [];
-  final List<(double, int)> headingSamples = [];
   Timer? uiUpdateTimer;
 
   int uiUpdatePeriod = 250;

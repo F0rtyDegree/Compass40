@@ -110,6 +110,7 @@ class CompassService {
     _rawHeadingBuffer.clear();
     _mag = [0.0, 0.0, 0.0];
   }
+  
   Future<void> _loadCalibration() async {
     final p = await SharedPreferences.getInstance();
     _cx = p.getDouble(_prefKeyX) ?? 0;
