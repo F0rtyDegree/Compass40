@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
@@ -46,6 +48,7 @@ class GpsCompassService {
     final speedKmh = (data.speed ?? 0) * 3.6;
     final bearing = data.gpsBearing;
     final threshold = _settings?.autoSwitchSpeedKmh ?? 3.0;
+     print('GPS_RAW: speed=${speedKmh.toStringAsFixed(1)}km/h bearing=$bearing threshold=$threshold');
 
     if (bearing != null && speedKmh >= threshold) {
       _samples.add(bearing);

@@ -58,7 +58,11 @@ class HomeLogic {
 
     _compassService.start();
     _headingSubscription = _compassService.dataStream.listen((data) {
-      state.headingNotifier.value = data.heading;
+      final useGps = _useGpsCompass();
+      print('MAG: heading=${data.heading.toStringAsFixed(1)} useGps=$useGps');
+      if (!useGps) {
+        state.headingNotifier.value = data.heading;
+      }
       state.accuracyNotifier.value = data.accuracy;
     });
   }
@@ -84,6 +88,12 @@ class HomeLogic {
     print('dispose(): (3)');
     state.uiUpdateTimer?.cancel();
     print('dispose(): (1)');
+    GpsCompassService.instance.bearingNotifier.removeListener(
+      _onGpsBearingChanged,
+    );
+    GpsCompassService.instance.isActiveNotifier.removeListener(
+      _onGpsActiveChanged,
+    );
     state.disposeNotifiers();
     print('dispose(): exit');
   }
@@ -100,6 +110,7 @@ class HomeLogic {
       state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
     });
     startUiUpdateTimer();
+    _onGpsActiveChanged();
   }
 
   Future<void> reloadSettings() async {
@@ -113,6 +124,7 @@ class HomeLogic {
       state.compassMode = mode;
     });
     await sensorService.saveCompassMode(mode);
+    _onGpsActiveChanged();
   }
 
   Future<void> setAutoSwitchSpeed(double speedKmh) async {
@@ -128,6 +140,12 @@ class HomeLogic {
     if (await sensorService.requestLocationPermission()) {
       final settings = await sensorService.loadSettings();
       GpsCompassService.instance.start(settings);
+      GpsCompassService.instance.bearingNotifier.addListener(
+        _onGpsBearingChanged,
+      );
+      GpsCompassService.instance.isActiveNotifier.addListener(
+        _onGpsActiveChanged,
+      );
       _subscribeToGpsDataStream();
     }
   }
@@ -156,18 +174,22 @@ class HomeLogic {
   void _subscribeToSensorStreams() {
     userAccelerometerEventStream().listen((UserAccelerometerEvent event) {
       print(
-          'Raw Accelerometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+        'Raw Accelerometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
+      );
     });
 
     magnetometerEventStream().listen((MagnetometerEvent event) {
       print(
-          'Raw Magnetometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+        'Raw Magnetometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
+      );
     });
 
-    _gyroscopeSubscription =
-        gyroscopeEventStream().listen((GyroscopeEvent event) {
+    _gyroscopeSubscription = gyroscopeEventStream().listen((
+      GyroscopeEvent event,
+    ) {
       print(
-          'Raw Gyroscope: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}');
+        'Raw Gyroscope: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
+      );
     });
   }
 
@@ -438,6 +460,38 @@ class HomeLogic {
         return 'GPS';
       case CompassMode.auto:
         return 'Авто';
+    }
+  }
+
+  bool _useGpsCompass() {
+    final result = switch (state.compassMode) {
+      CompassMode.magnetic => false,
+      CompassMode.gps => true,
+      CompassMode.auto => GpsCompassService.instance.isActiveNotifier.value,
+    };
+    print('USE_GPS: mode=${state.compassMode} active=${GpsCompassService.instance.isActiveNotifier.value} → $result');
+    return result;
+  }
+
+  void _onGpsBearingChanged() {
+    final bearing = GpsCompassService.instance.bearingNotifier.value;
+    final useGps = _useGpsCompass();
+    print('GPS_BEARING: $bearing useGps=$useGps');
+    if (!useGps) return;
+    if (bearing != null) {
+      state.headingNotifier.value = bearing;
+    }
+  }
+
+  void _onGpsActiveChanged() {
+    final useGps = _useGpsCompass();
+    print('GPS_ACTIVE: useGps=$useGps');
+    state.isGpsCompassActiveNotifier.value = useGps;
+    if (useGps) {
+      final bearing = GpsCompassService.instance.bearingNotifier.value;
+      if (bearing != null) {
+        state.headingNotifier.value = bearing;
+      }
     }
   }
 }
