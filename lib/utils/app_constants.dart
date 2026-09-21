@@ -7,6 +7,7 @@ class AppConstants {
 
   static const int uiUpdatePeriodDefaultMs = 250;
   static const int sensorStabilizationDefaultMs = 500;
+  static const int compassSmoothnessDefault = 50;
   static const double autoSwitchSpeedDefaultKmh = 2.5;
   static const int gpsUpdateIntervalDefaultSec = 1;
   static const int gpsAveragingSamplesDefault = 3;

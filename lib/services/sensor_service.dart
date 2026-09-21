@@ -38,10 +38,9 @@ class SensorService {
     return SensorSettings(
       useManualDeclination: useManualDeclination,
       magneticDeclination: magneticDeclination,
-      averagingPeriod:
-          prefs.getInt('averagingPeriod') ??
-          AppConstants.sensorStabilizationDefaultMs,
-      smoothingFactor: prefs.getDouble('smoothingFactor') ?? AppConstants.smoothingFactorDefault,
+      compassSmoothness:
+          prefs.getInt('compassSmoothness') ??
+          AppConstants.compassSmoothnessDefault,
       uiUpdatePeriod:
           prefs.getInt('uiUpdatePeriod') ??
           AppConstants.uiUpdatePeriodDefaultMs,
@@ -84,20 +83,17 @@ class SensorService {
 class SensorSettings {
   final bool useManualDeclination;
   final double magneticDeclination;
-  final int averagingPeriod;
-  final double smoothingFactor;
+  final int compassSmoothness;
   final int uiUpdatePeriod;
   final int gpsInterval;
   final CompassMode compassMode;
   final double autoSwitchSpeedKmh;
-  final int
-  gpsAveragingSamples; // количество сэмплов для GPS-усреднения (по умолчанию 3)
+  final int gpsAveragingSamples;
 
   SensorSettings({
     required this.useManualDeclination,
     required this.magneticDeclination,
-    required this.averagingPeriod,
-    required this.smoothingFactor,
+    required this.compassSmoothness,
     required this.uiUpdatePeriod,
     required this.gpsInterval,
     required this.compassMode,

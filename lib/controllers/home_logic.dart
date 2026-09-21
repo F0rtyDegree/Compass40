@@ -103,12 +103,11 @@ class HomeLogic {
     setState(() {
       state.useManualDeclination = settings.useManualDeclination;
       state.magneticDeclination = settings.magneticDeclination;
-      state.averagingPeriod = settings.averagingPeriod;
-      state.smoothingFactor = settings.smoothingFactor;
       state.uiUpdatePeriod = settings.uiUpdatePeriod;
       state.compassMode = settings.compassMode;
       state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
     });
+    _compassService.updateSettings(settings);
     startUiUpdateTimer();
     _onGpsActiveChanged();
   }
@@ -117,6 +116,7 @@ class HomeLogic {
     await _loadAllSettings();
     final settings = await sensorService.loadSettings();
     GpsCompassService.instance.updateSettings(settings);
+    _compassService.updateSettings(settings);
   }
 
   Future<void> setCompassMode(CompassMode mode) async {
@@ -474,24 +474,30 @@ Color getAccuracyStatusColor(double accuracy) {
   }
 
   void _onGpsBearingChanged() {
-    final bearing = GpsCompassService.instance.bearingNotifier.value;
-    final useGps = _useGpsCompass();
-    print('GPS_BEARING: $bearing useGps=$useGps');
-    if (!useGps) return;
-    if (bearing != null) {
-      state.headingNotifier.value = bearing;
-    }
+    _updateHeadingFromGps(source: 'BEARING');
   }
 
   void _onGpsActiveChanged() {
+    _updateHeadingFromGps(source: 'ACTIVE');
+  }
+
+  void _updateHeadingFromGps({required String source}) {
     final useGps = _useGpsCompass();
-    print('GPS_ACTIVE: useGps=$useGps');
+    final bearing = GpsCompassService.instance.bearingNotifier.value;
+    print('GPS_$source: bearing=$bearing useGps=$useGps');
+
     state.isGpsCompassActiveNotifier.value = useGps;
-    if (useGps) {
-      final bearing = GpsCompassService.instance.bearingNotifier.value;
-      if (bearing != null) {
-        state.headingNotifier.value = bearing;
-      }
+
+    if (!useGps) {
+      state.headingValidNotifier.value = true;
+      return;
+    }
+
+    if (bearing != null) {
+      state.headingNotifier.value = bearing;
+      state.headingValidNotifier.value = true;
+    } else {
+      state.headingValidNotifier.value = false;
     }
   }
 }

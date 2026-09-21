@@ -4,6 +4,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'computation_service.dart';
+import 'sensor_service.dart';
 
 class CompassData {
   final double heading;
@@ -66,7 +68,9 @@ class CompassService {
   // Сглаживание курса через cos/sin. Убирает скачок на стыке 359° -> 0°.
   double _smoothCos = 0.0;
   double _smoothSin = 0.0;
-  static const double _headingAlpha = 0.2;
+  double _headingAlpha = 0.5;
+  int _medianWindowMs = 250;
+  final List<(int, double)> _rawHeadingBuffer = [];
 
   void start() {
     if (_magSub != null) stop();
@@ -88,6 +92,12 @@ class CompassService {
     });
   }
 
+  void updateSettings(SensorSettings settings) {
+    final s = settings.compassSmoothness.clamp(0, 100) / 100.0;
+    _headingAlpha = 0.05 + 0.85 * s;
+    _medianWindowMs = (500 * (1.0 - s)).round();
+  }
+
   void stop() {
     _magSub?.cancel();
     _accSub?.cancel();
@@ -95,8 +105,11 @@ class CompassService {
     _accSub = null;
     _hasMag = false;
     _hasAcc = false;
+    _smoothCos = 0.0;
+    _smoothSin = 0.0;
+    _rawHeadingBuffer.clear();
+    _mag = [0.0, 0.0, 0.0];
   }
-
   Future<void> _loadCalibration() async {
     final p = await SharedPreferences.getInstance();
     _cx = p.getDouble(_prefKeyX) ?? 0;
@@ -225,8 +238,23 @@ class CompassService {
     double rawHeading = math.atan2(ey, ny) * 180 / math.pi;
     if (rawHeading < 0) rawHeading += 360;
 
-    // 5. Сглаживание через cos/sin
-    final rad = rawHeading * math.pi / 180;
+    // 5. Медианная фильтрация по времени
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    _rawHeadingBuffer.add((nowMs, rawHeading));
+    if (_medianWindowMs > 0) {
+      final cutoff = nowMs - _medianWindowMs;
+      _rawHeadingBuffer.removeWhere((e) => e.$1 < cutoff);
+    } else {
+      _rawHeadingBuffer.removeRange(0, _rawHeadingBuffer.length - 1);
+    }
+    final medianHeading = _rawHeadingBuffer.length == 1
+        ? _rawHeadingBuffer.first.$2
+        : calculateCircularMedian(
+            _rawHeadingBuffer.map((e) => e.$2).toList(),
+          );
+
+    // 6. Сглаживание через cos/sin
+    final rad = medianHeading * math.pi / 180;
     _smoothCos =
         _smoothCos * (1 - _headingAlpha) + math.cos(rad) * _headingAlpha;
     _smoothSin =

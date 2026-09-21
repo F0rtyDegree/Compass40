@@ -6,7 +6,8 @@ import 'dart:io';
 import 'package:gps_info/gps_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gps_manager.dart';
-import '../services/sensor_service.dart'; // <-- добавить
+import '../services/sensor_service.dart';
+import '../utils/app_constants.dart';
 
 class TrackRecorder {
   static final TrackRecorder _instance = TrackRecorder._();
@@ -59,8 +60,9 @@ class TrackRecorder {
     return SensorSettings(
       useManualDeclination: prefs.getBool('useManualDeclination') ?? false,
       magneticDeclination: prefs.getDouble('manualDeclination') ?? 0.0,
-      averagingPeriod: prefs.getInt('averagingPeriod') ?? 500,
-      smoothingFactor: prefs.getDouble('smoothingFactor') ?? 0.5,
+      compassSmoothness:
+          prefs.getInt('compassSmoothness') ??
+          AppConstants.compassSmoothnessDefault,
       uiUpdatePeriod: prefs.getInt('uiUpdatePeriod') ?? 250,
       gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
       compassMode: CompassMode.values[prefs.getInt('compassMode') ?? 0],

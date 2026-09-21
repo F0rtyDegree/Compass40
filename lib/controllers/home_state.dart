@@ -18,6 +18,7 @@ class HomeState {
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
   final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
   final ValueNotifier<int> calibrationProgressNotifier = ValueNotifier(0);
+  final ValueNotifier<bool> headingValidNotifier = ValueNotifier(true);
   final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
 
   // Режим компаса
@@ -41,11 +42,7 @@ class HomeState {
   final List<(double, int)> headingSamples = [];
   Timer? uiUpdateTimer;
 
-  int averagingPeriod = 500;
   int uiUpdatePeriod = 250;
-
-  double filteredHeading = 0.0;
-  double smoothingFactor = 0.5;
 
   static const int maxSamples = 50;
 
@@ -62,6 +59,7 @@ class HomeState {
     bearingToWaypoint.dispose();
     distanceToTarget.dispose();
     bearingToTarget.dispose();
+    headingValidNotifier.dispose();
     isGpsCompassActiveNotifier.dispose();
     isRecordingTrackNotifier.dispose();
   }

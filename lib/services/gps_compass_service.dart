@@ -4,8 +4,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
-import 'gps_manager.dart';        // <-- добавить импорт
+import 'gps_manager.dart';
 import '../utils/angle_utils.dart';
+import '../utils/app_constants.dart';
 
 class GpsCompassService {
   static final GpsCompassService instance = GpsCompassService._();
@@ -69,7 +70,9 @@ class GpsCompassService {
 
     final recent = _samples.sublist(_samples.length - windowSize);
     final median = await calculateCircularMedian(List.from(recent));
-    final smoothing = _settings?.smoothingFactor ?? 0.5;
+    final s = (_settings?.compassSmoothness ?? AppConstants.compassSmoothnessDefault)
+        .clamp(0, 100) / 100.0;
+    final smoothing = 0.05 + 0.85 * s;
     
     double diff = median - _filteredBearing;
     if (diff.abs() > 180) {

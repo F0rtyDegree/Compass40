@@ -8,6 +8,7 @@ class CompassSection extends StatelessWidget {
   final ValueNotifier<double> headingNotifier;
   final ValueNotifier<double> accuracyNotifier;
   final ValueNotifier<int> calibrationProgressNotifier;
+  final ValueNotifier<bool> headingValidNotifier;
   final ValueNotifier<bool> isGpsCompassActiveNotifier;
   final ValueNotifier<double?> bearingToTarget;
   final ValueNotifier<double?> bearingToWaypoint;
@@ -25,6 +26,7 @@ class CompassSection extends StatelessWidget {
     required this.headingNotifier,
     required this.accuracyNotifier,
     required this.calibrationProgressNotifier,
+    required this.headingValidNotifier,
     required this.isGpsCompassActiveNotifier,
     required this.bearingToTarget,
     required this.bearingToWaypoint,
@@ -111,12 +113,17 @@ class CompassSection extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Text(
-                      formatBearing(heading),
-                      style: const TextStyle(
-                        fontSize: 60,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: headingValidNotifier,
+                      builder: (context, valid, _) {
+                        return Text(
+                          valid ? formatBearing(heading) : '—',
+                          style: const TextStyle(
+                            fontSize: 60,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
                     ),
                     Positioned(
                       bottom: 60,
