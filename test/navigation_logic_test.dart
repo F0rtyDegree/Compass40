@@ -27,6 +27,26 @@ void main() {
       final median = await calculateCircularMedian(angles);
       expect(median, closeTo(5.0, 2.0));
     });
+
+    test('trueToMagneticBearing: восточное склонение вычитается', () {
+      expect(trueToMagneticBearing(100.0, 9.0), closeTo(91.0, 1e-9));
+    });
+
+    test('trueToMagneticBearing: западное склонение прибавляется', () {
+      expect(trueToMagneticBearing(100.0, -9.0), closeTo(109.0, 1e-9));
+    });
+
+    test('trueToMagneticBearing: переход через 0 вниз', () {
+      expect(trueToMagneticBearing(5.0, 9.0), closeTo(356.0, 1e-9));
+    });
+
+    test('trueToMagneticBearing: переход через 0 вверх', () {
+      expect(trueToMagneticBearing(355.0, -9.0), closeTo(4.0, 1e-9));
+    });
+
+    test('trueToMagneticBearing: нулевое склонение не меняет азимут', () {
+      expect(trueToMagneticBearing(123.0, 0.0), closeTo(123.0, 1e-9));
+    });
   });
 
   group('Бизнес-логика навигации (MapCalibrationService)', () {

@@ -47,12 +47,25 @@ class GpsCompassService {
 
   void _onGpsData(GpsData data) {
     final speedKmh = (data.speed ?? 0) * 3.6;
-    final bearing = data.gpsBearing;
+    final trueBearing = data.gpsBearing;
     final threshold = _settings?.autoSwitchSpeedKmh ?? 3.0;
-     print('GPS_RAW: speed=${speedKmh.toStringAsFixed(1)}km/h bearing=$bearing threshold=$threshold');
 
-    if (bearing != null && speedKmh >= threshold) {
-      _samples.add(bearing);
+    final useManual = _settings?.useManualDeclination ?? false;
+    final declination = useManual
+        ? (_settings?.magneticDeclination ?? 0.0)
+        : (data.magneticDeclination ?? 0.0);
+    final magneticBearing = trueBearing == null
+        ? null
+        : trueToMagneticBearing(trueBearing, declination);
+
+    print(
+      'GPS_RAW: speed=${speedKmh.toStringAsFixed(1)}km/h '
+      'true=$trueBearing mag=$magneticBearing '
+      'decl=$declination manual=$useManual threshold=$threshold',
+    );
+
+    if (magneticBearing != null && speedKmh >= threshold) {
+      _samples.add(magneticBearing);
       if (_samples.length > _maxSamples) _samples.removeAt(0);
       _processSamples();
     } else {

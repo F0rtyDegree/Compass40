@@ -8,6 +8,12 @@ double normalizeBearing(double bearing) {
   return result < 0 ? result + 360 : result;
 }
 
+/// Переводит истинный азимут в магнитный.
+/// Магнитный = истинный − склонение, с приведением к [0, 360).
+double trueToMagneticBearing(double trueBearing, double declination) {
+  return normalizeBearing(trueBearing - declination);
+}
+
 
 Future<double> calculateCircularMedian(List<double> angles) async {
   // Выносим в изолят, если вдруг список будет большим
