@@ -1,12 +1,28 @@
+Приоритеты исправлений
+_updateCompensation (0.8/0.1) — влияет на точность якорей.
+PhotoSeverController.finish() — mapRotation вне setState.
+GpsManager.subscribe — перезапись onDone.
+_recalculateCanPlaceTarget — привести в соответствие с именем.
+Убрать подписки на неиспользуемые сенсоры в HomeLogic, поправить dispose.
+Убрать compute() в FileLogger, заменить на очередь + async write.
+Изолировать writeAsStringSync из UI-потока.
+Удалить/подключить packages/my_compass.
+Централизовать ключи SharedPreferences и пути в AppConstants.
+Покрыть TrackRecorder и GpxExportService тестами.
+
 ============= info ===
 flutter clean & flutter pub get --offline
 
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 7.0.3 новый магнитный компас (свой) доработка еще доработки .
+ver. 7.0.8 исправляем запись трека. пишем пакетами по 20 точек.
 "
 
+ver. 7.0.6 карта: путь в AppConstants, убрана проверка нулевой координаты, вынос recalc-методов в MapScreenState, sentinel в MapProject.copyWith, тесты.
+ver. 7.0.5 новый магнитный компас: магнитное склонение добавили тест.
+ver. 7.0.4 новый магнитный компас: обновили настройки и справку.
+ver. 7.0.3 новый магнитный компас: починили калибровку.
 ver. 7.0.2 новый магнитный компас (свой) еще доработка .
 ver. 7.0.1 новый магнитный компас (свой) доработка.
 ver. 7.0.0 новый магнитный компас (свой) .
@@ -296,7 +312,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 7.0.3
+version: 7.0.8
 environment:
   sdk: ^3.9.0
 
@@ -452,15 +468,26 @@ linter:
 *   **Зеленая стрелка (Цель):** Появляется при наличии цели и указывает направление на нее.
 *   **Оранжевая стрелка (КП):** Появляется при отметке КП и указывает направление *от* КП *к* вам.
 
-### Индикатор точности сенсора
+### Индикатор калибровки
 
-Иконка щита под центральным значением показывает состояние магнитного сенсора:
+Иконка щита под центральным значением показывает состояние калибровки магнитного компаса:
 
-*   **Зеленый:** Отличная точность.
-*   **Желтый:** Высокая точность.
-*   **Оранжевый:** Средняя точность. Желательна калибровка.
-*   **Красный:** Низкая точность. Требуется калибровка.
-*   **Серый (GPS компас):** Компас работает по данным GPS (активируется автоматически при движении).
+*   **Красный «нет данных»:** Магнитометр не выдаёт показаний. Крутить восьмёрку бесполезно — сенсор недоступен.
+*   **Красный «Калибровка: нет»:** Калибровка не пройдена. Требуется вращение восьмёркой.
+*   **Оранжевый «Калибровка: идёт»:** Идёт накопление данных. Рядом показан прогресс: количество пройденных секторов из 8.
+*   **Зелёный «Калибровка: ОК»:** Компас откалиброван.
+*   **Серый «GPS компас»:** Компас работает по данным GPS (в режиме GPS или Авто при скорости выше порога).
+
+### Как калибровать
+
+1. Держите телефон на вытянутой руке, экраном к себе.
+2. Плавно описывайте восьмёрку в воздухе перед собой. Диаметр — 50–70 см.
+3. Поворачивайте экран вверх, вниз и боком. Восьмёрка в одной плоскости не покрывает все сектора.
+4. Темп — примерно один оборот за 2 секунды.
+5. Держитесь в 1–2 метрах от металла: машины, бытовой техники, магнитных предметов.
+6. Ориентировочное время — 15–30 секунд. Прогресс виден в счётчике N/8.
+
+Если после калибровки обстановка резко изменилась (например, вы сели в машину), щит вернётся в оранжевое состояние. Повторите калибровку.
 
 ---
 
@@ -634,6 +661,7 @@ linter:
 
 *   **Тема:** Переключает цветовую схему между светлой и тёмной.
 *   **Частота UI (мс):** Как часто (в миллисекундах) обновляется вся динамическая информация на главном экране: курс компаса, расстояние до цели и т.д. Меньшее значение делает интерфейс более «живым», но может немного увеличить расход батареи. *По умолчанию: 250 мс.*
+*   **Интервал GPS (сек):** Как часто запрашиваются данные от GPS-приёмника. Изменение вступает в силу только после перезапуска приложения. *По умолчанию: 1 сек.*
 
 ---
 
@@ -648,23 +676,17 @@ linter:
 
 ### Настройки для GPS и Авто режимов
 
-*   **Интервал GPS (сек):** Как часто запрашиваются данные от GPS-приемника. *По умолчанию: 1 сек.*
 *   **Сэмплы GPS (шт):** Количество последних GPS-измерений для усреднения и сглаживания курса в режиме GPS. *По умолчанию: 3 шт.*
 
 ### Настройки для Магнитного режима
 
 *   **Магнитное склонение:** Поправка для учёта разницы между географическим (истинным) и магнитным севером. Может быть автоматической (на основе GPS) или установленной вручную.
 
-*   **Стабилизация сенсоров (мс) и Стрелка (плавность):**
+*   **Плавность компаса:** Один регулятор от «плавная» до «быстрая». Управляет одновременно сглаживанием сырых данных сенсора (медианное окно) и визуальной скоростью поворота лимба (EMA).
 
-    Эти два параметра вместе определяют плавность компаса. Представьте, что вы ведете машину по неровной дороге:
-
-    *   **Стабилизация сенсоров** — это как **амортизаторы**. Эта настройка сглаживает «дрожание» сырых данных от сенсора. Большее значение делает показания стабильнее, но инертнее. *По умолчанию: 500 мс.*
-
-    *   **Стрелка** — это то, как **быстро вы поворачиваете руль**. Ползунок отвечает за визуальную анимацию стрелки. «Плавная» — стрелка движется медленно и грациозно. «Быстрая» — стрелка реагирует почти мгновенно.
-    На самом деле стрелки нет, но есть вращающийся лимиб.
-
-    **Рекомендация:** Сначала добейтесь стабильных показаний с помощью **Стабилизации**, а затем настройте визуальную **Стрелку** на свой вкус.
+    *   В положении «плавная» показания стабильны, но реагируют с задержкой.
+    *   В положении «быстрая» лимб следует за сенсором почти мгновенно, но заметно дрожание.
+    *   Средние значения — компромисс.
 
 ---
 
@@ -781,6 +803,7 @@ import 'home_state.dart';
 import '../services/file_logger.dart';
 import '../services/background_tracker.dart';
 import '../services/compass_service.dart';
+import '../utils/app_constants.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -828,6 +851,7 @@ class HomeLogic {
         state.headingNotifier.value = data.heading;
       }
       state.accuracyNotifier.value = data.accuracy;
+      state.calibrationProgressNotifier.value = data.calibrationProgress;
     });
   }
 
@@ -866,12 +890,11 @@ class HomeLogic {
     setState(() {
       state.useManualDeclination = settings.useManualDeclination;
       state.magneticDeclination = settings.magneticDeclination;
-      state.averagingPeriod = settings.averagingPeriod;
-      state.smoothingFactor = settings.smoothingFactor;
       state.uiUpdatePeriod = settings.uiUpdatePeriod;
       state.compassMode = settings.compassMode;
       state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
     });
+    _compassService.updateSettings(settings);
     startUiUpdateTimer();
     _onGpsActiveChanged();
   }
@@ -880,6 +903,7 @@ class HomeLogic {
     await _loadAllSettings();
     final settings = await sensorService.loadSettings();
     GpsCompassService.instance.updateSettings(settings);
+    _compassService.updateSettings(settings);
   }
 
   Future<void> setCompassMode(CompassMode mode) async {
@@ -1148,13 +1172,16 @@ class HomeLogic {
   }
 
   Future<void> finalizeTrackAndExport() async {
+    await _trackRecorder.stop();
     final trackPoints = await _trackRecorder.getTrackPoints();
     if (trackPoints.isEmpty) {
       await _trackRecorder.clear();
       return;
     }
 
-    final dir = Directory('/storage/emulated/0/Download/Compass40');
+    final dir = Directory(
+      '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
+    );
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
@@ -1176,13 +1203,13 @@ class HomeLogic {
 String getAccuracyText(double accuracy) {
   switch (accuracy.toInt()) {
     case 0:
-      return 'СБИТ (Данные неверны)'; // UNRELIABLE
+      return 'нет данных';
     case 1:
-      return 'НИЗКАЯ (8ку)'; // LOW -> Требуется калибровка! [health]
+      return 'Калибровка: нет';
     case 2:
-      return 'Точность: Средняя';      // MEDIUM
+      return 'Калибровка: средняя';
     case 3:
-      return 'Точность: Отличная';     // HIGH
+      return 'Калибровка: ОК';
     default:
       return 'Инициализация...';
   }
@@ -1237,24 +1264,30 @@ Color getAccuracyStatusColor(double accuracy) {
   }
 
   void _onGpsBearingChanged() {
-    final bearing = GpsCompassService.instance.bearingNotifier.value;
-    final useGps = _useGpsCompass();
-    print('GPS_BEARING: $bearing useGps=$useGps');
-    if (!useGps) return;
-    if (bearing != null) {
-      state.headingNotifier.value = bearing;
-    }
+    _updateHeadingFromGps(source: 'BEARING');
   }
 
   void _onGpsActiveChanged() {
+    _updateHeadingFromGps(source: 'ACTIVE');
+  }
+
+  void _updateHeadingFromGps({required String source}) {
     final useGps = _useGpsCompass();
-    print('GPS_ACTIVE: useGps=$useGps');
+    final bearing = GpsCompassService.instance.bearingNotifier.value;
+    print('GPS_$source: bearing=$bearing useGps=$useGps');
+
     state.isGpsCompassActiveNotifier.value = useGps;
-    if (useGps) {
-      final bearing = GpsCompassService.instance.bearingNotifier.value;
-      if (bearing != null) {
-        state.headingNotifier.value = bearing;
-      }
+
+    if (!useGps) {
+      state.headingValidNotifier.value = true;
+      return;
+    }
+
+    if (bearing != null) {
+      state.headingNotifier.value = bearing;
+      state.headingValidNotifier.value = true;
+    } else {
+      state.headingValidNotifier.value = false;
     }
   }
 }
@@ -1364,12 +1397,11 @@ enum CompassMode { auto, magnetic, gps }
 class HomeState {
   final GpsInfo gpsInfo = GpsInfo();
 
-  late StreamSubscription<GpsData> gpsDataSubscription;
-  // late StreamSubscription<List<double>> compassSubscription; // <--- REMOVED
-
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
   final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
+  final ValueNotifier<int> calibrationProgressNotifier = ValueNotifier(0);
+  final ValueNotifier<bool> headingValidNotifier = ValueNotifier(true);
   final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
 
   // Режим компаса
@@ -1390,14 +1422,9 @@ class HomeState {
   final ValueNotifier<double?> bearingToTarget = ValueNotifier(null);
 
   List<LogItem> logItems = [];
-  final List<(double, int)> headingSamples = [];
   Timer? uiUpdateTimer;
 
-  int averagingPeriod = 500;
   int uiUpdatePeriod = 250;
-
-  double filteredHeading = 0.0;
-  double smoothingFactor = 0.5;
 
   static const int maxSamples = 50;
 
@@ -1409,10 +1436,12 @@ class HomeState {
     gpsDataNotifier.dispose();
     headingNotifier.dispose();
     accuracyNotifier.dispose();
+    calibrationProgressNotifier.dispose();
     distanceToWaypoint.dispose();
     bearingToWaypoint.dispose();
     distanceToTarget.dispose();
     bearingToTarget.dispose();
+    headingValidNotifier.dispose();
     isGpsCompassActiveNotifier.dispose();
     isRecordingTrackNotifier.dispose();
   }
@@ -2168,23 +2197,14 @@ class MapFollowController {
     isAutoRotating = false;
   }
   void _recalculateCrosshairImagePoint() {
-    if (state.imageSize == null || state.viewportSize == null) return;
-
-    final screenPoint = state.crosshairScreenPoint;
-    final imagePoint = screenToImage(screenPoint);
-
     setState(() {
-      
-      state.crosshairImagePoint = imagePoint;
+      state.recalculateCrosshairImagePoint(screenToImage);
     });
   }
 
   void _recalculateUserScreenPoint() {
-    final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null) return;
-
     setState(() {
-      state.currentUserScreenPoint = imageToScreen(imagePoint);
+      state.recalculateUserScreenPoint(imageToScreen);
     });
   }
     bool _isPhotoSeverActive() {
@@ -2761,13 +2781,8 @@ class MapScreenLogic {
   }
 
   void _recalculateCrosshairImagePoint() {
-    if (state.imageSize == null || state.viewportSize == null) return;
-
-    final screenPoint = state.crosshairScreenPoint;
-    final imagePoint = screenToImage(screenPoint);
-
     setState(() {
-      state.crosshairImagePoint = imagePoint;
+      state.recalculateCrosshairImagePoint(screenToImage);
     });
   }
 
@@ -3112,7 +3127,7 @@ void _recalculateUserImagePoint() {
 
   final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
 
-  if (imagePoint == null || (imagePoint.dx == 0.0 && imagePoint.dy == 0.0)) {
+  if (imagePoint == null) {
     return;
   }
 
@@ -3143,11 +3158,8 @@ void _recalculateUserImagePoint() {
   _recalculatePreview();
 }
   void _recalculateUserScreenPoint() {
-    final imagePoint = state.currentUserImagePoint;
-    if (imagePoint == null) return;
-
     setState(() {
-      state.currentUserScreenPoint = imageToScreen(imagePoint);
+      state.recalculateUserScreenPoint(imageToScreen);
     });
   }
 
@@ -3395,6 +3407,17 @@ class MapScreenState {
       [];
 
   List<MapTarget> get allTargets => project?.targets ?? [];
+
+  void recalculateCrosshairImagePoint(Offset Function(Offset) screenToImage) {
+    if (imageSize == null || viewportSize == null) return;
+    crosshairImagePoint = screenToImage(crosshairScreenPoint);
+  }
+
+  void recalculateUserScreenPoint(Offset Function(Offset) imageToScreen) {
+    final imagePoint = currentUserImagePoint;
+    if (imagePoint == null) return;
+    currentUserScreenPoint = imageToScreen(imagePoint);
+  }
 }
 
 ============= lib/controllers/map_target_manager.dart ===
@@ -4132,6 +4155,8 @@ class MapProject extends Equatable {
     this.calibrationMode = 'affine',
   });
 
+  static const Object _unset = Object();
+
   MapProject copyWith({
     String? id,
     String? imagePath,
@@ -4142,7 +4167,7 @@ class MapProject extends Equatable {
     double? photoSeverLineMeters,
     double? photoSeverLinePixels,
     double? photoSeverNorthAngle,
-    List<Map<String, String>>? cachedGpxPoints,
+    Object? cachedGpxPoints = _unset,
     List<String>? pinnedAnchorIds,
     bool? manualMode,
     String? calibrationMode,
@@ -4157,7 +4182,9 @@ class MapProject extends Equatable {
       photoSeverLineMeters: photoSeverLineMeters ?? this.photoSeverLineMeters,
       photoSeverLinePixels: photoSeverLinePixels ?? this.photoSeverLinePixels,
       photoSeverNorthAngle: photoSeverNorthAngle ?? this.photoSeverNorthAngle,
-      cachedGpxPoints: cachedGpxPoints ?? this.cachedGpxPoints,
+      cachedGpxPoints: identical(cachedGpxPoints, _unset)
+          ? this.cachedGpxPoints
+          : cachedGpxPoints as List<Map<String, String>>?,
       pinnedAnchorIds: pinnedAnchorIds ?? this.pinnedAnchorIds,
       manualMode: manualMode ?? this.manualMode,
       calibrationMode: calibrationMode ?? this.calibrationMode,
@@ -4668,6 +4695,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             CompassSection(
               headingNotifier: _state.headingNotifier,
               accuracyNotifier: _state.accuracyNotifier,
+              calibrationProgressNotifier:
+                  _state.calibrationProgressNotifier,
+              headingValidNotifier: _state.headingValidNotifier,
               isGpsCompassActiveNotifier: _state.isGpsCompassActiveNotifier,
               bearingToTarget: _state.bearingToTarget,
               bearingToWaypoint: _state.bearingToWaypoint,
@@ -5952,415 +5982,432 @@ class _MapScreenState extends State<MapScreen> {
 }
 
 ============= lib/screens/settings_screen.dart ===
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+  import 'package:flutter/material.dart';
+  import 'package:provider/provider.dart';
+  import 'package:shared_preferences/shared_preferences.dart';
 
-import '../utils/app_constants.dart';
-import 'help_viewer_screen.dart';
-import '../theme_provider.dart';
-import '../controllers/home_state.dart';
+  import '../utils/app_constants.dart';
+  import 'help_viewer_screen.dart';
+  import '../theme_provider.dart';
+  import '../controllers/home_state.dart';
 
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  class SettingsScreen extends StatefulWidget {
+    const SettingsScreen({super.key});
 
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  late Future<void> _settingsFuture;
-  bool _useManualDeclination = false;
-  final _declinationController = TextEditingController();
-  final _averagingPeriodController = TextEditingController();
-  final _gpsIntervalController = TextEditingController();
-  final _uiUpdatePeriodController = TextEditingController();
-  final _autoSwitchSpeedController = TextEditingController();
-  final _gpsAveragingSamplesController = TextEditingController();
-  final _rotateModeTimeoutController = TextEditingController();
-  double _smoothingFactor = AppConstants.smoothingFactorDefault;
-  CompassMode _compassMode = CompassMode.magnetic;
-
-  @override
-  void initState() {
-    super.initState();
-    _settingsFuture = _loadSettings();
+    @override
+    State<SettingsScreen> createState() => _SettingsScreenState();
   }
 
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
+  class _SettingsScreenState extends State<SettingsScreen> {
+    late Future<void> _settingsFuture;
+    bool _useManualDeclination = false;
+    final _declinationController = TextEditingController();
+    final _gpsIntervalController = TextEditingController();
+    final _uiUpdatePeriodController = TextEditingController();
+    final _autoSwitchSpeedController = TextEditingController();
+    final _gpsAveragingSamplesController = TextEditingController();
+    final _rotateModeTimeoutController = TextEditingController();
+    double _compassSmoothness = AppConstants.compassSmoothnessDefault.toDouble();
+    CompassMode _compassMode = CompassMode.magnetic;
 
-    _useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
-    _declinationController.text = (prefs.getDouble('manualDeclination') ?? '')
-        .toString();
-    _averagingPeriodController.text = (prefs.getInt('averagingPeriod') ?? AppConstants.sensorStabilizationDefaultMs)
-        .toString();
-    _gpsIntervalController.text = (prefs.getInt('gpsUpdateInterval') ?? AppConstants.gpsUpdateIntervalDefaultSec)
-        .toString();
-    _uiUpdatePeriodController.text = (prefs.getInt('uiUpdatePeriod') ?? AppConstants.uiUpdatePeriodDefaultMs)
-        .toString();
-    _autoSwitchSpeedController.text =
-        (prefs.getDouble('autoSwitchSpeedKmh') ?? AppConstants.autoSwitchSpeedDefaultKmh).toString();
-    _gpsAveragingSamplesController.text =
-        (prefs.getInt('gpsAveragingSamples') ?? AppConstants.gpsAveragingSamplesDefault).toString();
-    _rotateModeTimeoutController.text =
-        (prefs.getInt('rotateModeTimeoutMs') ?? AppConstants.rotateModeTimeoutDefaultMs).toString();
-
-    double smoothingFactor = prefs.getDouble('smoothingFactor') ?? AppConstants.smoothingFactorDefault;
-    smoothingFactor = smoothingFactor.clamp(0.01, 0.99);
-    _smoothingFactor = smoothingFactor;
-
-    final modeIndex = prefs.getInt('compassMode') ?? 0;
-    _compassMode = CompassMode.values[modeIndex];
-  }
-
-  Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setBool('useManualDeclination', _useManualDeclination);
-
-    final declination = double.tryParse(_declinationController.text);
-    if (declination != null) {
-      await prefs.setDouble('manualDeclination', declination);
-    } else {
-      await prefs.remove('manualDeclination');
+    @override
+    void initState() {
+      super.initState();
+      _settingsFuture = _loadSettings();
     }
 
-    final period = int.tryParse(_averagingPeriodController.text);
-    await prefs.setInt('averagingPeriod', period ?? AppConstants.sensorStabilizationDefaultMs);
+    Future<void> _loadSettings() async {
+      final prefs = await SharedPreferences.getInstance();
 
-    final interval = int.tryParse(_gpsIntervalController.text);
-    await prefs.setInt('gpsUpdateInterval', interval ?? AppConstants.gpsUpdateIntervalDefaultSec);
+      _useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
+      _declinationController.text = (prefs.getDouble('manualDeclination') ?? '')
+          .toString();
+      _gpsIntervalController.text = (prefs.getInt('gpsUpdateInterval') ?? AppConstants.gpsUpdateIntervalDefaultSec)
+          .toString();
+      _uiUpdatePeriodController.text = (prefs.getInt('uiUpdatePeriod') ?? AppConstants.uiUpdatePeriodDefaultMs)
+          .toString();
+      _autoSwitchSpeedController.text =
+          (prefs.getDouble('autoSwitchSpeedKmh') ?? AppConstants.autoSwitchSpeedDefaultKmh).toString();
+      _gpsAveragingSamplesController.text =
+          (prefs.getInt('gpsAveragingSamples') ?? AppConstants.gpsAveragingSamplesDefault).toString();
+      _rotateModeTimeoutController.text =
+          (prefs.getInt('rotateModeTimeoutMs') ?? AppConstants.rotateModeTimeoutDefaultMs).toString();
 
-    final uiPeriod = int.tryParse(_uiUpdatePeriodController.text);
-    await prefs.setInt('uiUpdatePeriod', uiPeriod ?? AppConstants.uiUpdatePeriodDefaultMs);
+      _compassSmoothness =
+          (prefs.getInt('compassSmoothness') ?? AppConstants.compassSmoothnessDefault)
+              .clamp(0, 100)
+              .toDouble();
 
-    await prefs.setDouble('smoothingFactor', _smoothingFactor);
-    await prefs.setInt('compassMode', _compassMode.index);
+      final modeIndex = prefs.getInt('compassMode') ?? 0;
+      _compassMode = CompassMode.values[modeIndex];
+    }
 
-    final autoSpeed = double.tryParse(_autoSwitchSpeedController.text);
-    await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? AppConstants.autoSwitchSpeedDefaultKmh);
+    Future<void> _saveSettings() async {
+      final prefs = await SharedPreferences.getInstance();
 
-    final gpsSamples = int.tryParse(_gpsAveragingSamplesController.text);
-    await prefs.setInt('gpsAveragingSamples', gpsSamples ?? AppConstants.gpsAveragingSamplesDefault);
+      await prefs.setBool('useManualDeclination', _useManualDeclination);
 
-    final rotateTimeout = int.tryParse(_rotateModeTimeoutController.text);
-    await prefs.setInt('rotateModeTimeoutMs', rotateTimeout ?? AppConstants.rotateModeTimeoutDefaultMs);
-  }
+      final declination = double.tryParse(_declinationController.text);
+      if (declination != null) {
+        await prefs.setDouble('manualDeclination', declination);
+      } else {
+        await prefs.remove('manualDeclination');
+      }
 
-  Widget _buildTextFieldRow(
-    String label,
-    TextEditingController controller,
-    String hint, {
-    bool isInt = true,
-    String? suffix,
-  }) {
-    return Row(
-      children: [
-        Text(label, style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(width: 16),
-        Expanded(
-          child: TextField(
-            controller: controller,
-            textAlign: TextAlign.end,
-            keyboardType: TextInputType.numberWithOptions(
-              decimal: !isInt,
-              signed: true,
+      final interval = int.tryParse(_gpsIntervalController.text);
+      await prefs.setInt('gpsUpdateInterval', interval ?? AppConstants.gpsUpdateIntervalDefaultSec);
+
+      final uiPeriod = int.tryParse(_uiUpdatePeriodController.text);
+      await prefs.setInt('uiUpdatePeriod', uiPeriod ?? AppConstants.uiUpdatePeriodDefaultMs);
+      await prefs.setInt('compassSmoothness', _compassSmoothness.round());
+      await prefs.setInt('compassMode', _compassMode.index);
+
+
+      final autoSpeed = double.tryParse(_autoSwitchSpeedController.text);
+      await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? AppConstants.autoSwitchSpeedDefaultKmh);
+
+      final gpsSamples = int.tryParse(_gpsAveragingSamplesController.text);
+      await prefs.setInt('gpsAveragingSamples', gpsSamples ?? AppConstants.gpsAveragingSamplesDefault);
+
+      final rotateTimeout = int.tryParse(_rotateModeTimeoutController.text);
+      await prefs.setInt('rotateModeTimeoutMs', rotateTimeout ?? AppConstants.rotateModeTimeoutDefaultMs);
+    }
+
+    Widget _buildTextFieldRow(
+      String label,
+      TextEditingController controller,
+      String hint, {
+      bool isInt = true,
+      String? suffix,
+    }) {
+      return Row(
+        children: [
+          Text(label, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(width: 16),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              textAlign: TextAlign.end,
+              keyboardType: TextInputType.numberWithOptions(
+                decimal: !isInt,
+                signed: true,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: hint,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                suffixText: suffix,
+              ),
+              onChanged: (_) {},
             ),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: hint,
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-              suffixText: suffix,
-            ),
-            onChanged: (_) {},
           ),
-        ),
-      ],
-    );
-  }
+        ],
+      );
+    }
 
-  @override
-  void dispose() {
-    _declinationController.dispose();
-    _averagingPeriodController.dispose();
-    _gpsIntervalController.dispose();
-    _uiUpdatePeriodController.dispose();
-    _autoSwitchSpeedController.dispose();
-    _gpsAveragingSamplesController.dispose();
-    _rotateModeTimeoutController.dispose();
-    super.dispose();
-  }
+    @override
+    void dispose() {
+      _declinationController.dispose();
+      _gpsIntervalController.dispose();
+      _uiUpdatePeriodController.dispose();
+      _autoSwitchSpeedController.dispose();
+      _gpsAveragingSamplesController.dispose();
+      _rotateModeTimeoutController.dispose();
+      super.dispose();
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    @override
+    Widget build(BuildContext context) {
+      final themeProvider = Provider.of<ThemeProvider>(context);
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        await _saveSettings();
-        if (context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Настройки'),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.help_outline),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const HelpViewerScreen(
-                      helpFilePath: 'assets/help/settings_help.md',
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) async {
+          if (didPop) return;
+          await _saveSettings();
+          if (context.mounted) {
+            Navigator.of(context).pop();
+          }
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Настройки'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.help_outline),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const HelpViewerScreen(
+                        helpFilePath: 'assets/help/settings_help.md',
+                      ),
                     ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ),
-        body: FutureBuilder(
-          future: _settingsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox.shrink();
-            }
-            if (snapshot.hasError) {
-              return const Center(child: Text('Ошибка загрузки настроек'));
-            }
+                  );
+                },
+              ),
+            ],
+          ),
+          body: FutureBuilder(
+            future: _settingsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox.shrink();
+              }
+              if (snapshot.hasError) {
+                return const Center(child: Text('Ошибка загрузки настроек'));
+              }
 
-            return SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // === Интерфейс ===
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text('Интерфейс',
-                          style: Theme.of(context).textTheme.titleLarge),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Тема',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        SegmentedButton<ThemeMode>(
-                          segments: const [
-                            ButtonSegment(
-                              value: ThemeMode.light,
-                              label: Text('Светлая'),
-                              icon: Icon(Icons.light_mode),
-                            ),
-                            ButtonSegment(
-                              value: ThemeMode.dark,
-                              label: Text('Темная'),
-                              icon: Icon(Icons.dark_mode),
-                            ),
-                          ],
-                          selected: {
-                            themeProvider.themeMode == ThemeMode.system
-                                ? ThemeMode.light
-                                : themeProvider.themeMode,
-                          },
-                          onSelectionChanged: (s) =>
-                              themeProvider.setThemeMode(s.first),
-                          showSelectedIcon: false,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextFieldRow(
-                      'Частота UI:',
-                      _uiUpdatePeriodController,
-                      '${AppConstants.uiUpdatePeriodDefaultMs}',
-                      suffix: 'мс',
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
-
-                    // === Компас ===
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text('Компас',
-                          style: Theme.of(context).textTheme.titleLarge),
-                    ),
-                    Row(
-                      children: [
-                        Text('Режим:',
-                            style: Theme.of(context).textTheme.titleMedium),
-                        const Spacer(),
-                        PopupMenuButton<CompassMode>(
-                          onSelected: (mode) {
-                            setState(() => _compassMode = mode);
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: CompassMode.magnetic,
-                              child: Text('Магнитный'),
-                            ),
-                            const PopupMenuItem(
-                              value: CompassMode.gps,
-                              child: Text('GPS'),
-                            ),
-                            const PopupMenuItem(
-                              value: CompassMode.auto,
-                              child: Text('Авто'),
-                            ),
-                          ],
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _compassMode == CompassMode.magnetic
-                                    ? 'Магнитный'
-                                    : _compassMode == CompassMode.gps
-                                        ? 'GPS'
-                                        : 'Авто',
-                                style: Theme.of(context).textTheme.bodyLarge,
-                              ),
-                              const Icon(Icons.arrow_drop_down),
-                            ],
+              return SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // === Интерфейс ===
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text('Интерфейс',
+                            style: Theme.of(context).textTheme.titleLarge),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Тема',
+                            style: Theme.of(context).textTheme.titleMedium,
                           ),
-                        ),
-                        if (_compassMode == CompassMode.auto) ...[
-                          const SizedBox(width: 8),
-                          SizedBox(
-                            width: 80,
+                          SegmentedButton<ThemeMode>(
+                            segments: const [
+                              ButtonSegment(
+                                value: ThemeMode.light,
+                                label: Text('Светлая'),
+                                icon: Icon(Icons.light_mode),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.dark,
+                                label: Text('Темная'),
+                                icon: Icon(Icons.dark_mode),
+                              ),
+                            ],
+                            selected: {
+                              themeProvider.themeMode == ThemeMode.system
+                                  ? ThemeMode.light
+                                  : themeProvider.themeMode,
+                            },
+                            onSelectionChanged: (s) =>
+                                themeProvider.setThemeMode(s.first),
+                            showSelectedIcon: false,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildTextFieldRow(
+                        'Частота UI:',
+                        _uiUpdatePeriodController,
+                        '${AppConstants.uiUpdatePeriodDefaultMs}',
+                        suffix: 'мс',
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Text.rich(
+                            TextSpan(
+                              text: 'Интервал GPS ',
+                              style: Theme.of(context).textTheme.titleMedium,
+                              children: const [
+                                TextSpan(
+                                  text: '(нужен перезапуск)',
+                                  style: TextStyle(fontSize: 10),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
                             child: TextField(
-                              controller: _autoSwitchSpeedController,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true),
+                              controller: _gpsIntervalController,
                               textAlign: TextAlign.end,
+                              keyboardType: const TextInputType.numberWithOptions(
+                                decimal: false,
+                                signed: false,
+                              ),
                               decoration: const InputDecoration(
                                 isDense: true,
+                                hintText: '${AppConstants.gpsUpdateIntervalDefaultSec}',
                                 border: InputBorder.none,
                                 contentPadding: EdgeInsets.zero,
-                                suffixText: 'км/ч',
+                                suffixText: 'сек',
                               ),
-                              onChanged: (_) {},
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextFieldRow(
-                      'Интервал GPS:',
-                      _gpsIntervalController,
-                      '${AppConstants.gpsUpdateIntervalDefaultSec}',
-                      suffix: 'сек',
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextFieldRow(
-                      'Сэмплы GPS:',
-                      _gpsAveragingSamplesController,
-                      '${AppConstants.gpsAveragingSamplesDefault}',
-                      isInt: true,
-                      suffix: 'шт',
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Text(
-                          'Магнитное склонение:',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _useManualDeclination
-                              ? TextField(
-                                  controller: _declinationController,
-                                  textAlign: TextAlign.end,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                          decimal: true, signed: true),
-                                  decoration: const InputDecoration(
-                                    isDense: true,
-                                    hintText: '°',
-                                    border: InputBorder.none,
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                  onChanged: (_) {},
-                                )
-                              : const Text(
-                                  'авто',
-                                  textAlign: TextAlign.end,
-                                  style: TextStyle(color: Colors.grey),
-                                ),
-                        ),
-                        const SizedBox(width: 8),
-                        Switch(
-                          value: _useManualDeclination,
-                          onChanged: (v) {
-                            setState(() => _useManualDeclination = v);
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildTextFieldRow(
-                      'Стабилизация сенсоров:',
-                      _averagingPeriodController,
-                      '${AppConstants.sensorStabilizationDefaultMs}',
-                      suffix: 'мс',
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text('плавная',
-                            style: Theme.of(context).textTheme.bodySmall),
-                        Text('Стрелка',
-                            style: Theme.of(context).textTheme.titleMedium),
-                        Text('быстрая',
-                            style: Theme.of(context).textTheme.bodySmall),
-                      ],
-                    ),
-                    Slider(
-                      value: _smoothingFactor,
-                      min: 0.01,
-                      max: 0.99,
-                      divisions: 98,
-                      label: _smoothingFactor.toStringAsFixed(2),
-                      onChanged: (v) => setState(() => _smoothingFactor = v),
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
 
-                    // === Карта ===
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text('Карта',
-                          style: Theme.of(context).textTheme.titleLarge),
-                    ),
-                    _buildTextFieldRow(
-                      'Сброс режима вращения:',
-                      _rotateModeTimeoutController,
-                      '${AppConstants.rotateModeTimeoutDefaultMs}',
-                      suffix: 'мс',
-                    ),
-                  ],
+                      // === Компас ===
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Text('Компас',
+                            style: Theme.of(context).textTheme.titleLarge),
+                      ),
+                      Row(
+                        children: [
+                          Text('Режим:',
+                              style: Theme.of(context).textTheme.titleMedium),
+                          const Spacer(),
+                          PopupMenuButton<CompassMode>(
+                            onSelected: (mode) {
+                              setState(() => _compassMode = mode);
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: CompassMode.magnetic,
+                                child: Text('Магнитный'),
+                              ),
+                              const PopupMenuItem(
+                                value: CompassMode.gps,
+                                child: Text('GPS'),
+                              ),
+                              const PopupMenuItem(
+                                value: CompassMode.auto,
+                                child: Text('Авто'),
+                              ),
+                            ],
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _compassMode == CompassMode.magnetic
+                                      ? 'Магнитный'
+                                      : _compassMode == CompassMode.gps
+                                          ? 'GPS'
+                                          : 'Авто',
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                                const Icon(Icons.arrow_drop_down),
+                              ],
+                            ),
+                          ),
+                          if (_compassMode == CompassMode.auto) ...[
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 80,
+                              child: TextField(
+                                controller: _autoSwitchSpeedController,
+                                keyboardType: const TextInputType.numberWithOptions(
+                                    decimal: true),
+                                textAlign: TextAlign.end,
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.zero,
+                                  suffixText: 'км/ч',
+                                ),
+                                onChanged: (_) {},
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 10),
+                      _buildTextFieldRow(
+                        'Сэмплы GPS:',
+                        _gpsAveragingSamplesController,
+                        '${AppConstants.gpsAveragingSamplesDefault}',
+                        isInt: true,
+                        suffix: 'шт',
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Text(
+                            'Магнитное склонение:',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _useManualDeclination
+                                ? TextField(
+                                    controller: _declinationController,
+                                    textAlign: TextAlign.end,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                            decimal: true, signed: true),
+                                    decoration: const InputDecoration(
+                                      isDense: true,
+                                      hintText: '°',
+                                      border: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                    onChanged: (_) {},
+                                  )
+                                : const Text(
+                                    'авто',
+                                    textAlign: TextAlign.end,
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                          ),
+                          const SizedBox(width: 8),
+                          Switch(
+                            value: _useManualDeclination,
+                            onChanged: (v) {
+                              setState(() => _useManualDeclination = v);
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text('плавная',
+                              style: Theme.of(context).textTheme.bodySmall),
+                          Text('Плавность компаса',
+                              style: Theme.of(context).textTheme.titleMedium),
+                          Text('быстрая',
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ),
+                      Slider(
+                        value: _compassSmoothness,
+                        min: 0,
+                        max: 100,
+                        divisions: 100,
+                        label: _compassSmoothness.round().toString(),
+                        onChanged: (v) =>
+                            setState(() => _compassSmoothness = v),
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
+
+                      // === Карта ===
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Text('Карта',
+                            style: Theme.of(context).textTheme.titleLarge),
+                      ),
+                      _buildTextFieldRow(
+                        'Сброс режима вращения:',
+                        _rotateModeTimeoutController,
+                        '${AppConstants.rotateModeTimeoutDefaultMs}',
+                        suffix: 'мс',
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
 ============= lib/screens/target_screen.dart ===
 import 'package:flutter/material.dart';
@@ -6741,14 +6788,21 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'computation_service.dart';
+import 'sensor_service.dart';
 
 class CompassData {
   final double heading;
-  /// Статус калибровки: 3.0 (отличная), 2.0 (средняя), 1.0 (плохая), 0.0 (неизвестно)
+  /// Статус калибровки: 3.0 (ок), 2.0 (идёт), 1.0 (нет), 0.0 (нет данных).
   final double accuracy;
-  CompassData({required this.heading, required this.accuracy});
+  /// Количество посещённых секторов калибровки (0..8).
+  final int calibrationProgress;
+  CompassData({
+    required this.heading,
+    required this.accuracy,
+    this.calibrationProgress = 0,
+  });
 }
-
 class CompassService {
   static final CompassService _instance = CompassService._internal();
   factory CompassService() => _instance;
@@ -6771,19 +6825,36 @@ class CompassService {
   static const _prefKeyX = 'compass_calib_x';
   static const _prefKeyY = 'compass_calib_y';
   static const _prefKeyZ = 'compass_calib_z';
+  static const _prefKeyRangeX = 'compass_calib_range_x';
+  static const _prefKeyRangeY = 'compass_calib_range_y';
+  static const _prefKeyRangeZ = 'compass_calib_range_z';
   static const _prefKeyCalibrated = 'compass_calibrated';
+
   double _cx = 0, _cy = 0, _cz = 0;
   bool _isCalibrated = false;
 
-  bool _isCalibrating = false;
+  static const double _rangeThreshold = 30.0;
+  static const double _recalibrationDelta = 30.0;
+  static const int _sectorCount = 8;
+  static const int _samplesPerSector = 20;
+  static const double _minMagnitude = 5.0;
+
   double _minX = double.infinity, _maxX = -double.infinity;
   double _minY = double.infinity, _maxY = -double.infinity;
   double _minZ = double.infinity, _maxZ = -double.infinity;
 
+  double _calibratedRangeX = 0;
+  double _calibratedRangeY = 0;
+  double _calibratedRangeZ = 0;
+
+  final List<int> _sectorSamples = List.filled(_sectorCount, 0);
+
   // Сглаживание курса через cos/sin. Убирает скачок на стыке 359° -> 0°.
   double _smoothCos = 0.0;
   double _smoothSin = 0.0;
-  static const double _headingAlpha = 0.2;
+  double _headingAlpha = 0.5;
+  int _medianWindowMs = 250;
+  final List<(int, double)> _rawHeadingBuffer = [];
 
   void start() {
     if (_magSub != null) stop();
@@ -6800,9 +6871,15 @@ class CompassService {
     _magSub = magnetometerEventStream().listen((e) {
       _mag = [e.x, e.y, e.z];
       _hasMag = true;
-      if (_isCalibrating) _updateCalibrationBounds(e.x, e.y, e.z);
+      _updateCalibrationBounds(e.x, e.y, e.z);
       _tryEmit();
     });
+  }
+
+  void updateSettings(SensorSettings settings) {
+    final s = settings.compassSmoothness.clamp(0, 100) / 100.0;
+    _headingAlpha = 0.05 + 0.85 * s;
+    _medianWindowMs = (500 * (1.0 - s)).round();
   }
 
   void stop() {
@@ -6812,45 +6889,22 @@ class CompassService {
     _accSub = null;
     _hasMag = false;
     _hasAcc = false;
+    _smoothCos = 0.0;
+    _smoothSin = 0.0;
+    _rawHeadingBuffer.clear();
+    _mag = [0.0, 0.0, 0.0];
   }
-
+  
   Future<void> _loadCalibration() async {
     final p = await SharedPreferences.getInstance();
     _cx = p.getDouble(_prefKeyX) ?? 0;
     _cy = p.getDouble(_prefKeyY) ?? 0;
     _cz = p.getDouble(_prefKeyZ) ?? 0;
+    _calibratedRangeX = p.getDouble(_prefKeyRangeX) ?? 0;
+    _calibratedRangeY = p.getDouble(_prefKeyRangeY) ?? 0;
+    _calibratedRangeZ = p.getDouble(_prefKeyRangeZ) ?? 0;
     _isCalibrated = p.getBool(_prefKeyCalibrated) ?? false;
   }
-
-  void startCalibration() {
-    _isCalibrating = true;
-    _minX = _minY = _minZ = double.infinity;
-    _maxX = _maxY = _maxZ = -double.infinity;
-  }
-
-  Future<void> finishCalibration() async {
-    if (!_isCalibrating) return;
-    _isCalibrating = false;
-
-    if (_minX == double.infinity || _maxX == -double.infinity) return;
-
-    _cx = (_minX + _maxX) / 2;
-    _cy = (_minY + _maxY) / 2;
-    _cz = (_minZ + _maxZ) / 2;
-
-    final p = await SharedPreferences.getInstance();
-    await p.setDouble(_prefKeyX, _cx);
-    await p.setDouble(_prefKeyY, _cy);
-    await p.setDouble(_prefKeyZ, _cz);
-    await p.setBool(_prefKeyCalibrated, true);
-    _isCalibrated = true;
-  }
-
-  void cancelCalibration() {
-    _isCalibrating = false;
-  }
-
-  bool get isCalibrating => _isCalibrating;
 
   void _updateCalibrationBounds(double x, double y, double z) {
     if (x < _minX) _minX = x;
@@ -6859,6 +6913,78 @@ class CompassService {
     if (y > _maxY) _maxY = y;
     if (z < _minZ) _minZ = z;
     if (z > _maxZ) _maxZ = z;
+
+    final magnitude = math.sqrt(x * x + y * y + z * z);
+    if (magnitude >= _minMagnitude) {
+      final angle = math.atan2(y, x);
+      final normalized = angle < 0 ? angle + 2 * math.pi : angle;
+      final sector = (normalized / (2 * math.pi / _sectorCount)).floor() %
+          _sectorCount;
+      if (_sectorSamples[sector] < _samplesPerSector) {
+        _sectorSamples[sector]++;
+      }
+    }
+
+    final rangeX = _maxX - _minX;
+    final rangeY = _maxY - _minY;
+    final rangeZ = _maxZ - _minZ;
+
+    if (!_isCalibrated) {
+      final allSectorsVisited =
+          _sectorSamples.every((c) => c >= _samplesPerSector);
+      if (rangeX >= _rangeThreshold &&
+          rangeY >= _rangeThreshold &&
+          rangeZ >= _rangeThreshold &&
+          allSectorsVisited) {
+        _applyCalibration(rangeX, rangeY, rangeZ);
+      }
+      return;
+    }
+
+    final driftX = rangeX > _calibratedRangeX + _recalibrationDelta;
+    final driftY = rangeY > _calibratedRangeY + _recalibrationDelta;
+    final driftZ = rangeZ > _calibratedRangeZ + _recalibrationDelta;
+    if (driftX || driftY || driftZ) {
+      _resetCalibration();
+    }
+  }
+
+  Future<void> _applyCalibration(
+    double rangeX,
+    double rangeY,
+    double rangeZ,
+  ) async {
+    _cx = (_minX + _maxX) / 2;
+    _cy = (_minY + _maxY) / 2;
+    _cz = (_minZ + _maxZ) / 2;
+    _calibratedRangeX = rangeX;
+    _calibratedRangeY = rangeY;
+    _calibratedRangeZ = rangeZ;
+    _isCalibrated = true;
+
+    final p = await SharedPreferences.getInstance();
+    await p.setDouble(_prefKeyX, _cx);
+    await p.setDouble(_prefKeyY, _cy);
+    await p.setDouble(_prefKeyZ, _cz);
+    await p.setDouble(_prefKeyRangeX, _calibratedRangeX);
+    await p.setDouble(_prefKeyRangeY, _calibratedRangeY);
+    await p.setDouble(_prefKeyRangeZ, _calibratedRangeZ);
+    await p.setBool(_prefKeyCalibrated, true);
+  }
+
+  Future<void> _resetCalibration() async {
+    _isCalibrated = false;
+    _calibratedRangeX = 0;
+    _calibratedRangeY = 0;
+    _calibratedRangeZ = 0;
+    _minX = _minY = _minZ = double.infinity;
+    _maxX = _maxY = _maxZ = -double.infinity;
+    for (int i = 0; i < _sectorCount; i++) {
+      _sectorSamples[i] = 0;
+    }
+
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_prefKeyCalibrated, false);
   }
 
   void _tryEmit() {
@@ -6897,8 +7023,23 @@ class CompassService {
     double rawHeading = math.atan2(ey, ny) * 180 / math.pi;
     if (rawHeading < 0) rawHeading += 360;
 
-    // 5. Сглаживание через cos/sin
-    final rad = rawHeading * math.pi / 180;
+    // 5. Медианная фильтрация по времени
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    _rawHeadingBuffer.add((nowMs, rawHeading));
+    if (_medianWindowMs > 0) {
+      final cutoff = nowMs - _medianWindowMs;
+      _rawHeadingBuffer.removeWhere((e) => e.$1 < cutoff);
+    } else {
+      _rawHeadingBuffer.removeRange(0, _rawHeadingBuffer.length - 1);
+    }
+    final medianHeading = _rawHeadingBuffer.length == 1
+        ? _rawHeadingBuffer.first.$2
+        : calculateCircularMedian(
+            _rawHeadingBuffer.map((e) => e.$2).toList(),
+          );
+
+    // 6. Сглаживание через cos/sin
+    final rad = medianHeading * math.pi / 180;
     _smoothCos =
         _smoothCos * (1 - _headingAlpha) + math.cos(rad) * _headingAlpha;
     _smoothSin =
@@ -6907,24 +7048,37 @@ class CompassService {
     double filteredHeading = math.atan2(_smoothSin, _smoothCos) * 180 / math.pi;
     if (filteredHeading < 0) filteredHeading += 360;
 
+    final progress =
+        _sectorSamples.where((c) => c >= _samplesPerSector).length;
     _controller.add(
       CompassData(
         heading: filteredHeading,
         accuracy: _computeAccuracy(mx, my, mz),
+        calibrationProgress: progress,
       ),
     );
   }
 
-  /// Оценка точности по модулю вектора магнитного поля.
-  /// Геомагнитное поле Земли ~ 25-65 мкТл.
+  /// Статус калибровки компаса.
+  /// 3.0 — откалиброван (зелёный).
+  /// 2.0 — идёт накопление размаха (оранжевый).
+  /// 1.0 — калибровка отсутствует (красный).
+  /// 0.0 — нет данных от магнитометра.
   double _computeAccuracy(double mx, double my, double mz) {
     final magnitude = math.sqrt(mx * mx + my * my + mz * mz);
+    if (magnitude < 5.0) return 0.0;
 
-    if (!_isCalibrated) return 1.0;
+    if (_isCalibrated) return 3.0;
 
-    if (magnitude >= 20.0 && magnitude <= 100.0) {
-      return 3.0;
-    } else if (magnitude >= 10.0 && magnitude <= 120.0) {
+    final rangeX = _maxX - _minX;
+    final rangeY = _maxY - _minY;
+    final rangeZ = _maxZ - _minZ;
+    if (rangeX.isFinite &&
+        rangeY.isFinite &&
+        rangeZ.isFinite &&
+        rangeX > 0 &&
+        rangeY > 0 &&
+        rangeZ > 0) {
       return 2.0;
     }
     return 1.0;
@@ -6961,6 +7115,7 @@ double calculateCircularMedian(List<double> angles) {
 
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import '../utils/app_constants.dart';
 
 // Эта функция выполняется в изоляте.
 // Она БОЛЬШЕ НЕ запрашивает разрешения. Предполагается, что они уже есть.
@@ -6970,9 +7125,9 @@ Future<void> _writeLogInternal(String message) async {
 
     Directory? downloadsDir;
     if (Platform.isAndroid) {
-      downloadsDir = Directory('/storage/emulated/0/Download');
+      downloadsDir = Directory(AppConstants.externalDownloadDir);
       if (!await downloadsDir.exists()) {
-        downloadsDir = Directory('/sdcard/Download'); // Fallback
+        downloadsDir = Directory(AppConstants.externalDownloadFallback);
       }
     } else {
       print('writeLog (isolate): Not on Android, exiting.');
@@ -6984,8 +7139,8 @@ Future<void> _writeLogInternal(String message) async {
       return;
     }
 
-    const String folderName = 'Compass40';
-    final compassDir = Directory('${downloadsDir.path}/$folderName');
+    final compassDir =
+        Directory('${downloadsDir.path}/${AppConstants.compassFolderName}');
     if (!await compassDir.exists()) {
       await compassDir.create(recursive: true);
     }
@@ -7014,9 +7169,9 @@ class FileLogger {
     try {
       Directory? downloadsDir;
       if (Platform.isAndroid) {
-        downloadsDir = Directory('/storage/emulated/0/Download');
+        downloadsDir = Directory(AppConstants.externalDownloadDir);
         if (!await downloadsDir.exists()) {
-          downloadsDir = Directory('/sdcard/Download');
+          downloadsDir = Directory(AppConstants.externalDownloadFallback);
         }
       }
       if (downloadsDir == null || !await downloadsDir.exists()) {
@@ -7024,8 +7179,8 @@ class FileLogger {
         return;
       }
 
-      const String folderName = 'Compass40';
-      final compassDir = Directory('${downloadsDir.path}/$folderName');
+      final compassDir =
+          Directory('${downloadsDir.path}/${AppConstants.compassFolderName}');
       if (!await compassDir.exists()) {
         await compassDir.create(recursive: true);
       }
@@ -7055,8 +7210,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
-import 'gps_manager.dart';        // <-- добавить импорт
-import '../utils/angle_utils.dart';
+import 'gps_manager.dart';
+import '../utils/angle_utils.dart' hide calculateCircularMedian;
+import '../utils/app_constants.dart';
+import 'computation_service.dart';
 
 class GpsCompassService {
   static final GpsCompassService instance = GpsCompassService._();
@@ -7097,12 +7254,25 @@ class GpsCompassService {
 
   void _onGpsData(GpsData data) {
     final speedKmh = (data.speed ?? 0) * 3.6;
-    final bearing = data.gpsBearing;
+    final trueBearing = data.gpsBearing;
     final threshold = _settings?.autoSwitchSpeedKmh ?? 3.0;
-     print('GPS_RAW: speed=${speedKmh.toStringAsFixed(1)}km/h bearing=$bearing threshold=$threshold');
 
-    if (bearing != null && speedKmh >= threshold) {
-      _samples.add(bearing);
+    final useManual = _settings?.useManualDeclination ?? false;
+    final declination = useManual
+        ? (_settings?.magneticDeclination ?? 0.0)
+        : (data.magneticDeclination ?? 0.0);
+    final magneticBearing = trueBearing == null
+        ? null
+        : trueToMagneticBearing(trueBearing, declination);
+
+    print(
+      'GPS_RAW: speed=${speedKmh.toStringAsFixed(1)}km/h '
+      'true=$trueBearing mag=$magneticBearing '
+      'decl=$declination manual=$useManual threshold=$threshold',
+    );
+
+    if (magneticBearing != null && speedKmh >= threshold) {
+      _samples.add(magneticBearing);
       if (_samples.length > _maxSamples) _samples.removeAt(0);
       _processSamples();
     } else {
@@ -7119,8 +7289,10 @@ class GpsCompassService {
     isActiveNotifier.value = true;
 
     final recent = _samples.sublist(_samples.length - windowSize);
-    final median = await calculateCircularMedian(List.from(recent));
-    final smoothing = _settings?.smoothingFactor ?? 0.5;
+    final median = calculateCircularMedian(List.from(recent));
+    final s = (_settings?.compassSmoothness ?? AppConstants.compassSmoothnessDefault)
+        .clamp(0, 100) / 100.0;
+    final smoothing = 0.05 + 0.85 * s;
     
     double diff = median - _filteredBearing;
     if (diff.abs() > 180) {
@@ -7304,9 +7476,9 @@ class GpxExportService {
       for (final (time, lat, lon) in trackPoints) {
         final latStr = lat.toStringAsFixed(6);
         final lonStr = lon.toStringAsFixed(6);
-        buffer.writeln('      <trkpt lat="$latStr" lon="$lonStr">');
-        buffer.writeln('        <time>$time</time>');
-        buffer.writeln('      </trkpt>');
+        buffer.writeln(
+          '<trkpt lat="$latStr" lon="$lonStr"><time>$time</time></trkpt>',
+        );
       }
       buffer.writeln('    </trkseg>');
       buffer.writeln('  </trk>');
@@ -8411,10 +8583,9 @@ class SensorService {
     return SensorSettings(
       useManualDeclination: useManualDeclination,
       magneticDeclination: magneticDeclination,
-      averagingPeriod:
-          prefs.getInt('averagingPeriod') ??
-          AppConstants.sensorStabilizationDefaultMs,
-      smoothingFactor: prefs.getDouble('smoothingFactor') ?? AppConstants.smoothingFactorDefault,
+      compassSmoothness:
+          prefs.getInt('compassSmoothness') ??
+          AppConstants.compassSmoothnessDefault,
       uiUpdatePeriod:
           prefs.getInt('uiUpdatePeriod') ??
           AppConstants.uiUpdatePeriodDefaultMs,
@@ -8457,20 +8628,17 @@ class SensorService {
 class SensorSettings {
   final bool useManualDeclination;
   final double magneticDeclination;
-  final int averagingPeriod;
-  final double smoothingFactor;
+  final int compassSmoothness;
   final int uiUpdatePeriod;
   final int gpsInterval;
   final CompassMode compassMode;
   final double autoSwitchSpeedKmh;
-  final int
-  gpsAveragingSamples; // количество сэмплов для GPS-усреднения (по умолчанию 3)
+  final int gpsAveragingSamples;
 
   SensorSettings({
     required this.useManualDeclination,
     required this.magneticDeclination,
-    required this.averagingPeriod,
-    required this.smoothingFactor,
+    required this.compassSmoothness,
     required this.uiUpdatePeriod,
     required this.gpsInterval,
     required this.compassMode,
@@ -8488,7 +8656,8 @@ import 'dart:io';
 import 'package:gps_info/gps_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gps_manager.dart';
-import '../services/sensor_service.dart'; // <-- добавить
+import '../services/sensor_service.dart';
+import '../utils/app_constants.dart';
 
 class TrackRecorder {
   static final TrackRecorder _instance = TrackRecorder._();
@@ -8502,28 +8671,29 @@ class TrackRecorder {
   bool get isRecording => _isRecording;
 
   String? _csvPath;
-  int _pointCount = 0;
+  final List<String> _pendingLines = [];
   static const int _saveThreshold = 20;
 
   Future<void> start() async {
     if (_isRecording) return;
 
     final prefs = await SharedPreferences.getInstance();
-    final dir = Directory('/storage/emulated/0/Download/Compass40');
+     final dir = Directory(
+      '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
+    );
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
 
+    _pendingLines.clear();
+
     final existingCsv = File('${dir.path}/track_points.csv');
     if (await existingCsv.exists()) {
       _csvPath = existingCsv.path;
-      final lines = await existingCsv.readAsLines();
-      _pointCount = lines.length;
     } else {
       _csvPath = '${dir.path}/track_points.csv';
       await existingCsv.create(recursive: true);
       await existingCsv.writeAsString('');
-      _pointCount = 0;
     }
 
     _isRecording = true;
@@ -8541,8 +8711,9 @@ class TrackRecorder {
     return SensorSettings(
       useManualDeclination: prefs.getBool('useManualDeclination') ?? false,
       magneticDeclination: prefs.getDouble('manualDeclination') ?? 0.0,
-      averagingPeriod: prefs.getInt('averagingPeriod') ?? 500,
-      smoothingFactor: prefs.getDouble('smoothingFactor') ?? 0.5,
+      compassSmoothness:
+          prefs.getInt('compassSmoothness') ??
+          AppConstants.compassSmoothnessDefault,
       uiUpdatePeriod: prefs.getInt('uiUpdatePeriod') ?? 250,
       gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
       compassMode: CompassMode.values[prefs.getInt('compassMode') ?? 0],
@@ -8568,15 +8739,20 @@ class TrackRecorder {
     final lat = data.latitude!;
     final lon = data.longitude!;
 
-    final line = '$time,$lat,$lon\n';
-    final file = File(_csvPath!);
-    file.writeAsStringSync(line, mode: FileMode.append);
-    print('[TrackRecorder] wrote point: $line');
+    _pendingLines.add('$time,$lat,$lon\n');
+    print('[TrackRecorder] buffered point, buffer=${_pendingLines.length}');
 
-    _pointCount++;
-    if (_pointCount >= _saveThreshold) {
-      _pointCount = 0;
+    if (_pendingLines.length >= _saveThreshold) {
+      _flushBuffer();
     }
+  }
+
+  void _flushBuffer() {
+    if (_pendingLines.isEmpty || _csvPath == null) return;
+    final file = File(_csvPath!);
+    file.writeAsStringSync(_pendingLines.join(), mode: FileMode.append);
+    print('[TrackRecorder] flushed ${_pendingLines.length} points');
+    _pendingLines.clear();
   }
 
   Future<void> stop() async {
@@ -8584,6 +8760,7 @@ class TrackRecorder {
     _isRecording = false;
     await _subscription?.cancel();
     _subscription = null;
+    _flushBuffer();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isRecordingTrack', false);
   }
@@ -8592,7 +8769,9 @@ class TrackRecorder {
     final prefs = await SharedPreferences.getInstance();
     final wasRecording = prefs.getBool('isRecordingTrack') ?? false;
 
-    final dir = Directory('/storage/emulated/0/Download/Compass40');
+    final dir = Directory(
+      '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
+    );
     if (!await dir.exists()) return false;
 
     final csvFile = File('${dir.path}/track_points.csv');
@@ -8629,7 +8808,7 @@ class TrackRecorder {
       await file.delete();
     }
     _csvPath = null;
-    _pointCount = 0;
+    _pendingLines.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isRecordingTrack', false);
   }
@@ -8645,8 +8824,6 @@ class TrackRecorder {
     final csvFile = File('${dir.path}/track_points.csv');
     if (await csvFile.exists()) {
       _csvPath = csvFile.path;
-      final lines = await csvFile.readAsLines();
-      _pointCount = lines.length;
     }
   }
 
@@ -8923,6 +9100,12 @@ double normalizeBearing(double bearing) {
   return result < 0 ? result + 360 : result;
 }
 
+/// Переводит истинный азимут в магнитный.
+/// Магнитный = истинный − склонение, с приведением к [0, 360).
+double trueToMagneticBearing(double trueBearing, double declination) {
+  return normalizeBearing(trueBearing - declination);
+}
+
 
 Future<double> calculateCircularMedian(List<double> angles) async {
   // Выносим в изолят, если вдруг список будет большим
@@ -9005,6 +9188,10 @@ String formatBearing(double bearing) {
 }
 ============= lib/utils/app_constants.dart ===
 class AppConstants {
+  static const String externalDownloadDir = '/storage/emulated/0/Download';
+  static const String externalDownloadFallback = '/sdcard/Download';
+  static const String compassFolderName = 'Compass40';
+
   static const double minTriangleAngleDegrees = 15.0;
   static const double maxTriangleAngleDegrees = 165.0; // 180 - 15
   static const double minAnchorDistanceMeters = 30.0;
@@ -9013,6 +9200,7 @@ class AppConstants {
 
   static const int uiUpdatePeriodDefaultMs = 250;
   static const int sensorStabilizationDefaultMs = 500;
+  static const int compassSmoothnessDefault = 50;
   static const double autoSwitchSpeedDefaultKmh = 2.5;
   static const int gpsUpdateIntervalDefaultSec = 1;
   static const int gpsAveragingSamplesDefault = 3;
@@ -9348,6 +9536,8 @@ import '../utils/angle_utils.dart';
 class CompassSection extends StatelessWidget {
   final ValueNotifier<double> headingNotifier;
   final ValueNotifier<double> accuracyNotifier;
+  final ValueNotifier<int> calibrationProgressNotifier;
+  final ValueNotifier<bool> headingValidNotifier;
   final ValueNotifier<bool> isGpsCompassActiveNotifier;
   final ValueNotifier<double?> bearingToTarget;
   final ValueNotifier<double?> bearingToWaypoint;
@@ -9364,6 +9554,8 @@ class CompassSection extends StatelessWidget {
     super.key,
     required this.headingNotifier,
     required this.accuracyNotifier,
+    required this.calibrationProgressNotifier,
+    required this.headingValidNotifier,
     required this.isGpsCompassActiveNotifier,
     required this.bearingToTarget,
     required this.bearingToWaypoint,
@@ -9450,12 +9642,17 @@ class CompassSection extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Text(
-                      formatBearing(heading),
-                      style: const TextStyle(
-                        fontSize: 60,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: headingValidNotifier,
+                      builder: (context, valid, _) {
+                        return Text(
+                          valid ? formatBearing(heading) : '—',
+                          style: const TextStyle(
+                            fontSize: 60,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      },
                     ),
                     Positioned(
                       bottom: 60,
@@ -9473,22 +9670,46 @@ class CompassSection extends StatelessWidget {
                                   ? 'GPS компас'
                                   : getAccuracyText(acc);
 
-                              return Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.shield_outlined,
-                                    color: color,
-                                    size: 28,
-                                  ),
-                                  Text(
-                                    text,
-                                    style: TextStyle(
-                                      color: color,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
+                              return ValueListenableBuilder<int>(
+                                valueListenable:
+                                    calibrationProgressNotifier,
+                                builder: (context, progress, _) {
+                                  final showHint =
+                                      !isGpsActive && acc < 3;
+                                  final hintText = showHint
+                                      ? '8-ку ($progress/8)'
+                                      : '';
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.shield_outlined,
+                                        color: color,
+                                        size: 28,
+                                      ),
+                                      Text(
+                                        text,
+                                        style: TextStyle(
+                                          color: color,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                      if (showHint)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            top: 2,
+                                          ),
+                                          child: Text(
+                                            hintText,
+                                            style: TextStyle(
+                                              color: color,
+                                              fontSize: 9,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                },
                               );
                             },
                           );
@@ -11503,32 +11724,6 @@ class MyCompassPlugin : FlutterPlugin, EventChannel.StreamHandler, SensorEventLi
     }
 }
 
-============= packages/my_compass/lib/my_compass.dart ===
-import 'dart:async';
-
-import 'package:flutter/services.dart';
-
-class MyCompass {
-  static const EventChannel _eventChannel = EventChannel('my_compass/events');
-  static Stream<List<double>>? _headingStream;
-
-  static Stream<List<double>> get events {
-    _headingStream ??= _eventChannel.receiveBroadcastStream().map((
-      dynamic event,
-    ) {
-      if (event is List) {
-        return event.cast<double>();
-      }
-      // Handle the case where a single double is received for backward compatibility or error
-      if (event is double) {
-        return [event, 0.0]; // Default accuracy to 0.0
-      }
-      return [0.0, 0.0]; // Default value in case of unexpected type
-    });
-    return _headingStream!;
-  }
-}
-
 ============= test/calibration/map_calibration_service_test.dart ===
 import 'dart:math' as math;
 import 'package:flutter_test/flutter_test.dart';
@@ -12090,6 +12285,112 @@ MapAnchor _anchor(String id, double x, double y, double lat, double lon) {
   );
 }
 
+============= test/map/map_project_copy_with_test.dart ===
+import 'package:flutter_test/flutter_test.dart';
+import 'package:compass40/models/map_project.dart';
+
+void main() {
+  group('MapProject.copyWith — sentinel для cachedGpxPoints', () {
+    final base = MapProject(
+      id: 'p1',
+      imagePath: '/tmp/img.png',
+      anchors: const [],
+      targets: const [],
+      cachedGpxPoints: const [
+        {'name': 'A', 'lat': '55.0', 'lon': '37.0'},
+      ],
+    );
+
+    test('без аргументов сохраняет всё, включая cachedGpxPoints', () {
+      final r = base.copyWith();
+      expect(r.cachedGpxPoints, base.cachedGpxPoints);
+      expect(r.id, base.id);
+      expect(r.imagePath, base.imagePath);
+    });
+
+    test('явный null обнуляет cachedGpxPoints', () {
+      final r = base.copyWith(cachedGpxPoints: null);
+      expect(r.cachedGpxPoints, isNull);
+    });
+
+    test('новый список заменяет cachedGpxPoints', () {
+      final r = base.copyWith(
+        cachedGpxPoints: const [
+          {'name': 'B', 'lat': '56.0', 'lon': '38.0'},
+        ],
+      );
+      expect(r.cachedGpxPoints, isNotNull);
+      expect(r.cachedGpxPoints!.length, 1);
+      expect(r.cachedGpxPoints!.first['name'], 'B');
+    });
+
+    test('одновременное изменение нескольких полей', () {
+      final r = base.copyWith(
+        id: 'p2',
+        manualMode: true,
+        calibrationMode: 'pairNearest',
+        cachedGpxPoints: null,
+      );
+      expect(r.id, 'p2');
+      expect(r.manualMode, isTrue);
+      expect(r.calibrationMode, 'pairNearest');
+      expect(r.cachedGpxPoints, isNull);
+      expect(r.imagePath, base.imagePath);
+    });
+  });
+}
+============= test/map/map_screen_state_test.dart ===
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:compass40/controllers/map_screen_state.dart';
+
+void main() {
+  group('MapScreenState.recalculateCrosshairImagePoint', () {
+    test('ничего не делает, если imageSize == null', () {
+      final s = MapScreenState();
+      s.viewportSize = const Size(400, 800);
+      s.recalculateCrosshairImagePoint((p) => p);
+      expect(s.crosshairImagePoint, isNull);
+    });
+
+    test('ничего не делает, если viewportSize == null', () {
+      final s = MapScreenState();
+      s.imageSize = const Size(1000, 1000);
+      s.recalculateCrosshairImagePoint((p) => p);
+      expect(s.crosshairImagePoint, isNull);
+    });
+
+    test('пересчитывает точку через переданную функцию', () {
+      final s = MapScreenState();
+      s.imageSize = const Size(1000, 1000);
+      s.viewportSize = const Size(400, 800);
+      s.crosshairInCenter = true;
+
+      s.recalculateCrosshairImagePoint(
+        (p) => Offset(p.dx * 2, p.dy * 2),
+      );
+
+      expect(s.crosshairImagePoint, const Offset(400, 800));
+    });
+  });
+
+  group('MapScreenState.recalculateUserScreenPoint', () {
+    test('ничего не делает, если currentUserImagePoint == null', () {
+      final s = MapScreenState();
+      s.recalculateUserScreenPoint((p) => p);
+      expect(s.currentUserScreenPoint, isNull);
+    });
+
+    test('пересчитывает точку через переданную функцию', () {
+      final s = MapScreenState();
+      s.currentUserImagePoint = const Offset(10, 20);
+      s.recalculateUserScreenPoint(
+        (p) => Offset(p.dx + 1, p.dy + 2),
+      );
+      expect(s.currentUserScreenPoint, const Offset(11, 22));
+    });
+  });
+}
 ============= test/navigation_logic_test.dart ===
 import 'package:flutter_test/flutter_test.dart';
 import 'package:compass40/utils/geo_utils.dart';
@@ -12119,6 +12420,26 @@ void main() {
       final angles = [350.0, 5.0, 10.0];
       final median = await calculateCircularMedian(angles);
       expect(median, closeTo(5.0, 2.0));
+    });
+
+    test('trueToMagneticBearing: восточное склонение вычитается', () {
+      expect(trueToMagneticBearing(100.0, 9.0), closeTo(91.0, 1e-9));
+    });
+
+    test('trueToMagneticBearing: западное склонение прибавляется', () {
+      expect(trueToMagneticBearing(100.0, -9.0), closeTo(109.0, 1e-9));
+    });
+
+    test('trueToMagneticBearing: переход через 0 вниз', () {
+      expect(trueToMagneticBearing(5.0, 9.0), closeTo(356.0, 1e-9));
+    });
+
+    test('trueToMagneticBearing: переход через 0 вверх', () {
+      expect(trueToMagneticBearing(355.0, -9.0), closeTo(4.0, 1e-9));
+    });
+
+    test('trueToMagneticBearing: нулевое склонение не меняет азимут', () {
+      expect(trueToMagneticBearing(123.0, 0.0), closeTo(123.0, 1e-9));
     });
   });
 

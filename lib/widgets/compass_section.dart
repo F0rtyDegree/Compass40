@@ -148,7 +148,7 @@ class CompassSection extends StatelessWidget {
                                   final showHint =
                                       !isGpsActive && acc < 3;
                                   final hintText = showHint
-                                      ? 'Поворачивайте экран вверх/вниз/боком ($progress/8)'
+                                      ? '8-ку ($progress/8)'
                                       : '';
                                   return Column(
                                     mainAxisSize: MainAxisSize.min,

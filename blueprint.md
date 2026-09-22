@@ -19,5 +19,22 @@
 
 
 To Do:
-мне не нравится работа магнитного компаса. 
-нужно расставить принты для сбора информации о датчиках из которых складывается направление стрелки. нужны как сырые величины в момент из получения, так и обработанные (усредненные) которые потом уже используются для вычисления направления стрелки.
+_updateCompensation (0.8/0.1) — влияет на точность якорей.
+
+PhotoSeverController.finish() — mapRotation вне setState.
+
+GpsManager.subscribe — перезапись onDone.
+
+_recalculateCanPlaceTarget — привести в соответствие с именем.
+
+Убрать подписки на неиспользуемые сенсоры в HomeLogic, поправить dispose.
+
+Убрать compute() в FileLogger, заменить на очередь + async write.
+
+Изолировать writeAsStringSync из UI-потока.
+
+Удалить/подключить packages/my_compass.
+
+Централизовать ключи SharedPreferences и пути в AppConstants.
+
+Покрыть TrackRecorder и GpxExportService тестами.

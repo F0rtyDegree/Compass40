@@ -23,6 +23,7 @@ import 'map_target_manager.dart';
 import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
+import '../utils/compensation_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -1066,10 +1067,7 @@ void _recalculateUserImagePoint() {
   }
 
   void _updateCompensation(double delta) {
-    // Экспоненциальное скользящее среднее
-    _compensationMs = _compensationMs * 0.8 + delta * 0.1;
-    // Ограничиваем разумными пределами
-    _compensationMs = _compensationMs.clamp(500.0, 3000.0);
+    _compensationMs = updateCompensationEma(_compensationMs, delta);
     _saveCompensation();
   }
 }
