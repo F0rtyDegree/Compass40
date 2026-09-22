@@ -135,9 +135,9 @@ class PhotoSeverController {
       state.project = updatedProject;
       isActive = false;
       points.clear();
+      // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
+      state.mapRotation = -math.pi / 2 - northAngle;
     });
-    // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
-    state.mapRotation = -math.pi / 2 - northAngle;
 //    showSnackBar('Калибровка ФотоСевер сохранена');
     
     // Вызываем callback после сохранения

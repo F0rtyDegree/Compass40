@@ -19,9 +19,9 @@
 
 
 To Do:
-_updateCompensation (0.8/0.1) — влияет на точность якорей.
+_updateCompensation (0.8/0.1) — влияет на точность якорей. (готово)
 
-PhotoSeverController.finish() — mapRotation вне setState.
+PhotoSeverController.finish() — mapRotation вне setState. (готово)
 
 GpsManager.subscribe — перезапись onDone.
 
