@@ -1,8 +1,6 @@
 
 To Do:
 
-Удалить/подключить packages/my_compass.
-
-Централизовать ключи SharedPreferences и пути в AppConstants.
+Централизовать ключи SharedPreferences и пути в AppConstants. (в процессе)
 
 Покрыть TrackRecorder и GpxExportService тестами.
