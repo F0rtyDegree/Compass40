@@ -1,47 +1,7 @@
 // ignore_for_file: avoid_print
 
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import '../utils/app_constants.dart';
-
-// Эта функция выполняется в изоляте.
-// Она БОЛЬШЕ НЕ запрашивает разрешения. Предполагается, что они уже есть.
-Future<void> _writeLogInternal(String message) async {
-  try {
-    Directory? downloadsDir;
-    if (Platform.isAndroid) {
-      downloadsDir = Directory(AppConstants.externalDownloadDir);
-      if (!await downloadsDir.exists()) {
-        downloadsDir = Directory(AppConstants.externalDownloadFallback);
-      }
-    } else {
-      print('writeLog (isolate): Not on Android, exiting.');
-      return;
-    }
-
-    if (!await downloadsDir.exists()) {
-      print('writeLog (isolate): Download directory not found.');
-      return;
-    }
-
-    final compassDir =
-        Directory('${downloadsDir.path}/${AppConstants.compassFolderName}');
-    if (!await compassDir.exists()) {
-      await compassDir.create(recursive: true);
-    }
-
-    const String logFileName = 'compass_log.txt';
-    final file = File('${compassDir.path}/$logFileName');
-    
-    // Используем append, так как файл уже очищен при инициализации
-    final timestamp = DateTime.now().toIso8601String().replaceFirst('T', ' ');
-    final logLine = '$timestamp  $message\n';
-
-    await file.writeAsString(logLine, mode: FileMode.append);
-  } catch (e) {
-    print('writeLog (isolate) ERROR: $e');
-  }
-}
 
 class FileLogger {
   static bool _initialized = false;
@@ -80,9 +40,36 @@ class FileLogger {
     }
   }
 
-  /// Записать сообщение в лог-файл.
+  /// Записать сообщение в лог-файл. Синхронно.
   /// Файл должен быть предварительно инициализирован через [init].
   static void writeLog(String message) {
-    compute(_writeLogInternal, message);
+    try {
+      Directory? downloadsDir;
+      if (Platform.isAndroid) {
+        downloadsDir = Directory(AppConstants.externalDownloadDir);
+        if (!downloadsDir.existsSync()) {
+          downloadsDir = Directory(AppConstants.externalDownloadFallback);
+        }
+      } else {
+        return;
+      }
+
+      if (!downloadsDir.existsSync()) {
+        return;
+      }
+
+      final compassDir =
+          Directory('${downloadsDir.path}/${AppConstants.compassFolderName}');
+      if (!compassDir.existsSync()) {
+        compassDir.createSync(recursive: true);
+      }
+
+      final file = File('${compassDir.path}/compass_log.txt');
+      final timestamp = DateTime.now().toIso8601String().replaceFirst('T', ' ');
+      final logLine = '$timestamp  $message\n';
+      file.writeAsStringSync(logLine, mode: FileMode.append);
+    } catch (e) {
+      print('writeLog ERROR: $e');
+    }
   }
 }

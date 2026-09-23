@@ -4,11 +4,7 @@ _updateCompensation (0.8/0.1) — влияет на точность якоре�
 
 PhotoSeverController.finish() — mapRotation вне setState. (готово)
 
-GpsManager.subscribe — перезапись onDone.
-
-_recalculateCanPlaceTarget — привести в соответствие с именем.
-
-Убрать подписки на неиспользуемые сенсоры в HomeLogic, поправить dispose.
+GpsManager.subscribe — перезапись onDone. (готово)
 
 Убрать compute() в FileLogger, заменить на очередь + async write.
 
