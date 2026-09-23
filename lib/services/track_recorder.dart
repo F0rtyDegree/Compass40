@@ -1,12 +1,10 @@
 // ignore_for_file: avoid_print
 
-import '../controllers/home_state.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:gps_info/gps_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gps_manager.dart';
-import '../services/sensor_service.dart';
 import '../utils/app_constants.dart';
 
 class TrackRecorder {
@@ -49,29 +47,9 @@ class TrackRecorder {
     _isRecording = true;
     await prefs.setBool('isRecordingTrack', true);
 
-    final settings = await _loadSettings();
-    _subscription = _gpsManager.subscribe(
-      intervalSeconds: settings.gpsInterval,
-      onData: _onGpsData,
-    );
+    _subscription = _gpsManager.gpsStream.listen(_onGpsData);
   }
-
-  Future<SensorSettings> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    return SensorSettings(
-      useManualDeclination: prefs.getBool('useManualDeclination') ?? false,
-      magneticDeclination: prefs.getDouble('manualDeclination') ?? 0.0,
-      compassSmoothness:
-          prefs.getInt('compassSmoothness') ??
-          AppConstants.compassSmoothnessDefault,
-      uiUpdatePeriod: prefs.getInt('uiUpdatePeriod') ?? 250,
-      gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
-      compassMode: CompassMode.values[prefs.getInt('compassMode') ?? 0],
-      autoSwitchSpeedKmh: prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0,
-      gpsAveragingSamples: prefs.getInt('gpsAveragingSamples') ?? 3,
-    );
-  }
-
+  
   void _onGpsData(GpsData data) {
       
     // ВАЖНО: 

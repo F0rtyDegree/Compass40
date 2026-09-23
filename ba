@@ -29,7 +29,8 @@ du -h --max-depth=1 /home/user/.gradle/caches/8.12 | sort -rh >> sizes.log
 df -h .  >> sizes.log
 df -h .
 
-echo "$(date) сборка завершена" >> sizes.log
+echo "$(date -d "3 hours" +"%a %b %d %T") сборка завершена" >> sizes.log
 echo "" >> sizes.log
 
+date -d "3 hours" +"%a %b %d %T"
 #!/bin/bash

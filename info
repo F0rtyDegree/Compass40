@@ -3,9 +3,10 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 7.0.12 Компас. Упростили условиями калибровки. Удалили лишние принты.
+ver. 7.0.13 Оптимизация: GpsManager.subscribe — перезапись onDone.
 "
 
+ver. 7.0.12 Компас. Упростили условиями калибровки. Удалили лишние принты.
 ver. 7.0.11 Починили компас. Добавлен автоконтроль потери калибровки и ручной сброс калибровки.
 ver. 7.0.10 PhotoSeverController.finish() — mapRotation вне setState. - исправлено.
 ver. 7.0.9 _updateCompensation (0.8/0.1) -  исправлено.

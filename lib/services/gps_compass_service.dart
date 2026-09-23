@@ -26,10 +26,7 @@ class GpsCompassService {
   void start(SensorSettings settings) {
     if (_subscription != null) return;
     _settings = settings;
-    _subscription = _gpsManager.subscribe(
-      intervalSeconds: settings.gpsInterval,
-      onData: _onGpsData,
-    );
+    _subscription = _gpsManager.gpsStream.listen(_onGpsData);
   }
 
   void updateSettings(SensorSettings settings) {

@@ -79,7 +79,7 @@ class HomeLogic {
     _gpsSubscription = null;
     _headingSubscription?.cancel();
 
-    _gpsManager.dispose();
+    _gpsManager.stop();
     _compassService.stop();
     state.uiUpdateTimer?.cancel();
     GpsCompassService.instance.bearingNotifier.removeListener(
@@ -143,9 +143,9 @@ class HomeLogic {
 
   void _subscribeToGpsDataStream() async {
     final settings = await sensorService.loadSettings();
-    _gpsSubscription = _gpsManager.subscribe(
-      intervalSeconds: settings.gpsInterval,
-      onData: (gpsData) {
+    _gpsManager.start(settings.gpsInterval);
+    _gpsSubscription = _gpsManager.gpsStream.listen(
+      (gpsData) {
         state.gpsDataNotifier.value = gpsData;
         if (!state.useManualDeclination) {
           setState(() {
