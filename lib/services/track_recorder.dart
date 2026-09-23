@@ -68,19 +68,17 @@ class TrackRecorder {
     final lon = data.longitude!;
 
     _pendingLines.add('$time,$lat,$lon\n');
-    print('[TrackRecorder] buffered point, buffer=${_pendingLines.length}');
 
     if (_pendingLines.length >= _saveThreshold) {
-      _flushBuffer();
+      unawaited(_flushBuffer());
     }
   }
 
-  void _flushBuffer() {
+  Future<void> _flushBuffer() async {
     if (_pendingLines.isEmpty || _csvPath == null) return;
-    final file = File(_csvPath!);
-    file.writeAsStringSync(_pendingLines.join(), mode: FileMode.append);
-    print('[TrackRecorder] flushed ${_pendingLines.length} points');
+    final lines = _pendingLines.join();
     _pendingLines.clear();
+    await File(_csvPath!).writeAsString(lines, mode: FileMode.append);
   }
 
   Future<void> stop() async {
@@ -88,7 +86,7 @@ class TrackRecorder {
     _isRecording = false;
     await _subscription?.cancel();
     _subscription = null;
-    _flushBuffer();
+    await _flushBuffer();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isRecordingTrack', false);
   }
