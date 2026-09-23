@@ -10,6 +10,7 @@ class CompassSection extends StatelessWidget {
   final ValueNotifier<int> calibrationProgressNotifier;
   final ValueNotifier<bool> headingValidNotifier;
   final ValueNotifier<bool> isGpsCompassActiveNotifier;
+  final ValueNotifier<bool> calibrationStaleNotifier;
   final ValueNotifier<double?> bearingToTarget;
   final ValueNotifier<double?> bearingToWaypoint;
   final List<LogItem> logItems;
@@ -28,6 +29,7 @@ class CompassSection extends StatelessWidget {
     required this.calibrationProgressNotifier,
     required this.headingValidNotifier,
     required this.isGpsCompassActiveNotifier,
+    required this.calibrationStaleNotifier,
     required this.bearingToTarget,
     required this.bearingToWaypoint,
     required this.logItems,
@@ -133,7 +135,7 @@ class CompassSection extends StatelessWidget {
                           return ValueListenableBuilder<double>(
                             valueListenable: accuracyNotifier,
                             builder: (context, acc, _) {
-                              final color = isGpsActive
+                              final shieldColor = isGpsActive
                                   ? Colors.grey
                                   : getAccuracyStatusColor(acc);
 
@@ -141,44 +143,54 @@ class CompassSection extends StatelessWidget {
                                   ? 'GPS компас'
                                   : getAccuracyText(acc);
 
-                              return ValueListenableBuilder<int>(
-                                valueListenable:
-                                    calibrationProgressNotifier,
-                                builder: (context, progress, _) {
-                                  final showHint =
-                                      !isGpsActive && acc < 3;
-                                  final hintText = showHint
-                                      ? '8-ку ($progress/8)'
-                                      : '';
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.shield_outlined,
-                                        color: color,
-                                        size: 28,
-                                      ),
-                                      Text(
-                                        text,
-                                        style: TextStyle(
-                                          color: color,
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                      if (showHint)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 2,
+                              return ValueListenableBuilder<bool>(
+                                valueListenable: calibrationStaleNotifier,
+                                builder: (context, isStale, _) {
+                                  final textColor = (!isGpsActive &&
+                                          acc == 3 &&
+                                          isStale)
+                                      ? Colors.redAccent
+                                      : shieldColor;
+                                  return ValueListenableBuilder<int>(
+                                    valueListenable:
+                                        calibrationProgressNotifier,
+                                    builder: (context, progress, _) {
+                                      final showHint =
+                                          !isGpsActive && acc < 3;
+                                      final hintText = showHint
+                                          ? '8-ку ($progress/8)'
+                                          : '';
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.shield_outlined,
+                                            color: shieldColor,
+                                            size: 28,
                                           ),
-                                          child: Text(
-                                            hintText,
+                                          Text(
+                                            text,
                                             style: TextStyle(
-                                              color: color,
-                                              fontSize: 9,
+                                              color: textColor,
+                                              fontSize: 10,
                                             ),
                                           ),
-                                        ),
-                                    ],
+                                          if (showHint)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 2,
+                                              ),
+                                              child: Text(
+                                                hintText,
+                                                style: TextStyle(
+                                                  color: shieldColor,
+                                                  fontSize: 9,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
                                   );
                                 },
                               );

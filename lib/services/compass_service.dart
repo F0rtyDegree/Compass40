@@ -6,6 +6,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'computation_service.dart';
 import 'sensor_service.dart';
+import '../utils/calibration_utils.dart';
 
 class CompassData {
   final double heading;
@@ -13,10 +14,13 @@ class CompassData {
   final double accuracy;
   /// Количество посещённых секторов калибровки (0..8).
   final int calibrationProgress;
+  /// Признак устаревшей калибровки: поле вокруг изменилось.
+  final bool calibrationStale;
   CompassData({
     required this.heading,
     required this.accuracy,
     this.calibrationProgress = 0,
+    this.calibrationStale = false,
   });
 }
 class CompassService {
@@ -45,9 +49,20 @@ class CompassService {
   static const _prefKeyRangeY = 'compass_calib_range_y';
   static const _prefKeyRangeZ = 'compass_calib_range_z';
   static const _prefKeyCalibrated = 'compass_calibrated';
+  static const _prefKeyMagnitude = 'compass_calib_magnitude';
 
   double _cx = 0, _cy = 0, _cz = 0;
   bool _isCalibrated = false;
+
+  /// Магнитуда поля (μT) на момент последней успешной калибровки.
+  double _calibMagnitude = 0.0;
+
+  /// Скользящий буфер магнитуды для вычисления устойчивого среднего.
+  static const int _magnitudeBufferSize = 60;
+  final List<double> _magnitudeBuffer = [];
+
+  /// Флаг устаревшей калибровки (поле вокруг сильно изменилось).
+  bool _calibrationStale = false;
 
   static const double _rangeThreshold = 30.0;
   static const double _recalibrationDelta = 30.0;
@@ -120,6 +135,7 @@ class CompassService {
     _calibratedRangeY = p.getDouble(_prefKeyRangeY) ?? 0;
     _calibratedRangeZ = p.getDouble(_prefKeyRangeZ) ?? 0;
     _isCalibrated = p.getBool(_prefKeyCalibrated) ?? false;
+    _calibMagnitude = p.getDouble(_prefKeyMagnitude) ?? 0.0;
   }
 
   void _updateCalibrationBounds(double x, double y, double z) {
@@ -177,6 +193,14 @@ class CompassService {
     _calibratedRangeY = rangeY;
     _calibratedRangeZ = rangeZ;
     _isCalibrated = true;
+    _calibrationStale = false;
+
+    // Запоминаем магнитуду поля на момент калибровки.
+    // Берём среднее по буферу, если он заполнен.
+    if (_magnitudeBuffer.length >= _magnitudeBufferSize) {
+      _calibMagnitude =
+          _magnitudeBuffer.reduce((a, b) => a + b) / _magnitudeBuffer.length;
+    }
 
     final p = await SharedPreferences.getInstance();
     await p.setDouble(_prefKeyX, _cx);
@@ -186,6 +210,9 @@ class CompassService {
     await p.setDouble(_prefKeyRangeY, _calibratedRangeY);
     await p.setDouble(_prefKeyRangeZ, _calibratedRangeZ);
     await p.setBool(_prefKeyCalibrated, true);
+    if (_calibMagnitude > 0) {
+      await p.setDouble(_prefKeyMagnitude, _calibMagnitude);
+    }
   }
 
   Future<void> _resetCalibration() async {
@@ -203,6 +230,39 @@ class CompassService {
     await p.setBool(_prefKeyCalibrated, false);
   }
 
+  /// Полный сброс калибровки: обнуляет офсеты, размахи, счётчики секторов,
+  /// Полный сброс калибровки: обнуляет офсеты, размахи, счётчики секторов,
+  /// сглаживание и удаляет сохранённые значения из SharedPreferences.
+  Future<void> resetCalibration() async {
+    _cx = 0;
+    _cy = 0;
+    _cz = 0;
+    _calibratedRangeX = 0;
+    _calibratedRangeY = 0;
+    _calibratedRangeZ = 0;
+    _isCalibrated = false;
+    _calibMagnitude = 0.0;
+    _calibrationStale = false;
+    _magnitudeBuffer.clear();
+    _minX = _minY = _minZ = double.infinity;
+    _maxX = _maxY = _maxZ = -double.infinity;
+    for (int i = 0; i < _sectorCount; i++) {
+      _sectorSamples[i] = 0;
+    }
+    _smoothCos = 0.0;
+    _smoothSin = 0.0;
+    _rawHeadingBuffer.clear();
+
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_prefKeyX);
+    await p.remove(_prefKeyY);
+    await p.remove(_prefKeyZ);
+    await p.remove(_prefKeyRangeX);
+    await p.remove(_prefKeyRangeY);
+    await p.remove(_prefKeyRangeZ);
+    await p.remove(_prefKeyCalibrated);
+    await p.remove(_prefKeyMagnitude);
+  }
   void _tryEmit() {
     if (!_hasMag || !_hasAcc) return;
 
@@ -210,6 +270,23 @@ class CompassService {
     final mx = _mag[0] - _cx;
     final my = _mag[1] - _cy;
     final mz = _mag[2] - _cz;
+
+    // Магнитуда поля после вычитания офсетов.
+    final magnitude = math.sqrt(mx * mx + my * my + mz * mz);
+    _magnitudeBuffer.add(magnitude);
+    if (_magnitudeBuffer.length > _magnitudeBufferSize) {
+      _magnitudeBuffer.removeAt(0);
+    }
+    final avgMagnitude = _magnitudeBuffer.isEmpty
+        ? 0.0
+        : _magnitudeBuffer.reduce((a, b) => a + b) / _magnitudeBuffer.length;
+    _calibrationStale = isCalibrationStale(
+      isCalibrated: _isCalibrated,
+      calibMagnitude: _calibMagnitude,
+      avgMagnitude: avgMagnitude,
+      bufferLength: _magnitudeBuffer.length,
+      bufferSize: _magnitudeBufferSize,
+    );
 
     final ax = _accFiltered[0];
     final ay = _accFiltered[1];
@@ -271,6 +348,7 @@ class CompassService {
         heading: filteredHeading,
         accuracy: _computeAccuracy(mx, my, mz),
         calibrationProgress: progress,
+        calibrationStale: _calibrationStale,
       ),
     );
   }

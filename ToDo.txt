@@ -1,0 +1,21 @@
+
+To Do:
+_updateCompensation (0.8/0.1) — влияет на точность якорей. (готово)
+
+PhotoSeverController.finish() — mapRotation вне setState. (готово)
+
+GpsManager.subscribe — перезапись onDone.
+
+_recalculateCanPlaceTarget — привести в соответствие с именем.
+
+Убрать подписки на неиспользуемые сенсоры в HomeLogic, поправить dispose.
+
+Убрать compute() в FileLogger, заменить на очередь + async write.
+
+Изолировать writeAsStringSync из UI-потока.
+
+Удалить/подключить packages/my_compass.
+
+Централизовать ключи SharedPreferences и пути в AppConstants.
+
+Покрыть TrackRecorder и GpxExportService тестами.

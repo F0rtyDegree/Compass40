@@ -8,15 +8,25 @@ rm -rf /home/user/.gradle/caches/build-cache-1
 rm -rf /home/user/.gradle/caches/transforms-*
 # +30сек rm -rf /home/user/.gradle/caches/8.12/transforms
 
-# rm -rf ~/.android/cache ~/.androidsdkroot/.installer ~/.androidsdkroot/.temp
-# rm -rf /home/user/.gradle/caches/8.12/javaCompile
+THRESHOLD_MB=3500   # 2.5 GiB — сработает на 2.5G+ и не будет мёртвой зоны
+
+find /home/user/.gradle/caches -maxdepth 3 -type d -name transforms | while read -r t; do
+    size_mb=$(du -sm "$t" 2>/dev/null | awk '{print $1}')
+    [ -z "$size_mb" ] && size_mb=0
+
+    echo "transforms: $t = ${size_mb} MB (порог ${THRESHOLD_MB})"
+
+    if [ "$size_mb" -gt "$THRESHOLD_MB" ]; then
+        echo "  -> удаляю /home/user/.gradle/caches/8.12/transforms"
+        rm -rf "$t"
+    else
+        echo "  -> оставляю"
+    fi
+done
 
 # вызовет последуюющую очень долгую сборку но реально очистит место
 # rm -rf ~/.gradle/caches
 # find ~/.gradle/caches -type f -atime +0 -delete
-
-
-
 
 rm -rf /home/user/myapp/build/app/outputs/apk/debug/app-debug.apk
 rm -rf /home/user/myapp/build/app/outputs/apk/release/app-release.apk

@@ -6,6 +6,7 @@
   import 'help_viewer_screen.dart';
   import '../theme_provider.dart';
   import '../controllers/home_state.dart';
+  import '../services/compass_service.dart';
 
   class SettingsScreen extends StatefulWidget {
     const SettingsScreen({super.key});
@@ -398,6 +399,24 @@
                         label: _compassSmoothness.round().toString(),
                         onChanged: (v) =>
                             setState(() => _compassSmoothness = v),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await CompassService().resetCalibration();
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Калибровка компаса сброшена'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Сбросить калибровку компаса'),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       const Divider(),

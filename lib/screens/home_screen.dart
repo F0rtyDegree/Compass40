@@ -183,6 +183,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   _state.calibrationProgressNotifier,
               headingValidNotifier: _state.headingValidNotifier,
               isGpsCompassActiveNotifier: _state.isGpsCompassActiveNotifier,
+              calibrationStaleNotifier: _state.calibrationStaleNotifier,
               bearingToTarget: _state.bearingToTarget,
               bearingToWaypoint: _state.bearingToWaypoint,
               logItems: _state.logItems,

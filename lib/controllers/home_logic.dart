@@ -66,6 +66,7 @@ class HomeLogic {
       }
       state.accuracyNotifier.value = data.accuracy;
       state.calibrationProgressNotifier.value = data.calibrationProgress;
+      state.calibrationStaleNotifier.value = data.calibrationStale;
     });
   }
 

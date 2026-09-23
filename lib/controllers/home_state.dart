@@ -17,6 +17,7 @@ class HomeState {
   final ValueNotifier<int> calibrationProgressNotifier = ValueNotifier(0);
   final ValueNotifier<bool> headingValidNotifier = ValueNotifier(true);
   final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
+  final ValueNotifier<bool> calibrationStaleNotifier = ValueNotifier(false);
 
   // Режим компаса
   CompassMode compassMode = CompassMode.auto;
@@ -57,6 +58,7 @@ class HomeState {
     bearingToTarget.dispose();
     headingValidNotifier.dispose();
     isGpsCompassActiveNotifier.dispose();
+    calibrationStaleNotifier.dispose();
     isRecordingTrackNotifier.dispose();
   }
 }
