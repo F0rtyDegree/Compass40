@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_manager.dart';
@@ -26,10 +25,9 @@ class HomeLogic {
   final SensorService sensorService;
   final GpsManager _gpsManager = GpsManager();
   final CompassService _compassService = CompassService();
-
+  
   StreamSubscription<GpsData>? _gpsSubscription;
   StreamSubscription? _headingSubscription;
-  StreamSubscription? _gyroscopeSubscription;
 
   final TrackRecorder _trackRecorder = TrackRecorder();
   bool _wasTrackRecovered = false;
@@ -60,7 +58,6 @@ class HomeLogic {
     _compassService.start();
     _headingSubscription = _compassService.dataStream.listen((data) {
       final useGps = _useGpsCompass();
-      print('MAG: heading=${data.heading.toStringAsFixed(1)} useGps=$useGps');
       if (!useGps) {
         state.headingNotifier.value = data.heading;
       }
@@ -74,22 +71,17 @@ class HomeLogic {
     if (_disposed) return;
     _disposed = true;
 
-    print('dispose: (5)');
     FileLogger.writeLog('Compass40 stop');
-    print('dispose(): (4)');
 
     stopBackgroundService();
 
     _gpsSubscription?.cancel();
     _gpsSubscription = null;
     _headingSubscription?.cancel();
-    _gyroscopeSubscription?.cancel();
 
     _gpsManager.dispose();
     _compassService.stop();
-    print('dispose(): (3)');
     state.uiUpdateTimer?.cancel();
-    print('dispose(): (1)');
     GpsCompassService.instance.bearingNotifier.removeListener(
       _onGpsBearingChanged,
     );
@@ -97,7 +89,6 @@ class HomeLogic {
       _onGpsActiveChanged,
     );
     state.disposeNotifiers();
-    print('dispose(): exit');
   }
 
   Future<void> _loadAllSettings() async {
@@ -137,8 +128,6 @@ class HomeLogic {
   }
 
   Future<void> _initServicesAndPermissions() async {
-    _subscribeToSensorStreams();
-
     if (await sensorService.requestLocationPermission()) {
       final settings = await sensorService.loadSettings();
       GpsCompassService.instance.start(settings);
@@ -171,28 +160,6 @@ class HomeLogic {
         print('GPS stream closed in HomeLogic');
       },
     );
-  }
-
-  void _subscribeToSensorStreams() {
-    userAccelerometerEventStream().listen((UserAccelerometerEvent event) {
-      print(
-        'Raw Accelerometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
-      );
-    });
-
-    magnetometerEventStream().listen((MagnetometerEvent event) {
-      print(
-        'Raw Magnetometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
-      );
-    });
-
-    _gyroscopeSubscription = gyroscopeEventStream().listen((
-      GyroscopeEvent event,
-    ) {
-      print(
-        'Raw Gyroscope: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
-      );
-    });
   }
 
   void startUiUpdateTimer() {
@@ -369,9 +336,6 @@ class HomeLogic {
         state.isRecordingTrack = false;
         state.isRecordingTrackNotifier.value = false;
       });
-      print(
-        '🔔 toggleTrackRecording: calling updateNotification with "stop Record"',
-      );
       updateNotification(content: 'Запись трэка остановлена');
     } else {
       await _trackRecorder.start();
@@ -469,13 +433,11 @@ Color getAccuracyStatusColor(double accuracy) {
   }
 
   bool _useGpsCompass() {
-    final result = switch (state.compassMode) {
+    return switch (state.compassMode) {
       CompassMode.magnetic => false,
       CompassMode.gps => true,
       CompassMode.auto => GpsCompassService.instance.isActiveNotifier.value,
     };
-    print('USE_GPS: mode=${state.compassMode} active=${GpsCompassService.instance.isActiveNotifier.value} → $result');
-    return result;
   }
 
   void _onGpsBearingChanged() {
@@ -489,7 +451,6 @@ Color getAccuracyStatusColor(double accuracy) {
   void _updateHeadingFromGps({required String source}) {
     final useGps = _useGpsCompass();
     final bearing = GpsCompassService.instance.bearingNotifier.value;
-    print('GPS_$source: bearing=$bearing useGps=$useGps');
 
     state.isGpsCompassActiveNotifier.value = useGps;
 

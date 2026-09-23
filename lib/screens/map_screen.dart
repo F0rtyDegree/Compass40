@@ -106,9 +106,6 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _controlChannel.invokeMethod('setMapActive', false);
     MapScreenController().unregister();
-    print(
-      '🔔 MapScreen.dispose: calling updateNotification with "Compass activate"',
-    );
     updateNotification(title: 'Режим - Компас');
     _logic.dispose();
     super.dispose();

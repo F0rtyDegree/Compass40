@@ -8,8 +8,6 @@ import '../utils/app_constants.dart';
 // Она БОЛЬШЕ НЕ запрашивает разрешения. Предполагается, что они уже есть.
 Future<void> _writeLogInternal(String message) async {
   try {
-    print('writeLog (isolate): entry');
-
     Directory? downloadsDir;
     if (Platform.isAndroid) {
       downloadsDir = Directory(AppConstants.externalDownloadDir);
@@ -40,7 +38,6 @@ Future<void> _writeLogInternal(String message) async {
     final logLine = '$timestamp  $message\n';
 
     await file.writeAsString(logLine, mode: FileMode.append);
-    print('writeLog (isolate): exit');
   } catch (e) {
     print('writeLog (isolate) ERROR: $e');
   }
@@ -78,7 +75,6 @@ class FileLogger {
       }
       await file.create(recursive: true);
       _initialized = true;
-      print('FileLogger.init: log file cleared');
     } catch (e) {
       print('FileLogger.init ERROR: $e');
     }

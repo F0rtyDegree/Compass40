@@ -19,8 +19,6 @@ find /home/user/.gradle/caches -maxdepth 3 -type d -name transforms | while read
     if [ "$size_mb" -gt "$THRESHOLD_MB" ]; then
         echo "  -> удаляю /home/user/.gradle/caches/8.12/transforms"
         rm -rf "$t"
-    else
-        echo "  -> оставляю"
     fi
 done
 

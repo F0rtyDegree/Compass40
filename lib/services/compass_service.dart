@@ -57,6 +57,9 @@ class CompassService {
   /// Магнитуда поля (μT) на момент последней успешной калибровки.
   double _calibMagnitude = 0.0;
 
+  /// Ожидаем накопления буфера после калибровки, чтобы зафиксировать эталон.
+  bool _awaitingCalibMagnitude = false;
+
   /// Скользящий буфер магнитуды для вычисления устойчивого среднего.
   static const int _magnitudeBufferSize = 60;
   final List<double> _magnitudeBuffer = [];
@@ -67,7 +70,7 @@ class CompassService {
   static const double _rangeThreshold = 30.0;
   static const double _recalibrationDelta = 30.0;
   static const int _sectorCount = 8;
-  static const int _samplesPerSector = 20;
+  static const int _samplesPerSector = 5;
   static const double _minMagnitude = 5.0;
 
   double _minX = double.infinity, _maxX = -double.infinity;
@@ -195,12 +198,11 @@ class CompassService {
     _isCalibrated = true;
     _calibrationStale = false;
 
-    // Запоминаем магнитуду поля на момент калибровки.
-    // Берём среднее по буферу, если он заполнен.
-    if (_magnitudeBuffer.length >= _magnitudeBufferSize) {
-      _calibMagnitude =
-          _magnitudeBuffer.reduce((a, b) => a + b) / _magnitudeBuffer.length;
-    }
+    // Эталон магнитуды ещё не зафиксирован: он будет вычислен
+    // после накопления буфера уже с новыми офсетами.
+    _calibMagnitude = 0.0;
+    _awaitingCalibMagnitude = true;
+    _magnitudeBuffer.clear();
 
     final p = await SharedPreferences.getInstance();
     await p.setDouble(_prefKeyX, _cx);
@@ -210,9 +212,7 @@ class CompassService {
     await p.setDouble(_prefKeyRangeY, _calibratedRangeY);
     await p.setDouble(_prefKeyRangeZ, _calibratedRangeZ);
     await p.setBool(_prefKeyCalibrated, true);
-    if (_calibMagnitude > 0) {
-      await p.setDouble(_prefKeyMagnitude, _calibMagnitude);
-    }
+    await p.remove(_prefKeyMagnitude);
   }
 
   Future<void> _resetCalibration() async {
@@ -242,6 +242,7 @@ class CompassService {
     _calibratedRangeZ = 0;
     _isCalibrated = false;
     _calibMagnitude = 0.0;
+    _awaitingCalibMagnitude = false;
     _calibrationStale = false;
     _magnitudeBuffer.clear();
     _minX = _minY = _minZ = double.infinity;
@@ -277,6 +278,21 @@ class CompassService {
     if (_magnitudeBuffer.length > _magnitudeBufferSize) {
       _magnitudeBuffer.removeAt(0);
     }
+    // Если ждём фиксации эталона после калибровки и буфер заполнен —
+    // сохраняем эталон и записываем его в SharedPreferences.
+    if (_isCalibrated &&
+        _awaitingCalibMagnitude &&
+        _magnitudeBuffer.length >= _magnitudeBufferSize) {
+      _calibMagnitude =
+          _magnitudeBuffer.reduce((a, b) => a + b) / _magnitudeBuffer.length;
+      _awaitingCalibMagnitude = false;
+      SharedPreferences.getInstance().then((p) {
+        if (_calibMagnitude > 0) {
+          p.setDouble(_prefKeyMagnitude, _calibMagnitude);
+        }
+      });
+    }
+
     final avgMagnitude = _magnitudeBuffer.isEmpty
         ? 0.0
         : _magnitudeBuffer.reduce((a, b) => a + b) / _magnitudeBuffer.length;

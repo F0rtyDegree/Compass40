@@ -221,15 +221,9 @@ class _LogScreenState extends State<LogScreen> {
       final distanceText = entry.distanceFromPrevious != null
           ? ' ${entry.distanceFromPrevious!.round()}m'
           : ' ---';
-      print(
-        'log_screen: timestamp = ${entry.timestamp} (микросекунды: ${entry.timestamp.microsecond})',
-      );
-      print(
-        "Время с миллисекундами: ${DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp)}",
-      );
-  final timeStr = entry.timestamp.toIso8601String().substring(11, 26); // "HH:mm:ss.SSSSSS"
-  final text = 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText $timeStr';
-      print("🔔 переменная text: $text");
+      final timeStr = entry.timestamp.toIso8601String().substring(11, 26);
+      final text =
+          'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText $timeStr';
 
       return InkWell(
         onTap: () => _handleTap(entry),

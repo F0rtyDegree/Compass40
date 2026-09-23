@@ -77,9 +77,8 @@ class LogService {
   }
 
 Future<void> saveLogEntries(List<LogItem> logItems) async {
-  final prefs = await SharedPreferences.getInstance(); // добавить эту строку
+  final prefs = await SharedPreferences.getInstance();
   final jsonString = jsonEncode(logItems.map((e) => e.toJson()).toList());
-  print('saveLogEntries: JSON = $jsonString');
   await prefs.setString('log_items', jsonString);
 }
 

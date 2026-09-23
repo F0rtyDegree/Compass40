@@ -59,12 +59,6 @@ class GpsCompassService {
         ? null
         : trueToMagneticBearing(trueBearing, declination);
 
-    print(
-      'GPS_RAW: speed=${speedKmh.toStringAsFixed(1)}km/h '
-      'true=$trueBearing mag=$magneticBearing '
-      'decl=$declination manual=$useManual threshold=$threshold',
-    );
-
     if (magneticBearing != null && speedKmh >= threshold) {
       _samples.add(magneticBearing);
       if (_samples.length > _maxSamples) _samples.removeAt(0);

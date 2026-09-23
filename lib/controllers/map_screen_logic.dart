@@ -716,12 +716,8 @@ class MapScreenLogic {
       final double delta = (gps2.time! - rawRequestTime.millisecondsSinceEpoch)
           .toDouble();
       _updateCompensation(delta);
-      print(
-        '🔔 Компенсация обновлена: delta=$delta, new compensation=${_compensationMs.round()}мс',
-      );
     }
 
-    print('anchorRequestTime (с компенсацией): $anchorRequestTime');
     await anchorManager.addAnchorFromGps(
       finalGps,
       crosshair,
@@ -820,13 +816,8 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void _recalculateWorkingPairAndRotation() {
-    print(
-      '_recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
-    );
     final anchors = state.project?.anchors ?? [];
-    print('before updateAnchors, used=${_calibrationService.usedAnchorCount}');
     _calibrationService.updateAnchors(anchors);
-    print('after updateAnchors, used=${_calibrationService.usedAnchorCount}');
     final newPair = _calibrationService.selectWorkingPair(anchors);
     final declinationRad = magneticDeclination * math.pi / 180;
 
@@ -847,9 +838,6 @@ class MapScreenLogic {
       }
     });
 
-    print(
-      '🔔 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
-    );
     onAnchorsChangedForStatus?.call();
   }
 
@@ -899,7 +887,6 @@ void _recalculateUserImagePoint() {
       if (metersPerPixel != null && metersPerPixel > 0) {
         final jumpMeters = pixelDistance * metersPerPixel;
         showSnackBar('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
-        print('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
       }
     }
   }

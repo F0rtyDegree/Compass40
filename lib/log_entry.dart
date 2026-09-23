@@ -86,15 +86,13 @@ class MapAnchorLogEntry extends LogItem {
   };
 
   factory MapAnchorLogEntry.fromJson(Map<String, dynamic> json) {
-    final entry = MapAnchorLogEntry(
+    return MapAnchorLogEntry(
       id: json['id'],
       latitude: json['latitude'],
       longitude: json['longitude'],
       distanceFromPrevious: json['distanceFromPrevious'],
       createdAt: DateTime.parse(json['timestamp']),
     );
-    print('loadLogEntries: parsed timestamp = ${entry.timestamp}');
-    return entry;
   }
 }
 

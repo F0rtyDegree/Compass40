@@ -283,10 +283,6 @@ class MapAnchorManager {
     final creationTimestamp =
         creationTime ?? DateTime.fromMillisecondsSinceEpoch(0);
 
-    print(
-      '🔔 ТП создана: время=$creationTimestamp (источник: ${creationTime != null ? 'GPS' : 'импорт'})',
-    );
-
     final anchor = MapAnchor(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       /* формируем уникальный id из текущего времени */
@@ -320,7 +316,6 @@ class MapAnchorManager {
     onAnchorsChanged();
     await onRecalculateTargets(restartNavigation: true);
 
-    print('Peredacha TP v zhurnal: vremia=$creationTimestamp');
     onAnchorAdded?.call(
       latitude,
       longitude,
@@ -427,7 +422,6 @@ class MapAnchorManager {
                 showHintAndClose('Нужно ФотоСевер & 1 якорь', ctx);
                 return;
               }
-              print('Vybran rezhim P');
               calibrationService.setCalibrationMode(CalibrationMode.photoSever);
               calibrationService.updatePhotoSeverData(
                 lineMeters: project.photoSeverLineMeters,
@@ -524,9 +518,6 @@ class MapAnchorManager {
   }
 
   void _saveCalibrationState() {
-    print(
-      '💾 _saveCalibrationState called, mode=${calibrationService.currentMode}, pinned=${calibrationService.pinnedAnchorIdsList}',
-    );
     final project = state.project;
     if (project != null) {
       final updated = project.copyWith(
@@ -538,9 +529,7 @@ class MapAnchorManager {
       setState(() {
         state.project = updated;
       });
-      print('calling onAnchorsChanged()');
       onAnchorsChanged();
-      print('after onAnchorsChanged()');
     }
   }
 
