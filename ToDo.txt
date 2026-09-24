@@ -2,7 +2,6 @@
 To Do:
 
 Архитектура:
-Смешение ValueNotifier и setState в состоянии.
 MapScreenState.heading и magneticHeading дублируют друг друга.
 Множественные синглтоны затрудняют тестирование.
 

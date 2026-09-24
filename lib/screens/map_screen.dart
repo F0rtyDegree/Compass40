@@ -241,7 +241,7 @@ class _MapScreenState extends State<MapScreen> {
                       : null,
                   previewDistanceMeters: _state.previewDistanceMeters,
                   previewBearingDegrees: _state.previewBearingDegrees,
-                  heading: _state.heading,
+                  heading: _state.magneticHeading,
                   isGpsActive: _state.isGpsActive,
                   mapRotation: _state.mapRotation,
                   magneticDeclination: widget.magneticDeclination,

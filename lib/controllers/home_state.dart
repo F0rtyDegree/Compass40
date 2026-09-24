@@ -8,6 +8,15 @@ import '../log_entry.dart';
 // Режимы компаса
 enum CompassMode { auto, magnetic, gps }
 
+/// Состояние главного экрана.
+///
+/// ВНИМАНИЕ: обычные поля и ValueNotifier смешаны исторически.
+/// Часть значений обновляется через setState (waypoint, target, logItems),
+/// часть — через ValueNotifier (gpsDataNotifier, headingNotifier и т.д.).
+/// Это не ошибка, а следствие эволюции кода: сначала всё было на setState,
+/// затем для часто меняющихся значений добавили ValueNotifier.
+/// Не рефакторить без явной необходимости — затрагивает все контроллеры
+/// и экраны, риск сломать работающее выше пользы.
 class HomeState {
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);

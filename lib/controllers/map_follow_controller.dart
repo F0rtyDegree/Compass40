@@ -142,7 +142,9 @@ class MapFollowController {
   }
 
   void applyHeadingRotation() {
-    if (!state.followMode || state.heading == null || (state.workingPair == null && !_isPhotoSeverActive())) {
+    if (!state.followMode ||
+        state.magneticHeading == null ||
+        (state.workingPair == null && !_isPhotoSeverActive())) {
       return;
     }
 

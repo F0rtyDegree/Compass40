@@ -3,9 +3,10 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 7.0.21 MapCalibrationService.bearingAndDistance дублирует calculateNavigationData. Исправлено.
+ver. 7.0.22 MapScreenState.heading и magneticHeading дублируют друг друга. Исправлено.
 "
 
+ver. 7.0.21 MapCalibrationService.bearingAndDistance дублирует calculateNavigationData. Исправлено.
 ver. 7.0.20 userPath растёт неограниченно в течение сессии. Сделано прореживание пути.
 ver. 7.0.19 Увеличиваем рзмер кнопки ЯЗдесь. Якорь ставим сразу.
 ver. 7.0.18 Убрали еще обнаруженный мертвый код.

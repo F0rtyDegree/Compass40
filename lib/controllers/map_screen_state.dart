@@ -6,6 +6,14 @@ import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
 import '../models/map_working_pair.dart';
 
+/// Состояние экрана карты.
+///
+/// ВНИМАНИЕ: обычные поля и ValueNotifier смешаны исторически.
+/// Часть значений обновляется через setState (workingPair, followMode,
+/// transformState и т.д.), часть — через ValueNotifier (crosshairFeedback).
+/// Это не ошибка, а следствие эволюции кода. Не рефакторить без явной
+/// необходимости — затрагивает все контроллеры и виджеты карты, риск
+/// сломать работающее выше пользы.
 class MapScreenState {
   // Проект и изображение
   String? imagePath;
@@ -45,7 +53,6 @@ class MapScreenState {
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;
   Offset? currentUserScreenPoint;
-  double? heading; // Азимут
   bool isGpsActive = false;
 
   // Предпросмотр расстояния/азимута (до точки под прицелом или до цели)

@@ -1038,7 +1038,6 @@ void _recalculateUserImagePoint() {
   void _onHeadingChanged() {
     final magneticHeading = headingNotifier.value;
     setState(() {
-      state.heading = magneticHeading;
       state.magneticHeading = magneticHeading;
     });
     if (state.followMode) {
