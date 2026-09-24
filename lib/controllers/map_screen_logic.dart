@@ -24,6 +24,7 @@ import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../utils/compensation_utils.dart';
+import '../utils/geo_utils.dart';
 import '../utils/user_path_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -950,7 +951,7 @@ void _recalculateUserImagePoint() {
       return;
     }
 
-    final bd = _calibrationService.bearingAndDistance(
+    final nav = calculateNavigationData(
       fromLat: gps!.latitude!,
       fromLon: gps.longitude!,
       toLat: active!.latitude!,
@@ -959,8 +960,8 @@ void _recalculateUserImagePoint() {
     );
 
     setState(() {
-      state.previewDistanceMeters = bd.distanceMeters;
-      state.previewBearingDegrees = bd.magneticBearing;
+      state.previewDistanceMeters = nav.distanceMeters;
+      state.previewBearingDegrees = nav.magneticBearing;
     });
   }
 

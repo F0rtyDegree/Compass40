@@ -6,12 +6,10 @@ import '../models/map_anchor.dart';
 import '../models/geo_point.dart';
 import '../utils/geo_utils.dart';
 import 'affine_transform.dart';
-import '../models/bearing_and_distance.dart';
 import 'point_selector.dart';
 import '../models/map_working_pair.dart';
 import '../transforms/similarity_transform.dart';
 import '../transforms/photo_sever_transform.dart';
-export '../models/bearing_and_distance.dart';
 export '../models/geo_point.dart';
 export '../transforms/similarity_transform.dart';
 
@@ -557,20 +555,4 @@ class MapCalibrationService {
     return geoAngle - imageAngle;
   }
 
-  BearingAndDistance bearingAndDistance({
-    required double fromLat,
-    required double fromLon,
-    required double toLat,
-    required double toLon,
-    required double magneticDeclination,
-  }) {
-    final dist = calculateDistance(fromLat, fromLon, toLat, toLon);
-    final trueBearing = calculateTrueBearing(fromLat, fromLon, toLat, toLon);
-    final magneticBearing = (trueBearing - magneticDeclination + 360) % 360;
-    return BearingAndDistance(
-      distanceMeters: dist,
-      trueBearing: trueBearing,
-      magneticBearing: magneticBearing,
-    );
-  }
 }

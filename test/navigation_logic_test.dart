@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:compass40/utils/geo_utils.dart';
 import 'package:compass40/utils/angle_utils.dart';
-import 'package:compass40/services/map_calibration_service.dart';
 
 void main() {
   group('Чистая геометрия (geo_utils)', () {
@@ -51,15 +50,13 @@ void main() {
 
   group('Бизнес-логика навигации (MapCalibrationService)', () {
     test('расчет азимута и расстояния с учетом магнитного склонения (Минск)', () {
-      final service = MapCalibrationService();
-
       const fromLat = 53.91414;
       const fromLon = 27.55329;
       const toLat = 53.92301;
       const toLon = 27.55567;
       const magneticDeclination = 9.0;
 
-      final result = service.bearingAndDistance(
+      final result = calculateNavigationData(
         fromLat: fromLat,
         fromLon: fromLon,
         toLat: toLat,

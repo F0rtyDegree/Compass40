@@ -1,9 +1,6 @@
 
 To Do:
 
-Дублирование:
-MapCalibrationService.bearingAndDistance дублирует calculateNavigationData.
-
 Архитектура:
 Смешение ValueNotifier и setState в состоянии.
 MapScreenState.heading и magneticHeading дублируют друг друга.
