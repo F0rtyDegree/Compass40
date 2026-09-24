@@ -1,4 +1,8 @@
 class AppConstants {
+  // У программы единственный пользователь — сам разработчик.
+  // В текущих условиях жёсткие пути Android работают и менять их
+  // на path_provider не нужно. Когда появятся проблемы на других
+  // устройствах — вернуться к этому вопросу.
   static const String externalDownloadDir = '/storage/emulated/0/Download';
   static const String externalDownloadFallback = '/sdcard/Download';
   static const String compassFolderName = 'Compass40';

@@ -24,6 +24,7 @@ import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../utils/compensation_utils.dart';
+import '../utils/user_path_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -185,6 +186,11 @@ class MapScreenLogic {
     );
     gpsDataNotifier.removeListener(_onGpsDataChanged);
     if (state.project != null) {
+      // saveProject асинхронный, но dispose синхронный — await здесь невозможен.
+      // Осознанно оставлено без await. Все критичные изменения проекта уже
+      // сохранены раньше (addAnchor, closeMap, pickImage и т.д.). Здесь —
+      // вторичная страховка. Риск потери минимален. Возвращаться к вопросу
+      // только при реальных проблемах.
       storageService.saveProject(state.project!);
     }
     state.rotateModeTimer?.cancel();
@@ -894,11 +900,18 @@ void _recalculateUserImagePoint() {
     return;
   }
 
-  final updatedPath = [...state.project!.userPath, imagePoint];
+  final rawPath = [...state.project!.userPath, imagePoint];
+  final pruned = pruneUserPath(
+    path: rawPath,
+    jumpIndices: state.project!.pathJumpIndices,
+  );
 
   setState(() {
     state.currentUserImagePoint = imagePoint;
-    state.project = state.project!.copyWith(userPath: updatedPath);
+    state.project = state.project!.copyWith(
+      userPath: pruned.path,
+      pathJumpIndices: pruned.jumpIndices,
+    );
   });
 
   // Вычисление длины прыжка (один раз для новой точки)
