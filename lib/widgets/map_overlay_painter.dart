@@ -186,7 +186,7 @@ class MapOverlayPainter extends CustomPainter {
       ..strokeWidth = 2.0;
 
     final circlePaint = Paint()
-      ..color = Colors.grey
+      ..color = Colors.yellow
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0;
 
@@ -194,7 +194,7 @@ class MapOverlayPainter extends CustomPainter {
     canvas.drawCircle(screen, 10, circlePaint);
 
     final linePaint = Paint()
-      ..color = Colors.grey
+      ..color = Colors.yellow
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 

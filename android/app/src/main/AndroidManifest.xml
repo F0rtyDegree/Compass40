@@ -54,6 +54,17 @@
     android:foregroundServiceType="location"
     android:exported="false" 
     tools:replace="android:exported"/>
+        <!-- Отключаем автозапуск сервиса после перезагрузки устройства.
+             Плагин flutter_background_service по умолчанию регистрирует
+             BootReceiver, который перезапускает сервис при BOOT_COMPLETED.
+             Нам это не нужно: сервис должен работать только пока работает
+             приложение. Если приложение убито системой без вызова dispose,
+             флаг "сервис запущен" остаётся, и после ребута сервис стартует
+             сам. Отключаем receiver. -->
+        <receiver
+            android:name="id.flutter.flutter_background_service.BootReceiver"
+            android:enabled="false"
+            tools:replace="android:enabled" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
