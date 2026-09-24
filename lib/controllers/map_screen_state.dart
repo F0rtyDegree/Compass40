@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
+import '../models/map_anchor.dart';
 import '../models/map_project.dart';
 import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
@@ -37,6 +38,9 @@ class MapScreenState {
 
   // Обратная связь при копировании
   final ValueNotifier<bool> crosshairFeedback = ValueNotifier<bool>(false);
+
+  /// Временный якорь, отображается серым до получения точных координат GPS.
+  MapAnchor? pendingAnchor;
 
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;

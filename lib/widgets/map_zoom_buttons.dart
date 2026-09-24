@@ -49,6 +49,7 @@ class MapZoomButtons extends StatelessWidget {
             onTap: onTargetPressed,
             onLongPress: onTargetLongPressed,
             enabled: targetEnabled,
+            size: 75,
           ),
           const SizedBox(height: 12),
           // Кнопка "Я ЗДЕСЬ"
@@ -59,6 +60,7 @@ class MapZoomButtons extends StatelessWidget {
             onTap: onHereNowPressed,
             onLongPress: onHereFromClipboard,
             enabled: hereEnabled,
+            size: 75,
           ),
           const SizedBox(height: 36), // Добавлено пространство
           // Стандартные кнопки масштаба и поворота
@@ -96,22 +98,25 @@ class MapZoomButtons extends StatelessWidget {
   }
 
   // Новая квадратная кнопка для действий "Я ЗДЕСЬ" и "ЦЕЛЬ"
-  Widget _buildSquareButton({
+   Widget _buildSquareButton({
     required String label,
     required IconData icon,
     required Color color,
     VoidCallback? onTap,
     VoidCallback? onLongPress,
     bool enabled = true,
+    double size = 60,
   }) {
+    final iconSize = size * 0.4;
+    final fontSize = size * 0.16;
     return Opacity(
       opacity: enabled ? 1.0 : 0.45,
       child: GestureDetector(
         onTap: enabled ? onTap : null,
         onLongPress: enabled ? onLongPress : null,
         child: Container(
-          width: 60,
-          height: 60,
+          width: size,
+          height: size,
           decoration: BoxDecoration(
             color: color.withAlpha(80),
             borderRadius: BorderRadius.circular(12),
@@ -128,13 +133,13 @@ class MapZoomButtons extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: Colors.white, size: 24),
+              Icon(icon, color: Colors.white, size: iconSize),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 10,
+                  fontSize: fontSize,
                   fontWeight: FontWeight.bold,
                 ),
               ),

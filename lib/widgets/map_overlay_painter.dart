@@ -12,6 +12,7 @@ class MapOverlayPainter extends CustomPainter {
 
   final List<MapAnchor> anchors;
   final List<MapTarget> targets;
+  final MapAnchor? pendingAnchor;
   final Set<String> activeAnchorIds;
   final List<Offset> userPath;
   final List<int> pathJumpIndices;
@@ -32,6 +33,7 @@ class MapOverlayPainter extends CustomPainter {
     required this.viewportSize,
     required this.anchors,
     required this.targets,
+    this.pendingAnchor,
     this.activeAnchorIds = const {},
     this.userPath = const [],
     this.pathJumpIndices = const [],
@@ -52,6 +54,13 @@ class MapOverlayPainter extends CustomPainter {
     for (final anchor in anchors) {
       final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
       _drawAnchor(canvas, screen, anchor);
+    }
+
+    if (pendingAnchor != null) {
+      final screen = imageToScreen(
+        Offset(pendingAnchor!.imageX, pendingAnchor!.imageY),
+      );
+      _drawPendingAnchor(canvas, screen);
     }
 
     for (final target in targets) {
@@ -167,6 +176,37 @@ class MapOverlayPainter extends CustomPainter {
       ..lineTo(screen.dx, screen.dy + 10)
       ..lineTo(screen.dx + 5, screen.dy + 5);
     canvas.drawPath(path, linePaint);
+  }
+
+  void _drawPendingAnchor(Canvas canvas, Offset screen) {
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    final circlePaint = Paint()
+      ..color = Colors.grey
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    canvas.drawCircle(screen, 10, borderPaint);
+    canvas.drawCircle(screen, 10, circlePaint);
+
+    final linePaint = Paint()
+      ..color = Colors.grey
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawLine(
+      screen + const Offset(-5, 0),
+      screen + const Offset(5, 0),
+      linePaint,
+    );
+    canvas.drawLine(
+      screen + const Offset(0, -8),
+      screen + const Offset(0, 5),
+      linePaint,
+    );
   }
 
   void _drawCurrentPosition(Canvas canvas, Offset screen) {
@@ -399,6 +439,11 @@ class MapOverlayPainter extends CustomPainter {
         oldDelegate.targets.length != targets.length ||
         oldDelegate.userPath.length != userPath.length ||
         oldDelegate.pathJumpIndices.length != pathJumpIndices.length) {
+      return true;
+    }
+
+    // Pending-якорь: проверка наличия
+    if ((oldDelegate.pendingAnchor == null) != (pendingAnchor == null)) {
       return true;
     }
 

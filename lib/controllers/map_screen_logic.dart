@@ -370,6 +370,7 @@ class MapScreenLogic {
       state.activeTarget = null;
       state.currentUserImagePoint = null;
       state.currentUserScreenPoint = null;
+      state.pendingAnchor = null;
     });
 
     if (imagePathToDelete != null) {
@@ -624,6 +625,9 @@ class MapScreenLogic {
 /// подстраивается под текущие условия, используя измеренную задержку
 /// между нажатием и получением следующего GPS-пакета.
 /// ============================================================
+    // Если уже идёт ожидание GPS — игнорируем повторное нажатие.
+    if (state.pendingAnchor != null) return;
+
     final DateTime anchorRequestTime = rawRequestTime.add(
       Duration(milliseconds: _compensationMs.round()),
     );
@@ -634,8 +638,24 @@ class MapScreenLogic {
       return;
     }
 
-    GpsData gps1 = gpsDataNotifier.value;
-//    showSnackBar('Ожидание GPS...');
+    // Показываем серый якорь сразу, по текущему (грубому) GPS.
+    final roughGps = gpsDataNotifier.value;
+    if (roughGps.latitude == null || roughGps.longitude == null) {
+      showSnackBar('Нет сигнала GPS');
+      return;
+    }
+    setState(() {
+      state.pendingAnchor = MapAnchor(
+        id: 'pending',
+        imageX: crosshair.dx,
+        imageY: crosshair.dy,
+        latitude: roughGps.latitude!,
+        longitude: roughGps.longitude!,
+        createdAt: rawRequestTime,
+      );
+    });
+
+    GpsData gps1 = roughGps;
 
     const int maxIterations = 100;
     const Duration step = Duration(milliseconds: 50);
@@ -703,6 +723,9 @@ class MapScreenLogic {
     }
 
     if (finalGps == null) {
+      setState(() {
+        state.pendingAnchor = null;
+      });
       showSnackBar(
         'Не удалось определить точное положение. Попробуйте еще раз.',
       );
@@ -715,6 +738,10 @@ class MapScreenLogic {
           .toDouble();
       _updateCompensation(delta);
     }
+
+    setState(() {
+      state.pendingAnchor = null;
+    });
 
     await anchorManager.addAnchorFromGps(
       finalGps,

@@ -8,7 +8,7 @@ rm -rf /home/user/.gradle/caches/build-cache-1
 rm -rf /home/user/.gradle/caches/transforms-*
 # +30сек rm -rf /home/user/.gradle/caches/8.12/transforms
 
-THRESHOLD_MB=3500   # предел папки /home/user/.gradle/caches/8.12/transforms
+THRESHOLD_MB=4500   # предел папки /home/user/.gradle/caches/8.12/transforms
 find /home/user/.gradle/caches -maxdepth 3 -type d -name transforms | while read -r t; do
     size_mb=$(du -sm "$t" 2>/dev/null | awk '{print $1}')
     [ -z "$size_mb" ] && size_mb=0

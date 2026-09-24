@@ -222,6 +222,7 @@ class _MapScreenState extends State<MapScreen> {
                   transformState: _state.transformState,
                   viewportSize: viewportSize,
                   anchors: _state.project?.anchors ?? [],
+                  pendingAnchor: _state.pendingAnchor,
                   targets: [
                     ..._state.project?.targets ?? [],
                     if (_state.plannedTarget != null) _state.plannedTarget!,
