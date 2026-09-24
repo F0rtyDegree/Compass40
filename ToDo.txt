@@ -1,6 +1,50 @@
 
 To Do:
 
-Централизовать ключи SharedPreferences и пути в AppConstants. (в процессе)
+Ошибки и подозрительные места:
 
-Покрыть TrackRecorder и GpxExportService тестами.
+userPath растёт неограниченно в течение сессии.
+
+AppConstants.externalDownloadDir — жёсткие пути Android.
+
+main.dart: Future.delayed(300 ms) перед уведомлением.
+
+MapCalibrationService.toggleAnchorPinned: Future.delayed(1s) не отменяется.
+
+MapScreenLogic.dispose: saveProject без await.
+
+Дублирование:
+
+MapCalibrationService.bearingAndDistance дублирует calculateNavigationData.
+
+Мёртвый код:
+
+WindRosePainter.isDarkMode — не используется в paint.
+
+MapFollowController.magneticDeclination — не используется.
+
+MapCalibrationService.activeAnchorIndices — не вызывается.
+
+HomeLogic.getAccuracyText/getAccuracyStatusColor/getCardinalDirection — не используют this.
+
+MapAnchorManager.onStartPhotoSever — пересечение с PhotoSeverController.
+
+Архитектура:
+
+Смешение ValueNotifier и setState в состоянии.
+
+MapScreenState.heading и magneticHeading дублируют друг друга.
+
+Множественные синглтоны затрудняют тестирование.
+
+Незначительные:
+
+MapOverlayPainter.shouldRepaint — сравнение по последнему ID.
+
+_buildAnchorBadge — 150 строк inline.
+
+MapScreen._onScaleUpdate — 4 повтора блока «повернуть с пивотом».
+
+help_viewer_screen грузит markdown без кэша.
+
+Dismissible в GpsSection с прозрачными фонами — невидимо для пользователя.

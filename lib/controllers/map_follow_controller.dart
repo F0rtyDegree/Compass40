@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/map_transform_state.dart';
+import '../utils/app_constants.dart';
 import 'map_screen_state.dart';
 
 class MapFollowController {
@@ -31,7 +32,9 @@ class MapFollowController {
 
   Future<void> loadRotateModeTimeout() async {
     final prefs = await SharedPreferences.getInstance();
-    rotateModeTimeoutMs = prefs.getInt('rotateModeTimeoutMs') ?? 1000;
+    rotateModeTimeoutMs =
+        prefs.getInt(AppConstants.prefRotateModeTimeoutMs) ??
+            AppConstants.rotateModeTimeoutDefaultMs;
   }
 
   void enableFollowMode() {

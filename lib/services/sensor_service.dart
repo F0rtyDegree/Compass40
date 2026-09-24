@@ -24,41 +24,47 @@ class SensorService {
   Future<SensorSettings> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
+    final useManualDeclination =
+        prefs.getBool(AppConstants.prefUseManualDeclination) ?? false;
     final magneticDeclination = useManualDeclination
-        ? (prefs.getDouble('manualDeclination') ?? 0.0)
+        ? (prefs.getDouble(AppConstants.prefManualDeclination) ?? 0.0)
         : 0.0;
 
-    final compassModeIndex = prefs.getInt('compassMode') ?? 0;
+    final compassModeIndex =
+        prefs.getInt(AppConstants.prefCompassMode) ?? 0;
     final compassMode = CompassMode.values[compassModeIndex];
     final autoSwitchSpeedKmh =
-        prefs.getDouble('autoSwitchSpeedKmh') ??
+        prefs.getDouble(AppConstants.prefAutoSwitchSpeedKmh) ??
         AppConstants.autoSwitchSpeedDefaultKmh;
 
     return SensorSettings(
       useManualDeclination: useManualDeclination,
       magneticDeclination: magneticDeclination,
       compassSmoothness:
-          prefs.getInt('compassSmoothness') ??
+          prefs.getInt(AppConstants.prefCompassSmoothness) ??
           AppConstants.compassSmoothnessDefault,
       uiUpdatePeriod:
-          prefs.getInt('uiUpdatePeriod') ??
+          prefs.getInt(AppConstants.prefUiUpdatePeriod) ??
           AppConstants.uiUpdatePeriodDefaultMs,
-      gpsInterval: prefs.getInt('gpsUpdateInterval') ?? AppConstants.gpsUpdateIntervalDefaultSec,
+      gpsInterval:
+          prefs.getInt(AppConstants.prefGpsUpdateInterval) ??
+          AppConstants.gpsUpdateIntervalDefaultSec,
       compassMode: compassMode,
       autoSwitchSpeedKmh: autoSwitchSpeedKmh,
-      gpsAveragingSamples: prefs.getInt('gpsAveragingSamples') ?? AppConstants.gpsAveragingSamplesDefault,
+      gpsAveragingSamples:
+          prefs.getInt(AppConstants.prefGpsAveragingSamples) ??
+          AppConstants.gpsAveragingSamplesDefault,
     );
   }
 
   Future<void> saveCompassMode(CompassMode mode) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('compassMode', mode.index);
+    await prefs.setInt(AppConstants.prefCompassMode, mode.index);
   }
 
   Future<void> saveAutoSwitchSpeed(double speedKmh) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('autoSwitchSpeedKmh', speedKmh);
+    await prefs.setDouble(AppConstants.prefAutoSwitchSpeedKmh, speedKmh);
   }
 
   Future<bool> requestLocationPermission() async {

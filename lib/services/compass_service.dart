@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'computation_service.dart';
 import 'sensor_service.dart';
 import '../utils/calibration_utils.dart';
+import '../utils/app_constants.dart';
 
 class CompassData {
   final double heading;
@@ -42,14 +43,14 @@ class CompassService {
   bool _hasMag = false;
   bool _hasAcc = false;
 
-  static const _prefKeyX = 'compass_calib_x';
-  static const _prefKeyY = 'compass_calib_y';
-  static const _prefKeyZ = 'compass_calib_z';
-  static const _prefKeyRangeX = 'compass_calib_range_x';
-  static const _prefKeyRangeY = 'compass_calib_range_y';
-  static const _prefKeyRangeZ = 'compass_calib_range_z';
-  static const _prefKeyCalibrated = 'compass_calibrated';
-  static const _prefKeyMagnitude = 'compass_calib_magnitude';
+  static const _prefKeyX = AppConstants.prefCompassCalibX;
+  static const _prefKeyY = AppConstants.prefCompassCalibY;
+  static const _prefKeyZ = AppConstants.prefCompassCalibZ;
+  static const _prefKeyRangeX = AppConstants.prefCompassCalibRangeX;
+  static const _prefKeyRangeY = AppConstants.prefCompassCalibRangeY;
+  static const _prefKeyRangeZ = AppConstants.prefCompassCalibRangeZ;
+  static const _prefKeyCalibrated = AppConstants.prefCompassCalibrated;
+  static const _prefKeyMagnitude = AppConstants.prefCompassCalibMagnitude;
 
   double _cx = 0, _cy = 0, _cz = 0;
   bool _isCalibrated = false;

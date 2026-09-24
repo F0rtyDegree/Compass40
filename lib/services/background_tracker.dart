@@ -1,6 +1,7 @@
 // ignore_for_file: avoid_print
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter/services.dart';
+import '../utils/app_constants.dart';
 
 final FlutterBackgroundService _service = FlutterBackgroundService();
 
@@ -10,7 +11,7 @@ void initializeBackgroundService() {
       onStart: onStart,
       autoStart: false,
       isForegroundMode: true,
-      notificationChannelId: 'compass40_tracking_channel',
+      notificationChannelId: AppConstants.notificationChannelId,
       foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(),

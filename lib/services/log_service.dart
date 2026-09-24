@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../log_entry.dart';
 import '../utils/geo_utils.dart';
+import '../utils/app_constants.dart';
 
 class LogService {
   // Мьютекс для синхронизации операций чтения/записи логов
@@ -62,7 +63,7 @@ class LogService {
 
   Future<List<LogItem>> loadLogEntries() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? logJson = prefs.getString('log_items');
+    final String? logJson = prefs.getString(AppConstants.prefLogItems);
 
     if (logJson != null) {
       try {
@@ -79,7 +80,7 @@ class LogService {
 Future<void> saveLogEntries(List<LogItem> logItems) async {
   final prefs = await SharedPreferences.getInstance();
   final jsonString = jsonEncode(logItems.map((e) => e.toJson()).toList());
-  await prefs.setString('log_items', jsonString);
+  await prefs.setString(AppConstants.prefLogItems, jsonString);
 }
 
   Future<SetWaypointResult?> setWaypoint({

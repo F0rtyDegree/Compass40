@@ -5,15 +5,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/map_project.dart';
 import '../models/map_transform_state.dart';
+import '../utils/app_constants.dart';
 
 class MapStorageService {
-  static const String _projectsKey = 'map_projects';
-  static const String _currentProjectIdKey = 'current_map_project_id';
-  static const String _transformPrefix = 'map_transform_';
+  static const String _projectsKey = AppConstants.prefMapProjects;
+  static const String _currentProjectIdKey =
+      AppConstants.prefCurrentMapProjectId;
+  static const String _transformPrefix = AppConstants.prefMapTransformPrefix;
 
   Future<Directory> _getMapsDirectory() async {
     final appDir = await getApplicationDocumentsDirectory();
-    final mapsDir = Directory('${appDir.path}/compass40_maps');
+    final mapsDir = Directory('${appDir.path}/${AppConstants.mapsFolderName}');
     if (!await mapsDir.exists()) {
       await mapsDir.create(recursive: true);
     }

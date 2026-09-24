@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'utils/app_constants.dart';
 
 class ThemeProvider with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
-  final String _key = "themeMode";
+  final String _key = AppConstants.prefThemeMode;
 
   ThemeMode get themeMode => _themeMode;
 

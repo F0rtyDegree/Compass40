@@ -29,7 +29,7 @@ class FileLogger {
         await compassDir.create(recursive: true);
       }
 
-      final file = File('${compassDir.path}/compass_log.txt');
+      final file = File('${compassDir.path}/${AppConstants.logFileName}');
       if (await file.exists()) {
         await file.delete();
       }
@@ -64,7 +64,7 @@ class FileLogger {
         compassDir.createSync(recursive: true);
       }
 
-      final file = File('${compassDir.path}/compass_log.txt');
+      final file = File('${compassDir.path}/${AppConstants.logFileName}');
       final timestamp = DateTime.now().toIso8601String().replaceFirst('T', ' ');
       final logLine = '$timestamp  $message\n';
       file.writeAsStringSync(logLine, mode: FileMode.append);

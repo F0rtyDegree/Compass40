@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../log_entry.dart';
+import '../utils/app_constants.dart';
 
 class LogScreen extends StatefulWidget {
   final List<LogItem> logItems;
@@ -23,7 +24,7 @@ class _LogScreenState extends State<LogScreen> {
 
   Future<void> _clearLogAndExit() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('log_items');
+    await prefs.remove(AppConstants.prefLogItems);
     if (mounted) {
       Navigator.of(context).pop({'logCleared': true});
     }

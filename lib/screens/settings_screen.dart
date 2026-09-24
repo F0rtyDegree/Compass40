@@ -36,58 +36,78 @@
     Future<void> _loadSettings() async {
       final prefs = await SharedPreferences.getInstance();
 
-      _useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
-      _declinationController.text = (prefs.getDouble('manualDeclination') ?? '')
-          .toString();
-      _gpsIntervalController.text = (prefs.getInt('gpsUpdateInterval') ?? AppConstants.gpsUpdateIntervalDefaultSec)
-          .toString();
-      _uiUpdatePeriodController.text = (prefs.getInt('uiUpdatePeriod') ?? AppConstants.uiUpdatePeriodDefaultMs)
-          .toString();
+      _useManualDeclination =
+          prefs.getBool(AppConstants.prefUseManualDeclination) ?? false;
+      _declinationController.text =
+          (prefs.getDouble(AppConstants.prefManualDeclination) ?? '')
+              .toString();
+      _gpsIntervalController.text =
+          (prefs.getInt(AppConstants.prefGpsUpdateInterval) ??
+                  AppConstants.gpsUpdateIntervalDefaultSec)
+              .toString();
+      _uiUpdatePeriodController.text =
+          (prefs.getInt(AppConstants.prefUiUpdatePeriod) ??
+                  AppConstants.uiUpdatePeriodDefaultMs)
+              .toString();
       _autoSwitchSpeedController.text =
-          (prefs.getDouble('autoSwitchSpeedKmh') ?? AppConstants.autoSwitchSpeedDefaultKmh).toString();
+          (prefs.getDouble(AppConstants.prefAutoSwitchSpeedKmh) ??
+                  AppConstants.autoSwitchSpeedDefaultKmh)
+              .toString();
       _gpsAveragingSamplesController.text =
-          (prefs.getInt('gpsAveragingSamples') ?? AppConstants.gpsAveragingSamplesDefault).toString();
+          (prefs.getInt(AppConstants.prefGpsAveragingSamples) ??
+                  AppConstants.gpsAveragingSamplesDefault)
+              .toString();
       _rotateModeTimeoutController.text =
-          (prefs.getInt('rotateModeTimeoutMs') ?? AppConstants.rotateModeTimeoutDefaultMs).toString();
+          (prefs.getInt(AppConstants.prefRotateModeTimeoutMs) ??
+                  AppConstants.rotateModeTimeoutDefaultMs)
+              .toString();
 
       _compassSmoothness =
-          (prefs.getInt('compassSmoothness') ?? AppConstants.compassSmoothnessDefault)
+          (prefs.getInt(AppConstants.prefCompassSmoothness) ??
+                  AppConstants.compassSmoothnessDefault)
               .clamp(0, 100)
               .toDouble();
 
-      final modeIndex = prefs.getInt('compassMode') ?? 0;
+      final modeIndex = prefs.getInt(AppConstants.prefCompassMode) ?? 0;
       _compassMode = CompassMode.values[modeIndex];
     }
 
     Future<void> _saveSettings() async {
       final prefs = await SharedPreferences.getInstance();
 
-      await prefs.setBool('useManualDeclination', _useManualDeclination);
+      await prefs.setBool(
+          AppConstants.prefUseManualDeclination, _useManualDeclination);
 
       final declination = double.tryParse(_declinationController.text);
       if (declination != null) {
-        await prefs.setDouble('manualDeclination', declination);
+        await prefs.setDouble(AppConstants.prefManualDeclination, declination);
       } else {
-        await prefs.remove('manualDeclination');
+        await prefs.remove(AppConstants.prefManualDeclination);
       }
 
       final interval = int.tryParse(_gpsIntervalController.text);
-      await prefs.setInt('gpsUpdateInterval', interval ?? AppConstants.gpsUpdateIntervalDefaultSec);
+      await prefs.setInt(
+          AppConstants.prefGpsUpdateInterval,
+          interval ?? AppConstants.gpsUpdateIntervalDefaultSec);
 
       final uiPeriod = int.tryParse(_uiUpdatePeriodController.text);
-      await prefs.setInt('uiUpdatePeriod', uiPeriod ?? AppConstants.uiUpdatePeriodDefaultMs);
-      await prefs.setInt('compassSmoothness', _compassSmoothness.round());
-      await prefs.setInt('compassMode', _compassMode.index);
-
+      await prefs.setInt(AppConstants.prefUiUpdatePeriod,
+          uiPeriod ?? AppConstants.uiUpdatePeriodDefaultMs);
+      await prefs.setInt(
+          AppConstants.prefCompassSmoothness, _compassSmoothness.round());
+      await prefs.setInt(AppConstants.prefCompassMode, _compassMode.index);
 
       final autoSpeed = double.tryParse(_autoSwitchSpeedController.text);
-      await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? AppConstants.autoSwitchSpeedDefaultKmh);
+      await prefs.setDouble(AppConstants.prefAutoSwitchSpeedKmh,
+          autoSpeed ?? AppConstants.autoSwitchSpeedDefaultKmh);
 
       final gpsSamples = int.tryParse(_gpsAveragingSamplesController.text);
-      await prefs.setInt('gpsAveragingSamples', gpsSamples ?? AppConstants.gpsAveragingSamplesDefault);
+      await prefs.setInt(AppConstants.prefGpsAveragingSamples,
+          gpsSamples ?? AppConstants.gpsAveragingSamplesDefault);
 
       final rotateTimeout = int.tryParse(_rotateModeTimeoutController.text);
-      await prefs.setInt('rotateModeTimeoutMs', rotateTimeout ?? AppConstants.rotateModeTimeoutDefaultMs);
+      await prefs.setInt(AppConstants.prefRotateModeTimeoutMs,
+          rotateTimeout ?? AppConstants.rotateModeTimeoutDefaultMs);
     }
 
     Widget _buildTextFieldRow(

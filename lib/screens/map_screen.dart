@@ -16,6 +16,7 @@ import 'package:gps_info/gps_info.dart';
 import '../controllers/map_screen_controller.dart';
 import 'package:flutter/services.dart';
 import '../services/background_tracker.dart';
+import '../utils/app_constants.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
@@ -656,7 +657,7 @@ class _MapScreenState extends State<MapScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return null;
     final savedDistance =
-        prefs.getDouble('photoSeverDistance') ?? defaultDistance;
+        prefs.getDouble(AppConstants.prefPhotoSeverDistance) ?? defaultDistance;
 
     final controller = TextEditingController(
       text: savedDistance.toStringAsFixed(0),
@@ -682,7 +683,7 @@ class _MapScreenState extends State<MapScreen> {
             onPressed: () {
               final val = double.tryParse(controller.text);
               if (val != null && val > 0) {
-                prefs.setDouble('photoSeverDistance', val);
+                prefs.setDouble(AppConstants.prefPhotoSeverDistance, val);
               }
               Navigator.pop(ctx, val);
             },

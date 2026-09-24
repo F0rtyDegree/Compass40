@@ -11,6 +11,7 @@ import 'services/background_tracker.dart';
 
 import 'package:flutter/services.dart';
 import 'package:compass40/controllers/map_screen_controller.dart';
+import '../utils/app_constants.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -35,8 +36,8 @@ Future<void> _handleIntent(MethodCall call) async {
 
 Future<void> _createNotificationChannel() async {
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'compass40_tracking_channel', // id
-    'Compass40 трекер', // название
+    AppConstants.notificationChannelId,
+    'Compass40 трекер',
     description: 'Уведомление о записи трека в фоне',
     importance: Importance.low,
   );

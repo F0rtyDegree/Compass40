@@ -112,7 +112,8 @@ class MapScreenLogic {
 
   // Динамическая компенсация (мс)
   double _compensationMs = 1500.0;
-  static const String _compensationPrefKey = 'anchor_compensation_ms';
+  static const String _compensationPrefKey =
+      AppConstants.prefAnchorCompensationMs;
 
   Future<void> init() async {
     anchorManager = MapAnchorManager(

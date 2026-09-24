@@ -7,6 +7,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gps_manager.dart';
 import '../utils/app_constants.dart';
 
+/// Запись точек трека в CSV-файл.
+///
+/// Юнит-тесты не покрываются осознанно: класс завязан на жёсткие пути
+/// Android (`/storage/emulated/0/Download`), синглтон GpsManager и
+/// SharedPreferences. Стоимость рефакторинга под тесты выше пользы —
+/// функционал некритичный, проверяется вручную.
 class TrackRecorder {
   static final TrackRecorder _instance = TrackRecorder._();
   factory TrackRecorder() => _instance;
@@ -35,17 +41,17 @@ class TrackRecorder {
 
     _pendingLines.clear();
 
-    final existingCsv = File('${dir.path}/track_points.csv');
+    final existingCsv = File('${dir.path}/${AppConstants.trackFileName}');
     if (await existingCsv.exists()) {
       _csvPath = existingCsv.path;
     } else {
-      _csvPath = '${dir.path}/track_points.csv';
+      _csvPath = '${dir.path}/${AppConstants.trackFileName}';
       await existingCsv.create(recursive: true);
       await existingCsv.writeAsString('');
     }
 
     _isRecording = true;
-    await prefs.setBool('isRecordingTrack', true);
+    await prefs.setBool(AppConstants.prefIsRecordingTrack, true);
 
     _subscription = _gpsManager.gpsStream.listen(_onGpsData);
   }
@@ -88,19 +94,20 @@ class TrackRecorder {
     _subscription = null;
     await _flushBuffer();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isRecordingTrack', false);
+    await prefs.setBool(AppConstants.prefIsRecordingTrack, false);
   }
 
   static Future<bool> recoverIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
-    final wasRecording = prefs.getBool('isRecordingTrack') ?? false;
+    final wasRecording =
+        prefs.getBool(AppConstants.prefIsRecordingTrack) ?? false;
 
     final dir = Directory(
       '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
     );
     if (!await dir.exists()) return false;
 
-    final csvFile = File('${dir.path}/track_points.csv');
+    final csvFile = File('${dir.path}/${AppConstants.trackFileName}');
     if (await csvFile.exists()) {
       return wasRecording;
     }
@@ -136,7 +143,7 @@ class TrackRecorder {
     _csvPath = null;
     _pendingLines.clear();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isRecordingTrack', false);
+    await prefs.setBool(AppConstants.prefIsRecordingTrack, false);
   }
 
   /// Инициализирует состояние для восстановления записи после сбоя.
@@ -147,7 +154,7 @@ class TrackRecorder {
     );
     if (!await dir.exists()) return;
 
-    final csvFile = File('${dir.path}/track_points.csv');
+    final csvFile = File('${dir.path}/${AppConstants.trackFileName}');
     if (await csvFile.exists()) {
       _csvPath = csvFile.path;
     }
