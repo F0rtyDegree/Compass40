@@ -381,6 +381,43 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Применяет трансформацию (поворот + опционально масштаб) так, чтобы
+  /// точка [pivotImage] осталась на экранной позиции [pivotScreen].
+  ///
+  /// Если [pivotImage] равен null — просто применяет трансформацию
+  /// без удержания пивота.
+  void _applyTransformWithPivot({
+    required Offset? pivotImage,
+    required Offset pivotScreen,
+    required MapTransformState baseTransform,
+    required double newScale,
+    required double newRotation,
+  }) {
+    if (pivotImage == null) {
+      _logic.updateTransform(
+        baseTransform.copyWith(
+          scale: newScale,
+          rotationRadians: newRotation,
+        ),
+      );
+      return;
+    }
+    final tempTransform = baseTransform.copyWith(
+      scale: newScale,
+      rotationRadians: newRotation,
+    );
+    final oldTransform = _state.transformState;
+    _state.transformState = tempTransform;
+    final pivotScreenAfter = _logic.imageToScreen(pivotImage);
+    _state.transformState = oldTransform;
+    final delta = pivotScreen - pivotScreenAfter;
+    _logic.updateTransform(
+      tempTransform.copyWith(
+        translation: baseTransform.translation + delta,
+      ),
+    );
+  }
+
   void _onScaleStart(ScaleStartDetails details) {
     _gestureStartTranslation = _state.transformState.translation;
     _gestureStartScale = _state.transformState.scale;
@@ -419,36 +456,17 @@ class _MapScreenState extends State<MapScreen> {
         const sensitivity = 0.8;
         final newRotation =
             _gestureStartRotation + _accumulatedRotation * sensitivity;
-        if (_gestureStartPivotImage != null) {
-          final tempTransform = MapTransformState(
+        _applyTransformWithPivot(
+          pivotImage: _gestureStartPivotImage,
+          pivotScreen: pivotScreen,
+          baseTransform: MapTransformState(
             scale: _state.transformState.scale,
-            rotationRadians: newRotation,
+            rotationRadians: _gestureStartRotation,
             translation: _gestureStartTranslation,
-          );
-          final oldTransform = _state.transformState;
-          _state.transformState = tempTransform;
-          final pivotScreenAfterRotate = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
-          _state.transformState = oldTransform;
-          final delta = pivotScreen - pivotScreenAfterRotate;
-          final newTranslation = _gestureStartTranslation + delta;
-          _logic.updateTransform(
-            MapTransformState(
-              scale: _state.transformState.scale,
-              rotationRadians: newRotation,
-              translation: newTranslation,
-            ),
-          );
-        } else {
-          _logic.updateTransform(
-            MapTransformState(
-              scale: _state.transformState.scale,
-              rotationRadians: newRotation,
-              translation: _state.transformState.translation,
-            ),
-          );
-        }
+          ),
+          newScale: _state.transformState.scale,
+          newRotation: newRotation,
+        );
         _logic.resetRotateModeTimer();
       } else {
         final delta = details.focalPoint - _gestureStartFocalPoint;
@@ -466,72 +484,33 @@ class _MapScreenState extends State<MapScreen> {
     if (pointerCount == 2) {
       final scaleChange = (details.scale - 1.0).abs();
       final rotationChange = details.rotation.abs();
+      final pivotScreen = _logic.getCrosshairScreenPoint();
       if (scaleChange > rotationChange) {
         final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
-        if (_gestureStartPivotImage != null) {
-          final pivotScreen = _logic.getCrosshairScreenPoint();
-          final tempTransform = MapTransformState(
-            scale: newScale,
+        _applyTransformWithPivot(
+          pivotImage: _gestureStartPivotImage,
+          pivotScreen: pivotScreen,
+          baseTransform: MapTransformState(
+            scale: _gestureStartScale,
             rotationRadians: _state.transformState.rotationRadians,
             translation: _gestureStartTranslation,
-          );
-          final oldTransform = _state.transformState;
-          _state.transformState = tempTransform;
-          final pivotScreenAfterScale = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
-          _state.transformState = oldTransform;
-          final delta = pivotScreen - pivotScreenAfterScale;
-          final newTranslation = _gestureStartTranslation + delta;
-          _logic.updateTransform(
-            MapTransformState(
-              scale: newScale,
-              rotationRadians: _state.transformState.rotationRadians,
-              translation: newTranslation,
-            ),
-          );
-        } else {
-          _logic.updateTransform(
-            MapTransformState(
-              scale: newScale,
-              rotationRadians: _state.transformState.rotationRadians,
-              translation: _gestureStartTranslation,
-            ),
-          );
-        }
+          ),
+          newScale: newScale,
+          newRotation: _state.transformState.rotationRadians,
+        );
       } else {
-        final pivotScreen = _logic.getCrosshairScreenPoint();
         final currentRotation = _gestureStartRotation + details.rotation;
-        if (_gestureStartPivotImage != null) {
-          final tempTransform = MapTransformState(
+        _applyTransformWithPivot(
+          pivotImage: _gestureStartPivotImage,
+          pivotScreen: pivotScreen,
+          baseTransform: MapTransformState(
             scale: _state.transformState.scale,
-            rotationRadians: currentRotation,
+            rotationRadians: _gestureStartRotation,
             translation: _gestureStartTranslation,
-          );
-          final oldTransform = _state.transformState;
-          _state.transformState = tempTransform;
-          final pivotScreenAfterRotate = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
-          _state.transformState = oldTransform;
-          final delta = pivotScreen - pivotScreenAfterRotate;
-          final newTranslation = _gestureStartTranslation + delta;
-          _logic.updateTransform(
-            MapTransformState(
-              scale: _state.transformState.scale,
-              rotationRadians: currentRotation,
-              translation: newTranslation,
-            ),
-          );
-        } else {
-          _logic.updateTransform(
-            MapTransformState(
-              scale: _state.transformState.scale,
-              rotationRadians: currentRotation,
-              translation: _state.transformState.translation,
-            ),
-          );
-        }
+          ),
+          newScale: _state.transformState.scale,
+          newRotation: currentRotation,
+        );
       }
       return;
     }
@@ -547,36 +526,17 @@ class _MapScreenState extends State<MapScreen> {
       if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
       const sensitivity = 0.8;
       final newRotation = _gestureStartRotation + deltaAngle * sensitivity;
-      if (_gestureStartPivotImage != null) {
-        final tempTransform = MapTransformState(
+      _applyTransformWithPivot(
+        pivotImage: _gestureStartPivotImage,
+        pivotScreen: pivotScreen,
+        baseTransform: MapTransformState(
           scale: _state.transformState.scale,
-          rotationRadians: newRotation,
+          rotationRadians: _gestureStartRotation,
           translation: _gestureStartTranslation,
-        );
-        final oldTransform = _state.transformState;
-        _state.transformState = tempTransform;
-        final pivotScreenAfterRotate = _logic.imageToScreen(
-          _gestureStartPivotImage!,
-        );
-        _state.transformState = oldTransform;
-        final delta = pivotScreen - pivotScreenAfterRotate;
-        final newTranslation = _gestureStartTranslation + delta;
-        _logic.updateTransform(
-          MapTransformState(
-            scale: _state.transformState.scale,
-            rotationRadians: newRotation,
-            translation: newTranslation,
-          ),
-        );
-      } else {
-        _logic.updateTransform(
-          MapTransformState(
-            scale: _state.transformState.scale,
-            rotationRadians: newRotation,
-            translation: _state.transformState.translation,
-          ),
-        );
-      }
+        ),
+        newScale: _state.transformState.scale,
+        newRotation: newRotation,
+      );
       return;
     }
   }
