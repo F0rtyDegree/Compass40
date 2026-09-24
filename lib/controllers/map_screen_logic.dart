@@ -376,7 +376,6 @@ class MapScreenLogic {
       state.plannedTarget = null;
       state.activeTarget = null;
       state.currentUserImagePoint = null;
-      state.currentUserScreenPoint = null;
       state.pendingAnchor = null;
     });
 
@@ -440,7 +439,6 @@ class MapScreenLogic {
     }
 
     _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
 
     if (state.project != null) {
       storageService.saveTransform(state.project!.id, newTransform);
@@ -453,7 +451,6 @@ class MapScreenLogic {
       state.viewportSize = size;
     });
     _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
   }
 
   void zoomIn() {
@@ -930,14 +927,8 @@ void _recalculateUserImagePoint() {
     }
   }
 
-  _recalculateUserScreenPoint();
   _recalculatePreview();
 }
-  void _recalculateUserScreenPoint() {
-    setState(() {
-      state.recalculateUserScreenPoint(imageToScreen);
-    });
-  }
 
   void _recalculatePreview() {
     final gps = _lastGpsData;
@@ -1069,7 +1060,6 @@ void _recalculateUserImagePoint() {
     required double mapRotation,
     required double photoSeverNorthAngle,
     required double photoSeverLinePixels,
-    required double declinationRad,
   }) {
     if (photoSeverLinePixels > 0) {
       return -math.pi / 2 - photoSeverNorthAngle;

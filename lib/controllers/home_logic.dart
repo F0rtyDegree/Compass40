@@ -137,11 +137,11 @@ class HomeLogic {
       GpsCompassService.instance.isActiveNotifier.addListener(
         _onGpsActiveChanged,
       );
-      _subscribeToGpsDataStream();
+      await _subscribeToGpsDataStream();
     }
   }
 
-  void _subscribeToGpsDataStream() async {
+  Future<void> _subscribeToGpsDataStream() async {
     final settings = await sensorService.loadSettings();
     _gpsManager.start(settings.gpsInterval);
     _gpsSubscription = _gpsManager.gpsStream.listen(

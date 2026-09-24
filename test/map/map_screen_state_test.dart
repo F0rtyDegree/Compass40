@@ -32,20 +32,4 @@ void main() {
     });
   });
 
-  group('MapScreenState.recalculateUserScreenPoint', () {
-    test('ничего не делает, если currentUserImagePoint == null', () {
-      final s = MapScreenState();
-      s.recalculateUserScreenPoint((p) => p);
-      expect(s.currentUserScreenPoint, isNull);
-    });
-
-    test('пересчитывает точку через переданную функцию', () {
-      final s = MapScreenState();
-      s.currentUserImagePoint = const Offset(10, 20);
-      s.recalculateUserScreenPoint(
-        (p) => Offset(p.dx + 1, p.dy + 2),
-      );
-      expect(s.currentUserScreenPoint, const Offset(11, 22));
-    });
-  });
 }

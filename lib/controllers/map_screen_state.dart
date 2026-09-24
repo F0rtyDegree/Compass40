@@ -52,7 +52,6 @@ class MapScreenState {
 
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;
-  Offset? currentUserScreenPoint;
   bool isGpsActive = false;
 
   // Предпросмотр расстояния/азимута (до точки под прицелом или до цели)
@@ -84,9 +83,4 @@ class MapScreenState {
     crosshairImagePoint = screenToImage(crosshairScreenPoint);
   }
 
-  void recalculateUserScreenPoint(Offset Function(Offset) imageToScreen) {
-    final imagePoint = currentUserImagePoint;
-    if (imagePoint == null) return;
-    currentUserScreenPoint = imageToScreen(imagePoint);
-  }
 }

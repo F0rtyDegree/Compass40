@@ -7,6 +7,11 @@ class HelpViewerScreen extends StatelessWidget {
 
   const HelpViewerScreen({super.key, required this.helpFilePath});
 
+  // Markdown грузится при каждом открытии экрана без кэша.
+  // Осознанно: файл маленький (несколько КБ), чтение из ассетов —
+  // миллисекунды, экран открывается редко. Кэш добавил бы глобальное
+  // состояние и инвалидацию ради неощутимой экономии.
+  // Возвращаться к вопросу — только если появится реальная задержка.
   Future<String> _loadHelpContent(BuildContext context) async {
     try {
       return await rootBundle.loadString(helpFilePath);

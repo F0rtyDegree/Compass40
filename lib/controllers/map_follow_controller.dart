@@ -47,7 +47,6 @@ class MapFollowController {
       state.crosshairInCenter = false;
     });
     _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
     centerMapOnUser();
     applyHeadingRotation();
   }
@@ -58,7 +57,6 @@ class MapFollowController {
       state.crosshairInCenter = true;
     });
     _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
   }
 
   void toggleFollowMode() {
@@ -103,8 +101,6 @@ class MapFollowController {
     setState(() {
       state.transformState = t.copyWith(translation: newTranslation);
     });
-
-    _recalculateUserScreenPoint();
   }
 
   void enableRotateMode() {
@@ -182,11 +178,6 @@ class MapFollowController {
     });
   }
 
-  void _recalculateUserScreenPoint() {
-    setState(() {
-      state.recalculateUserScreenPoint(imageToScreen);
-    });
-  }
     bool _isPhotoSeverActive() {
     final project = state.project;
     return project != null && project.photoSeverLinePixels > 0;

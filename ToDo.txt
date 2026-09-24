@@ -1,7 +1,2 @@
-
 To Do:
 
-Незначительные:
-MapScreen._onScaleUpdate — 4 повтора блока «повернуть с пивотом».
-help_viewer_screen грузит markdown без кэша.
-Dismissible в GpsSection с прозрачными фонами — невидимо для пользователя.

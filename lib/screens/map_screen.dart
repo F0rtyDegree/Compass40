@@ -333,14 +333,12 @@ class _MapScreenState extends State<MapScreen> {
 
   void _resetRotation() {
     final current = _state.transformState;
-    final declinationRad = widget.magneticDeclination * math.pi / 180;
 
     // Вычисляем целевой поворот через статический метод логики
     final newRotation = MapScreenLogic.computeResetRotation(
       mapRotation: _state.mapRotation,
       photoSeverNorthAngle: _state.project?.photoSeverNorthAngle ?? 0.0,
       photoSeverLinePixels: _state.project?.photoSeverLinePixels ?? 0.0,
-      declinationRad: declinationRad,
     );
 
     // Нормализация в [-π, π]
