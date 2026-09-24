@@ -141,7 +141,6 @@ class MapScreenLogic {
       state: state,
       setState: setState,
       showSnackBar: showSnackBar,
-      magneticDeclination: magneticDeclination,
       screenToImage: screenToImage,
       imageToScreen: imageToScreen,
       updateTransform: updateTransform,
@@ -171,7 +170,6 @@ class MapScreenLogic {
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     gpsDataNotifier.addListener(_onGpsDataChanged);
     _lastGpsData = gpsDataNotifier.value;
-    anchorManager.lastGpsData = gpsDataNotifier.value;
     headingNotifier.addListener(_onHeadingChanged);
     _onHeadingChanged();
     GpsCompassService.instance.isActiveNotifier.addListener(
@@ -190,7 +188,6 @@ class MapScreenLogic {
       storageService.saveProject(state.project!);
     }
     state.rotateModeTimer?.cancel();
-    state.followRestoreTimer?.cancel();
     state.crosshairFeedback.dispose();
     state.isDisposed = true;
   }
@@ -1022,7 +1019,6 @@ void _recalculateUserImagePoint() {
     final gpsData = gpsDataNotifier.value;
     if (gpsData.latitude == null || gpsData.longitude == null) return;
     _lastGpsData = gpsData;
-    anchorManager.lastGpsData = gpsData;
     _recalculateUserImagePoint();
     if (state.followMode) {
       followController.centerMapOnUser();

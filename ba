@@ -10,7 +10,7 @@ rm -rf /home/user/myapp/Compass40.apk.gz
 flutter test --no-pub
 flutter build apk --release --split-per-abi --tree-shake-icons --no-pub
 # flutter build apk --release --no-pub
-# flutter build apk --release --no-pub 2>&1 | grep -v "^Running Gradle task"
+# flutter build apk --release --no-pub 2>&1 | grep -v '^Running Gradle task'
 
 mv /home/user/myapp/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk Compass40.apk
 gzip -c Compass40.apk > Compass40.apk.gz
@@ -32,5 +32,7 @@ df -h .
 echo "$(date -d "3 hours" +"%a %b %d %T") сборка завершена" >> sizes.log
 echo "" >> sizes.log
 
-date -d "3 hours" +"%a %b %d %T"
+message="$(date -d "3 hours" +"%a %b %d %T")"; 
+echo -e "\033[0;32m$message\033[0m";
+
 #!/bin/bash

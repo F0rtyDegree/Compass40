@@ -2,7 +2,6 @@
 
 import 'dart:async';
 import 'package:gps_info/gps_info.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/home_state.dart';
@@ -14,12 +13,6 @@ class SensorService {
   SensorService._internal();
 
   final GpsInfo _gpsInfo = GpsInfo();
-
-  // Expose sensor streams by calling the new recommended methods
-  Stream<MagnetometerEvent> get magnetometerEvents => magnetometerEventStream();
-  Stream<UserAccelerometerEvent> get userAccelerometerEvents =>
-      userAccelerometerEventStream();
-  Stream<GyroscopeEvent> get gyroscopeEvents => gyroscopeEventStream();
 
   Future<SensorSettings> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();

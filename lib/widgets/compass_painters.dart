@@ -29,9 +29,8 @@ class ArrowPainter extends CustomPainter {
 }
 
 class WindRosePainter extends CustomPainter {
-  final bool isDarkMode;
   final double heading;
-  WindRosePainter({required this.isDarkMode, required this.heading});
+  WindRosePainter({required this.heading});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -131,7 +130,7 @@ class WindRosePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant WindRosePainter old) =>
-      old.isDarkMode != isDarkMode || old.heading != heading;
+      old.heading != heading;
 }
 
 class UprightTrianglePainter extends CustomPainter {

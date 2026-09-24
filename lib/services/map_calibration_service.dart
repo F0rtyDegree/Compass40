@@ -86,7 +86,6 @@ class MapCalibrationService {
   CalibrationMode _mode = CalibrationMode.affine;
   final Set<String> _pinnedAnchorIds = {};
   bool _manualMode = false; // true, если пользователь хоть раз коснулся якоря
-  VoidCallback? onTransformChanged;
 
   // ✅ Данные ФотоСевера для режима P
   double _psLineMeters = 0.0;
@@ -144,23 +143,6 @@ class MapCalibrationService {
     }
 
     return null;
-  }
-
-  String? get activeAnchorIndices {
-    final t = _currentTransform;
-    if (t is! _AffineTransformerAdapter) return null;
-
-    final ids = t._selectedPoints.map((a) => a.id).toSet();
-    if (ids.isEmpty) return null;
-
-    final indices = <int>[];
-    for (int i = 0; i < _anchors.length; i++) {
-      if (ids.contains(_anchors[i].id)) {
-        indices.add(i + 1);
-      }
-    }
-    indices.sort();
-    return indices.join(' ');
   }
 
   List<MapAnchor> get pinnedAnchors =>
@@ -491,7 +473,6 @@ class MapCalibrationService {
 
     // Если режим не распознан — сброс
     _currentTransform = null;
-    onTransformChanged?.call();
   }
 
   GeoPoint? imagePointToGeoFromCurrent(Offset imagePoint) {

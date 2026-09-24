@@ -102,12 +102,7 @@ class CompassSection extends StatelessWidget {
                             width: 275,
                             height: 275,
                             child: CustomPaint(
-                              painter: WindRosePainter(
-                                isDarkMode:
-                                    Theme.of(context).brightness ==
-                                    Brightness.dark,
-                                heading: heading,
-                              ),
+                              painter: WindRosePainter(heading: heading),
                             ),
                           ),
                           _buildTargetArrow(),

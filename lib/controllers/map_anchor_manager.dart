@@ -26,7 +26,6 @@ class MapAnchorManager {
   onAnchorAdded;
   final VoidCallback? onStartPhotoSever;
 
-  GpsData? lastGpsData;
   List<Map<String, String>>? cachedGpxPoints;
 
   final VoidCallback onAnchorsChanged;
@@ -43,7 +42,6 @@ class MapAnchorManager {
     required this.onRecalculateTargets,
     required this.screenToImage,
     this.onAnchorAdded,
-    this.lastGpsData,
     this.onStartPhotoSever,
   });
 

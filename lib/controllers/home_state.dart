@@ -9,8 +9,6 @@ import '../log_entry.dart';
 enum CompassMode { auto, magnetic, gps }
 
 class HomeState {
-  final GpsInfo gpsInfo = GpsInfo();
-
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
   final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
@@ -40,8 +38,6 @@ class HomeState {
   Timer? uiUpdateTimer;
 
   int uiUpdatePeriod = 250;
-
-  static const int maxSamples = 50;
 
   // Запись трека
   bool isRecordingTrack = false;

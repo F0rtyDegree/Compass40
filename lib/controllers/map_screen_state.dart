@@ -23,7 +23,6 @@ class MapScreenState {
 
   // Режимы
   bool followMode = false;
-  bool rotateMapByHeading = false;
   bool crosshairInCenter = true;
   bool rotateMode = false;
   
@@ -53,10 +52,7 @@ class MapScreenState {
   MapTarget? plannedTarget;
   MapTarget? activeTarget;
 
-  // Таймер восстановления режима сопровождения
-  Timer? followRestoreTimer;
-  Timer?
-  rotateModeTimer; // Таймер для автоматического отключения режима вращения
+  Timer? rotateModeTimer; // Таймер автоматического отключения режима вращения
 
   // Флаг для предотвращения утечек
   bool isDisposed = false;
@@ -71,14 +67,6 @@ class MapScreenState {
       return Offset(vp.width / 2, vp.height * 3 / 4);
     }
   }
-
-  List<MapTarget> get passedTargets =>
-      project?.targets
-          .where((t) => t.status == MapTargetStatus.passed)
-          .toList() ??
-      [];
-
-  List<MapTarget> get allTargets => project?.targets ?? [];
 
   void recalculateCrosshairImagePoint(Offset Function(Offset) screenToImage) {
     if (imageSize == null || viewportSize == null) return;

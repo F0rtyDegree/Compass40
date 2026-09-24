@@ -10,7 +10,6 @@ class MapFollowController {
   final MapScreenState state;
   final void Function(VoidCallback fn) setState;
   final void Function(String message) showSnackBar;
-  final double magneticDeclination;
 
   final Offset Function(Offset screenPoint) screenToImage;
   final Offset Function(Offset imagePoint) imageToScreen;
@@ -24,7 +23,6 @@ class MapFollowController {
     required this.state,
     required this.setState,
     required this.showSnackBar,
-    required this.magneticDeclination,
     required this.screenToImage,
     required this.imageToScreen,
     required this.updateTransform,
@@ -44,7 +42,6 @@ class MapFollowController {
       );
       return;
     }
-    state.followRestoreTimer?.cancel();
     setState(() {
       state.followMode = true;
       state.crosshairInCenter = false;
@@ -56,7 +53,6 @@ class MapFollowController {
   }
 
   void disableFollowMode() {
-    state.followRestoreTimer?.cancel();
     setState(() {
       state.followMode = false;
       state.crosshairInCenter = true;
