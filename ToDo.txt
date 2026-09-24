@@ -1,13 +1,7 @@
 
 To Do:
 
-Архитектура:
-MapScreenState.heading и magneticHeading дублируют друг друга.
-Множественные синглтоны затрудняют тестирование.
-
 Незначительные:
-MapOverlayPainter.shouldRepaint — сравнение по последнему ID.
-_buildAnchorBadge — 150 строк inline.
 MapScreen._onScaleUpdate — 4 повтора блока «повернуть с пивотом».
 help_viewer_screen грузит markdown без кэша.
 Dismissible в GpsSection с прозрачными фонами — невидимо для пользователя.

@@ -9,6 +9,7 @@ import '../controllers/map_screen_logic.dart';
 import '../widgets/map_crosshair.dart';
 import '../widgets/map_image_painter.dart';
 import '../widgets/map_overlay_painter.dart';
+import '../widgets/map_scale_badge.dart';
 import '../widgets/map_zoom_buttons.dart';
 import 'help_viewer_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -284,7 +285,16 @@ class _MapScreenState extends State<MapScreen> {
               ),
 
               if (_state.project != null && _state.project!.anchors.isNotEmpty)
-                Positioned(top: 12, right: 12, child: _buildAnchorBadge()),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: MapScaleBadge(
+                    totalCount: _logic.totalAnchorCount,
+                    usedCount: _logic.usedAnchorCount,
+                    metersPerPx: _logic.metersPerScreenPixel,
+                    distanceMeters: _logic.distanceToCrosshairMeters,
+                  ),
+                ),
               Positioned(top: 12, left: 12, child: _buildModeIndicator()),
 
               MapZoomButtons(
@@ -728,179 +738,5 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ),
     );
-  }
-
-  Widget _buildAnchorBadge() {
-    final totalCount = _logic.totalAnchorCount;
-    if (totalCount == 0) return const SizedBox.shrink();
-    final used = _logic.usedAnchorCount;
-    final metersPerPx = _logic.metersPerScreenPixel;
-
-    final Color textColor;
-    if (totalCount >= 3) {
-      textColor = Colors.green;
-    } else if (totalCount == 2 && used == 2) {
-      textColor = Colors.orange;
-    } else {
-      textColor = Colors.red;
-    }
-
-    double segmentWidth = 0;
-    String scaleLabel = '';
-    if (metersPerPx != null && metersPerPx > 0) {
-      final screenWidth = MediaQuery.of(context).size.width;
-      final maxWidth = screenWidth * 0.4;
-      const niceNumbers = [
-        1,
-        2,
-        5,
-        10,
-        20,
-        50,
-        100,
-        150,
-        200,
-        250,
-        500,
-        1000,
-        2000,
-        5000,
-      ];
-      for (final num in niceNumbers) {
-        final w = num / metersPerPx;
-        if (w <= maxWidth) {
-          segmentWidth = w;
-          scaleLabel = '$num м';
-        } else {
-          break;
-        }
-      }
-      if (segmentWidth == 0) {
-        segmentWidth = niceNumbers.last / metersPerPx;
-        scaleLabel = '${niceNumbers.last} м';
-      }
-    }
-
-    final double? dist = _logic.distanceToCrosshairMeters;
-    final String topLeftDisplay = '📏';
-    final String topRightDisplay = dist != null
-        ? (dist >= 1000
-              ? '${(dist / 1000).toStringAsFixed(1)} км'
-              : '${dist.round()} м')
-        : '---';
-
-    Widget topRowFullWidth = const SizedBox.shrink();
-    if (metersPerPx != null && segmentWidth > 0) {
-      if (topRightDisplay.isNotEmpty) {
-        topRowFullWidth = SizedBox(
-          width: segmentWidth,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                topLeftDisplay,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(color: Colors.white, blurRadius: 2),
-                    Shadow(color: Colors.white, blurRadius: 4),
-                    Shadow(color: Colors.white, blurRadius: 6),
-                  ],
-                ),
-              ),
-              Text(
-                topRightDisplay,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(color: Colors.white, blurRadius: 2),
-                    Shadow(color: Colors.white, blurRadius: 4),
-                    Shadow(color: Colors.white, blurRadius: 6),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      } else {
-        topRowFullWidth = SizedBox(
-          width: segmentWidth,
-          child: Text(
-            topLeftDisplay,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              shadows: [
-                Shadow(color: Colors.white, blurRadius: 2),
-                Shadow(color: Colors.white, blurRadius: 4),
-                Shadow(color: Colors.white, blurRadius: 6),
-              ],
-            ),
-          ),
-        );
-      }
-    }
-
-    Widget scaleWidget;
-    if (metersPerPx != null && segmentWidth > 0) {
-      scaleWidget = Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: topRowFullWidth,
-          ),
-          Container(
-            width: segmentWidth,
-            height: 2,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              boxShadow: [
-                BoxShadow(color: Colors.white, blurRadius: 4, spreadRadius: 0),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: segmentWidth,
-            child: Text(
-              scaleLabel,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                shadows: [
-                  Shadow(color: Colors.white, blurRadius: 2),
-                  Shadow(color: Colors.white, blurRadius: 4),
-                  Shadow(color: Colors.white, blurRadius: 6),
-                ],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      );
-    } else {
-      scaleWidget = Text(
-        topLeftDisplay,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          shadows: [
-            Shadow(color: Colors.white, blurRadius: 2),
-            Shadow(color: Colors.white, blurRadius: 4),
-            Shadow(color: Colors.white, blurRadius: 6),
-          ],
-        ),
-      );
-    }
-
-    return Tooltip(message: 'Масштабная линейка', child: scaleWidget);
   }
 }

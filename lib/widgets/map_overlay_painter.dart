@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/map_anchor.dart';
 import '../models/map_target.dart';
@@ -434,40 +435,17 @@ class MapOverlayPainter extends CustomPainter {
       return true;
     }
 
-    // Списки: проверка длины
-    if (oldDelegate.anchors.length != anchors.length ||
-        oldDelegate.targets.length != targets.length ||
-        oldDelegate.userPath.length != userPath.length ||
-        oldDelegate.pathJumpIndices.length != pathJumpIndices.length) {
-      return true;
-    }
-
     // Pending-якорь: проверка наличия
     if ((oldDelegate.pendingAnchor == null) != (pendingAnchor == null)) {
       return true;
     }
 
-    // Пользовательский путь: проверка последней точки
-    if (userPath.isNotEmpty && oldDelegate.userPath.isNotEmpty) {
-      if (userPath.last != oldDelegate.userPath.last) return true;
-    } else if (userPath.isNotEmpty != oldDelegate.userPath.isNotEmpty) {
-      return true;
-    }
-
-    // Якоря: проверка последнего ID
-    if (anchors.isNotEmpty && oldDelegate.anchors.isNotEmpty) {
-      if (anchors.last.id != oldDelegate.anchors.last.id) return true;
-    } else if (anchors.isNotEmpty != oldDelegate.anchors.isNotEmpty) {
-      return true;
-    }
-
-    // Цели: проверка последнего ID и статуса
-    if (targets.isNotEmpty && oldDelegate.targets.isNotEmpty) {
-      if (targets.last.id != oldDelegate.targets.last.id ||
-          targets.last.status != oldDelegate.targets.last.status) {
-        return true;
-      }
-    } else if (targets.isNotEmpty != oldDelegate.targets.isNotEmpty) {
+    // Поэлементное сравнение списков. Модели наследуют Equatable,
+    // поэтому listEquals даёт точный результат без эвристик.
+    if (!listEquals(oldDelegate.anchors, anchors)) return true;
+    if (!listEquals(oldDelegate.targets, targets)) return true;
+    if (!listEquals(oldDelegate.userPath, userPath)) return true;
+    if (!listEquals(oldDelegate.pathJumpIndices, pathJumpIndices)) {
       return true;
     }
 
