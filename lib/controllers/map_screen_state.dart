@@ -50,6 +50,11 @@ class MapScreenState {
   /// Временный якорь, отображается серым до получения точных координат GPS.
   MapAnchor? pendingAnchor;
 
+  /// Точки трека в пикселях карты. Заполняется при открытии карты
+  /// из CSV-файла и пополняется из GPS-потока, пока идёт запись.
+  /// Живёт только в памяти сессии, в проект не сохраняется.
+  List<Offset> trackImagePoints = [];
+
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;
   bool isGpsActive = false;

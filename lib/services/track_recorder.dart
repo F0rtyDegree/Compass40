@@ -87,6 +87,12 @@ class TrackRecorder {
     await File(_csvPath!).writeAsString(lines, mode: FileMode.append);
   }
 
+  /// Принудительно сбрасывает буфер в CSV, не дожидаясь заполнения.
+  /// Нужен перед перечитыванием файла, чтобы последние точки не потерялись.
+  Future<void> flushPending() async {
+    await _flushBuffer();
+  }
+
   Future<void> stop() async {
     if (!_isRecording) return;
     _isRecording = false;

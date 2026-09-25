@@ -224,15 +224,12 @@ class _MapScreenState extends State<MapScreen> {
                   viewportSize: viewportSize,
                   anchors: _state.project?.anchors ?? [],
                   pendingAnchor: _state.pendingAnchor,
+                  trackImagePoints: _state.trackImagePoints,
                   targets: [
                     ..._state.project?.targets ?? [],
                     if (_state.plannedTarget != null) _state.plannedTarget!,
                   ],
                   activeAnchorIds: _logic.activeAnchorIds ?? {},
-                  userPath: _logic.usedAnchorCount > 0
-                      ? (_state.project?.userPath ?? [])
-                      : [],
-                  pathJumpIndices: _state.project?.pathJumpIndices ?? [],
                   currentUserImagePoint: _state.currentUserImagePoint,
                   activeTargetImagePoint: _state.activeTarget != null
                       ? Offset(
@@ -612,7 +609,6 @@ class _MapScreenState extends State<MapScreen> {
           SimpleDialogOption(
             onPressed: () {
               Navigator.pop(ctx);
-              _logic.clearUserPath();
             },
             child: const Text('Удалить путь пользователя'),
           ),

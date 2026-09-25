@@ -15,8 +15,7 @@ class MapOverlayPainter extends CustomPainter {
   final List<MapTarget> targets;
   final MapAnchor? pendingAnchor;
   final Set<String> activeAnchorIds;
-  final List<Offset> userPath;
-  final List<int> pathJumpIndices;
+  final List<Offset> trackImagePoints;
 
   final Offset? currentUserImagePoint;
   final Offset? activeTargetImagePoint;
@@ -36,8 +35,7 @@ class MapOverlayPainter extends CustomPainter {
     required this.targets,
     this.pendingAnchor,
     this.activeAnchorIds = const {},
-    this.userPath = const [],
-    this.pathJumpIndices = const [],
+    this.trackImagePoints = const [],
     this.currentUserImagePoint,
     this.activeTargetImagePoint,
     this.previewDistanceMeters,
@@ -50,7 +48,7 @@ class MapOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    _drawUserPath(canvas);
+    _drawTrack(canvas);
 
     for (final anchor in anchors) {
       final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
@@ -86,36 +84,6 @@ class MapOverlayPainter extends CustomPainter {
         }
       }
       _drawCurrentPosition(canvas, screen);
-    }
-  }
-
-  void _drawUserPath(Canvas canvas) {
-    if (userPath.length < 2) return;
-
-    final solidPathPaint = Paint()
-      ..color = Colors.red.withAlpha((255 * 0.8).round())
-      ..strokeWidth = 6.0
-      ..style = PaintingStyle.stroke
-      ..strokeJoin = StrokeJoin.round
-      ..strokeCap = StrokeCap.round;
-
-    final dashedPathPaint = Paint()
-      ..color = Colors.red.withAlpha((255 * 0.6).round())
-      ..strokeWidth = 5.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final jumpIndicesSet = pathJumpIndices.toSet();
-
-    for (int i = 1; i < userPath.length; i++) {
-      final p1 = imageToScreen(userPath[i - 1]);
-      final p2 = imageToScreen(userPath[i]);
-
-      if (jumpIndicesSet.contains(i)) {
-        _drawDashedLine(canvas, p1, p2, dashedPathPaint);
-      } else {
-        canvas.drawLine(p1, p2, solidPathPaint);
-      }
     }
   }
 
@@ -177,6 +145,23 @@ class MapOverlayPainter extends CustomPainter {
       ..lineTo(screen.dx, screen.dy + 10)
       ..lineTo(screen.dx + 5, screen.dy + 5);
     canvas.drawPath(path, linePaint);
+  }
+
+  void _drawTrack(Canvas canvas) {
+    if (trackImagePoints.length < 2) return;
+
+    final trackPaint = Paint()
+      ..color = Colors.red.withAlpha((255 * 0.8).round())
+      ..strokeWidth = 6.0
+      ..style = PaintingStyle.stroke
+      ..strokeJoin = StrokeJoin.round
+      ..strokeCap = StrokeCap.round;
+
+    for (int i = 1; i < trackImagePoints.length; i++) {
+      final p1 = imageToScreen(trackImagePoints[i - 1]);
+      final p2 = imageToScreen(trackImagePoints[i]);
+      canvas.drawLine(p1, p2, trackPaint);
+    }
   }
 
   void _drawPendingAnchor(Canvas canvas, Offset screen) {
@@ -444,8 +429,7 @@ class MapOverlayPainter extends CustomPainter {
     // поэтому listEquals даёт точный результат без эвристик.
     if (!listEquals(oldDelegate.anchors, anchors)) return true;
     if (!listEquals(oldDelegate.targets, targets)) return true;
-    if (!listEquals(oldDelegate.userPath, userPath)) return true;
-    if (!listEquals(oldDelegate.pathJumpIndices, pathJumpIndices)) {
+    if (!listEquals(oldDelegate.trackImagePoints, trackImagePoints)) {
       return true;
     }
 

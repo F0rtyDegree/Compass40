@@ -16,6 +16,7 @@ import '../services/log_service.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import '../services/gps_compass_service.dart';
+import '../services/track_recorder.dart';
 import 'map_screen_state.dart';
 import '../services/sensor_service.dart';
 import 'map_anchor_manager.dart';
@@ -25,7 +26,6 @@ import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../utils/compensation_utils.dart';
 import '../utils/geo_utils.dart';
-import '../utils/user_path_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -172,6 +172,7 @@ class MapScreenLogic {
     _calibrationService.setMagneticDeclination(magneticDeclination);
     magneticDeclinationNotifier.addListener(_onMagneticDeclinationChanged);
     await _loadLastProject();
+    await _loadTrackFromCsv();
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     gpsDataNotifier.addListener(_onGpsDataChanged);
     _lastGpsData = gpsDataNotifier.value;
@@ -259,6 +260,54 @@ class MapScreenLogic {
     _recalculateCanPlaceTarget();
   }
 
+  /// Читает CSV-файл трека и заполняет trackImagePoints.
+  /// Вызывается один раз при открытии карты. Дальше точки добавляются
+  /// из GPS-потока (см. _appendTrackPoint).
+  Future<void> _loadTrackFromCsv() async {
+    if (_calibrationService.usedAnchorCount == 0) return;
+    final points = await TrackRecorder().getTrackPoints();
+    if (points.isEmpty) return;
+
+    final imagePoints = <Offset>[];
+    for (final (_, lat, lon) in points) {
+      final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
+      if (imagePoint != null) {
+        imagePoints.add(imagePoint);
+      }
+    }
+
+    setState(() {
+      state.trackImagePoints = imagePoints;
+    });
+  }
+
+  /// Пересчитывает пиксели трека под текущую привязку.
+  /// Вызывается после изменения якорей и при первой привязке карты.
+  Future<void> _reloadTrackImagePoints() async {
+    // Сбрасываем буфер CSV, чтобы последние точки (уже видимые на карте,
+    // но ещё не записанные) не потерялись при перечитывании.
+    await TrackRecorder().flushPending();
+    await _loadTrackFromCsv();
+  }
+
+  /// Добавляет точку трека из GPS-потока, если идёт запись.
+  /// Обновляется при каждом GPS-пакете.
+  void _appendTrackPointIfRecording() {
+    if (!TrackRecorder().isRecording) return;
+    final gps = _lastGpsData;
+    final lat = gps?.latitude;
+    final lon = gps?.longitude;
+    if (lat == null || lon == null) return;
+    if (_calibrationService.usedAnchorCount == 0) return;
+
+    final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
+    if (imagePoint == null) return;
+
+    setState(() {
+      state.trackImagePoints = [...state.trackImagePoints, imagePoint];
+    });
+  }
+
   Future<void> _loadImageSize() async {
     if (state.imagePath == null) return;
     final file = File(state.imagePath!);
@@ -340,8 +389,6 @@ class MapScreenLogic {
         imagePath: savedPath,
         anchors: [],
         targets: [],
-        userPath: [],
-        pathJumpIndices: [],
       );
 
       await storageService.saveProject(project);
@@ -384,6 +431,7 @@ class MapScreenLogic {
       state.activeTarget = null;
       state.currentUserImagePoint = null;
       state.pendingAnchor = null;
+      state.trackImagePoints = [];
     });
 
     if (imagePathToDelete != null) {
@@ -439,17 +487,6 @@ class MapScreenLogic {
       }
     }
 //    showSnackBar('Все якоря удалены');
-  }
-
-  Future<void> clearUserPath() async {
-    final project = state.project;
-    if (project == null) return;
-    final updatedProject = project.copyWith(userPath: [], pathJumpIndices: []);
-    await storageService.saveProject(updatedProject);
-    setState(() {
-      state.project = updatedProject;
-    });
-//    showSnackBar('Путь пользователя удалён');
   }
 
   // --------------------------------------------------------
@@ -956,39 +993,11 @@ void _recalculateUserImagePoint() {
   if (lat == null || lon == null || state.project == null) return;
 
   final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
-
-  if (imagePoint == null) {
-    return;
-  }
-
-  final rawPath = [...state.project!.userPath, imagePoint];
-  final pruned = pruneUserPath(
-    path: rawPath,
-    jumpIndices: state.project!.pathJumpIndices,
-  );
+  if (imagePoint == null) return;
 
   setState(() {
     state.currentUserImagePoint = imagePoint;
-    state.project = state.project!.copyWith(
-      userPath: pruned.path,
-      pathJumpIndices: pruned.jumpIndices,
-    );
   });
-
-  // Вычисление длины прыжка (один раз для новой точки)
-  final path = state.project!.userPath;
-  if (path.length >= 2) {
-    final newIndex = path.length - 1;
-    if (state.project!.pathJumpIndices.contains(newIndex)) {
-      final prevPoint = path[newIndex - 1];
-      final pixelDistance = (path[newIndex] - prevPoint).distance;
-      final metersPerPixel = _calibrationService.metersPerImagePixel;
-      if (metersPerPixel != null && metersPerPixel > 0) {
-        final jumpMeters = pixelDistance * metersPerPixel;
-        showSnackBar('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
-      }
-    }
-  }
 
   _recalculatePreview();
 }
@@ -1052,6 +1061,9 @@ void _recalculateUserImagePoint() {
       state.project = updatedProject;
       state.activeTarget = newActiveTarget;
     });
+
+    // Пересчитываем пиксели трека под новую привязку.
+    await _reloadTrackImagePoints();
 
     if (restartNavigation &&
         onStartNavigation != null &&
@@ -1123,6 +1135,7 @@ void _recalculateUserImagePoint() {
     if (gpsData.latitude == null || gpsData.longitude == null) return;
     _lastGpsData = gpsData;
     _recalculateUserImagePoint();
+    _appendTrackPointIfRecording();
     if (state.followMode) {
       followController.centerMapOnUser();
     }

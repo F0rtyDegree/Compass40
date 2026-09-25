@@ -29,8 +29,6 @@ MapOverlayPainter _painter({
   List<MapAnchor> anchors = const [],
   List<MapTarget> targets = const [],
   MapAnchor? pendingAnchor,
-  List<Offset> userPath = const [],
-  List<int> pathJumpIndices = const [],
 }) {
   return MapOverlayPainter(
     imageSize: const Size(1000, 1000),
@@ -39,8 +37,6 @@ MapOverlayPainter _painter({
     anchors: anchors,
     targets: targets,
     pendingAnchor: pendingAnchor,
-    userPath: userPath,
-    pathJumpIndices: pathJumpIndices,
   );
 }
 
@@ -101,20 +97,6 @@ void main() {
     test('изменение последнего якоря → true', () {
       final a = _painter(anchors: [_anchor('1'), _anchor('2', x: 0)]);
       final b = _painter(anchors: [_anchor('1'), _anchor('2', x: 50)]);
-      expect(b.shouldRepaint(a), isTrue);
-    });
-
-    test('изменение userPath → true', () {
-      final a = _painter(userPath: const [Offset(0, 0), Offset(1, 1)]);
-      final b = _painter(
-        userPath: const [Offset(0, 0), Offset(1, 1), Offset(2, 2)],
-      );
-      expect(b.shouldRepaint(a), isTrue);
-    });
-
-    test('изменение pathJumpIndices → true', () {
-      final a = _painter(pathJumpIndices: const [1]);
-      final b = _painter(pathJumpIndices: const [1, 5]);
       expect(b.shouldRepaint(a), isTrue);
     });
 

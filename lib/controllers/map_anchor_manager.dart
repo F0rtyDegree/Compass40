@@ -255,11 +255,6 @@ class MapAnchorManager {
     final project = state.project;
     if (project == null) return;
 
-    final newPathJumpIndices = [...project.pathJumpIndices];
-    if (project.userPath.isNotEmpty) {
-      newPathJumpIndices.add(project.userPath.length);
-    }
-
     double? distanceFromPrevious;
     if (project.anchors.isNotEmpty) {
       final lastAnchor = project.anchors.last;
@@ -299,7 +294,6 @@ class MapAnchorManager {
     final updatedAnchors = [...project.anchors, anchor];
     MapProject updatedProject = project.copyWith(
       anchors: updatedAnchors,
-      pathJumpIndices: newPathJumpIndices,
       manualMode: calibrationService.isManualMode,
       calibrationMode: calibrationService.currentMode.name,
       pinnedAnchorIds: calibrationService.pinnedAnchorIdsList,
