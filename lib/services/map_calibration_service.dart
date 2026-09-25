@@ -336,9 +336,9 @@ class MapCalibrationService {
   }
 
   double _triangleMinAngle(MapAnchor a, MapAnchor b, MapAnchor c) {
-    double distAB = _distanceBetweenAnchorsMeters(a, b);
-    double distBC = _distanceBetweenAnchorsMeters(b, c);
-    double distCA = _distanceBetweenAnchorsMeters(c, a);
+    double distAB = distanceBetweenAnchorsMeters(a, b);
+    double distBC = distanceBetweenAnchorsMeters(b, c);
+    double distCA = distanceBetweenAnchorsMeters(c, a);
     if (distAB < AppConstants.minTriangleSideMeters ||
         distBC < AppConstants.minTriangleSideMeters ||
         distCA < AppConstants.minTriangleSideMeters) {
@@ -357,10 +357,6 @@ class MapCalibrationService {
         (2 * side1 * side2);
     cosAngle = cosAngle.clamp(-1.0, 1.0);
     return math.acos(cosAngle) * 180 / math.pi;
-  }
-
-  double _distanceBetweenAnchorsMeters(MapAnchor a, MapAnchor b) {
-    return distanceBetweenAnchorsMeters(a, b);
   }
 
   void _captureCurrentAutomaticSet() {
