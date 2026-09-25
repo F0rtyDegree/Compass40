@@ -147,6 +147,11 @@ class MapOverlayPainter extends CustomPainter {
     canvas.drawPath(path, linePaint);
   }
 
+  /// Рисует трек без обрезки по viewport: все сегменты передаются
+  /// в canvas.drawLine, Flutter сам отсекает невидимое при рендере.
+  /// На больших треках (10k+ точек) это тратит немного CPU, но не
+  /// оптимизировано осознанно: 3600 линий за кадр — норма для Flutter.
+  /// Возвращаться — при реальных просадках.
   void _drawTrack(Canvas canvas) {
     if (trackImagePoints.length < 2) return;
 

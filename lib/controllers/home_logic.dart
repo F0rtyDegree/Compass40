@@ -331,7 +331,7 @@ class HomeLogic {
     }
   }
 
-  Future<void> toggleTrackRecording() async {
+    Future<void> toggleTrackRecording() async {
     if (state.isRecordingTrack) {
       await _trackRecorder.stop();
       setState(() {
@@ -339,16 +339,15 @@ class HomeLogic {
         state.isRecordingTrackNotifier.value = false;
       });
       updateNotification(content: 'Запись трэка остановлена');
+      MapScreenController().onRecordingStopped();
     } else {
       await _trackRecorder.start();
       setState(() {
         state.isRecordingTrack = true;
         state.isRecordingTrackNotifier.value = true;
       });
-      print(
-        '🔔 toggleTrackRecording: calling updateNotification with "start Record"',
-      );
       updateNotification(content: 'Идёт запись трэка...');
+      MapScreenController().onRecordingStarted();
     }
   }
 

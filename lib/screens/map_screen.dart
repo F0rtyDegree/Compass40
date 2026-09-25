@@ -606,12 +606,7 @@ class _MapScreenState extends State<MapScreen> {
             },
             child: const Text('Удалить все якоря'),
           ),
-          SimpleDialogOption(
-            onPressed: () {
-              Navigator.pop(ctx);
-            },
-            child: const Text('Удалить путь пользователя'),
-          ),
+          
         ],
       ),
     );

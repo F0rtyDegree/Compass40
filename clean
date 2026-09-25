@@ -1,12 +1,11 @@
 #!/bin/bash
-# cd /home/user/myapp/android
-# ./gradlew --stop
-# cd /home/user/myapp
+
+# вызовет последуюющую очень долгую сборку но реально очистит место
+# rm -rf ~/.gradle/caches
 
 rm -rf /home/user/.gradle/daemon
 rm -rf /home/user/.gradle/caches/build-cache-1
 rm -rf /home/user/.gradle/caches/transforms-*
-# +30сек rm -rf /home/user/.gradle/caches/8.12/transforms
 
 touch -d 'Sep 23 09:38' /tmp/ref_time && find /home/user/.gradle/caches/8.12/transforms -mindepth 1 -maxdepth 1 -type d -newer /tmp/ref_time -exec rm -rf {} +; rm -f /tmp/ref_time
 # ls -lt -r /home/user/.gradle/caches/8.12/transforms
@@ -25,10 +24,6 @@ find /home/user/.gradle/caches -maxdepth 3 -type d -name transforms | while read
         echo -e "\033[0;32m$message\033[0m";
     fi
 done
-
-# вызовет последуюющую очень долгую сборку но реально очистит место
-# rm -rf ~/.gradle/caches
-# find ~/.gradle/caches -type f -atime +0 -delete
 
 rm -rf /home/user/myapp/build/app/outputs/apk/debug/app-debug.apk
 rm -rf /home/user/myapp/build/app/outputs/apk/release/app-release.apk

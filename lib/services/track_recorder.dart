@@ -41,6 +41,12 @@ class TrackRecorder {
 
     _pendingLines.clear();
 
+    // Если CSV уже существует — дописываем к нему. Осознанно:
+    // 1. При восстановлении после сбоя точки продолжают ту же сессию.
+    // 2. При обычном старте CSV обычно пуст — previous сессия
+    //    удаляется после экспорта в GPX (см. finalizeTrackAndExport).
+    // 3. Если приложение упало до экспорта, старые точки остаются
+    //    и попадут в новую сессию. Это лучше, чем потерять их.
     final existingCsv = File('${dir.path}/${AppConstants.trackFileName}');
     if (await existingCsv.exists()) {
       _csvPath = existingCsv.path;

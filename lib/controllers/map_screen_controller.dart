@@ -34,4 +34,12 @@ class MapScreenController {
   void cancelActiveTarget() {
     _logic?.cancelActiveTarget();
   }
+
+  void onRecordingStarted() {
+    _logic?.onRecordingStarted();
+  }
+
+  void onRecordingStopped() {
+    _logic?.onRecordingStopped();
+  }
 }

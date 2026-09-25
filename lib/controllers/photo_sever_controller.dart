@@ -167,6 +167,10 @@ class PhotoSeverController {
       isActive = false;
       points.clear();
       _savedTransformBeforeRotation = null;
+      // Follow не восстанавливаем осознанно: после успешной привязки
+      // пользователь сам решит, включать ли сопровождение. Автовключение
+      // может удивить. При отмене (dist == null) — восстанавливаем,
+      // потому что там ничего не изменилось и режим был прерван.
       _followWasEnabled = false;
       // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
       state.mapRotation = -math.pi / 2 - northAngle;

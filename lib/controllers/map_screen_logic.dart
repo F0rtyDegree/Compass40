@@ -26,6 +26,7 @@ import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../utils/compensation_utils.dart';
 import '../utils/geo_utils.dart';
+import '../utils/track_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -139,6 +140,7 @@ class MapScreenLogic {
       storageService: storageService,
       calibrationService: _calibrationService,
       onStartNavigation: onStartNavigation,
+      onCancelNavigation: onCancelNavigation,
       onRecalculatePreview: _recalculatePreview,
     );
     followController = MapFollowController(
@@ -262,7 +264,12 @@ class MapScreenLogic {
 
   /// Читает CSV-файл трека и заполняет trackImagePoints.
   /// Вызывается один раз при открытии карты. Дальше точки добавляются
-  /// из GPS-потока (см. _appendTrackPoint).
+  /// из GPS-потока (см. _appendTrackPointIfRecording).
+  ///
+  /// На большом треке (20k+ точек) цикл с geoToImagePointFromCurrent
+  /// занимает сотни миллисекунд. Не оптимизировано осознанно: один раз
+  /// при открытии карты, на фоне загрузки изображения незаметно.
+  /// Возвращаться — только при реальных жалобах на задержку.
   Future<void> _loadTrackFromCsv() async {
     if (_calibrationService.usedAnchorCount == 0) return;
     final points = await TrackRecorder().getTrackPoints();
@@ -277,8 +284,24 @@ class MapScreenLogic {
     }
 
     setState(() {
-      state.trackImagePoints = imagePoints;
+      state.trackImagePoints = pruneTrackPoints(points: imagePoints);
     });
+  }
+
+  /// Убирает трек с карты. Вызывается при остановке записи.
+  /// CSV-файл при этом сохраняется — при следующем старте записи
+  /// трек будет прочитан заново.
+  void onRecordingStopped() {
+    setState(() {
+      state.trackImagePoints = [];
+    });
+  }
+
+  /// Загружает трек на карту. Вызывается при старте записи.
+  /// Если привязки нет, трек не загрузится. Он подгрузится позже,
+  /// когда появится первый якорь (см. recalculateTargetsAfterNewAnchor).
+  Future<void> onRecordingStarted() async {
+    await _loadTrackFromCsv();
   }
 
   /// Пересчитывает пиксели трека под текущую привязку.
@@ -288,10 +311,20 @@ class MapScreenLogic {
     // но ещё не записанные) не потерялись при перечитывании.
     await TrackRecorder().flushPending();
     await _loadTrackFromCsv();
+    // Между flushPending и чтением CSV мог прийти GPS-пакет и добавить
+    // точку в trackImagePoints. Чтение CSV перезапишет список без неё.
+    // Возвращаем текущую точку из _lastGpsData.
+    _appendTrackPointIfRecording();
   }
 
   /// Добавляет точку трека из GPS-потока, если идёт запись.
   /// Обновляется при каждом GPS-пакете.
+  ///
+  /// setState на каждый пакет и копирование списка — O(n). При 1 Гц
+  /// и 3600 точках это ~7000 операций в секунду, что незаметно.
+  /// Оптимизация (буфер + пакетная запись) не делается осознанно:
+  /// выигрыш неощутим, риск выше пользы. Возвращаться — если появятся
+  /// просадки при малом интервале GPS.
   void _appendTrackPointIfRecording() {
     if (!TrackRecorder().isRecording) return;
     final gps = _lastGpsData;
@@ -304,7 +337,8 @@ class MapScreenLogic {
     if (imagePoint == null) return;
 
     setState(() {
-      state.trackImagePoints = [...state.trackImagePoints, imagePoint];
+      final updated = [...state.trackImagePoints, imagePoint];
+      state.trackImagePoints = pruneTrackPoints(points: updated);
     });
   }
 
@@ -417,6 +451,11 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> closeMap() async {
+    // Синхронизируем с главным экраном: убираем строку цели, но только
+    // если активная цель была на карте. Иначе цель, заданная через
+    // TargetScreen, пропала бы при удалении карты.
+    final hadActiveTargetOnMap = state.activeTarget != null;
+
     final imagePathToDelete = state.imagePath;
     final projectId = state.project?.id;
 
@@ -451,6 +490,10 @@ class MapScreenLogic {
     _calibrationService.updateAnchors([]);
     _calibrationService.setPinnedAnchorIds([]);
     anchorManager.cachedGpxPoints = null;
+
+    if (hadActiveTargetOnMap) {
+      onCancelNavigation?.call();
+    }
   }
 
   Future<void> clearAllAnchors() async {
@@ -965,11 +1008,11 @@ class MapScreenLogic {
   }
 
   // Всегда ставит true. Проверка привязки отсутствует осознанно.
-  // Сценарий проявления: удалить все якоря, перезапустить приложение,
-  // открыть карту. Кнопка "ЦЕЛЬ" будет активна без привязки. Последствие
-  // слабое: одно лишнее нажатие до сообщения "Координаты цели не
-  // определены — добавьте привязку". Вероятность низкая. Возвращаться
-  // к вопросу — только если появятся реальные жалобы.
+  // Сценарий: карта без привязки. Кнопка "ЦЕЛЬ" активна. Пользователь
+  // ставит жёлтый флаг. Координаты не вычисляются (latitude = null).
+  // Нажатие ГОУ молча ничего не делает. Флаг можно убрать кнопкой "назад".
+  // Сообщения не показываем осознанно: обилие раздражает, причина видна
+  // по отсутствию координат. Возвращаться — только при реальных жалобах.
   void _recalculateCanPlaceTarget() {
     setState(() {
       state.canPlaceTarget = true;

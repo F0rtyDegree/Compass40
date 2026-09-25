@@ -12,6 +12,7 @@ class MapTargetManager {
   final MapStorageService storageService;
   final MapCalibrationService calibrationService;
   final Future<void> Function(double lat, double lon)? onStartNavigation;
+  final VoidCallback? onCancelNavigation;
   final VoidCallback onRecalculatePreview;
 
   MapTargetManager({
@@ -21,6 +22,7 @@ class MapTargetManager {
     required this.storageService,
     required this.calibrationService,
     required this.onStartNavigation,
+    this.onCancelNavigation,
     required this.onRecalculatePreview,
   });
 
@@ -77,6 +79,8 @@ class MapTargetManager {
       state.project = updated;
       state.activeTarget = null;
     });
+    // Синхронизируем с главным экраном: убираем строку цели.
+    onCancelNavigation?.call();
   }
 
   void cancelPlannedTarget() {
