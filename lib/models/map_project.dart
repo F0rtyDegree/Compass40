@@ -84,7 +84,10 @@ class MapProject extends Equatable {
           .map((i) => MapTarget.fromJson(i as Map<String, dynamic>))
           .toList(),
       userPath: ((json['userPath'] as List?) ?? [])
-          .map((p) => Offset(p['dx'] as double, p['dy'] as double))
+          .map((p) => Offset(
+                (p['dx'] as num).toDouble(),
+                (p['dy'] as num).toDouble(),
+              ))
           .toList(),
       pathJumpIndices: ((json['pathJumpIndices'] as List?) ?? [])
           .cast<int>()

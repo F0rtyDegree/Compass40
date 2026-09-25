@@ -19,9 +19,6 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.PluginRegistry
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     PluginRegistry.RequestPermissionsResultListener {
@@ -49,7 +46,6 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     override fun onAttachedToEngine(
         flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
     ) {
-        println("GpsInfoPlugin: onAttachedToEngine")
         val eventChannel = EventChannel(
             flutterPluginBinding.binaryMessenger,
             GPS_DATA_CHANNEL_NAME
@@ -59,17 +55,14 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
 
         eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                println("GpsInfoPlugin: onListen called")
                 eventSink = events
                 if (arguments is Int) {
                     updateInterval = arguments.toLong() * 1000L
-                    println("GpsInfoPlugin: updateInterval set to $updateInterval ms")
                 }
                 startGpsListener()
             }
 
             override fun onCancel(arguments: Any?) {
-                println("GpsInfoPlugin: onCancel called")
                 stopGpsListener()
                 eventSink = null
             }
@@ -77,25 +70,21 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-        println("GpsInfoPlugin: onAttachedToActivity")
         activity = binding.activity
         binding.addRequestPermissionsResultListener(this)
     }
 
     override fun onDetachedFromActivity() {
-        println("GpsInfoPlugin: onDetachedFromActivity")
         activity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(
         binding: ActivityPluginBinding
     ) {
-        println("GpsInfoPlugin: onReattachedToActivityForConfigChanges")
         onAttachedToActivity(binding)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
-        println("GpsInfoPlugin: onDetachedFromActivityForConfigChanges")
         onDetachedFromActivity()
     }
 
@@ -109,7 +98,6 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     }
 
     private fun requestLocationPermission() {
-        println("GpsInfoPlugin: requestLocationPermission")
         activity?.let {
             ActivityCompat.requestPermissions(
                 it,
@@ -124,16 +112,13 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
         permissions: Array<out String>,
         grantResults: IntArray
     ): Boolean {
-        println("GpsInfoPlugin: onRequestPermissionsResult requestCode=$requestCode")
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() &&
                 grantResults[0] == PackageManager.PERMISSION_GRANTED
             ) {
-                println("GpsInfoPlugin: Location permission granted")
                 startGpsListener()
                 return true
             } else {
-                println("GpsInfoPlugin ERROR: Location permission denied")
                 eventSink?.error(
                     "PERMISSION_DENIED",
                     "Location permission not granted.",
@@ -174,12 +159,6 @@ private fun sendDataUpdate() {
     data["satellitesInView"] = satellitesInView
     // Добавляем временную метку
     data["time"] = now
-    var gpsLatency: Long? = null
-
-    // Создаем форматер для времени, чтобы выводить его в лог в читаемом виде.
-    val sdf = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.getDefault())
-    val formattedAppTime = sdf.format(Date(now))
-    var formattedGpsTime = "N/A" // Значение по умолчанию, если данных GPS еще нет
 
     // ШАГ 2: Использование сохраненных данных.
     // `lastLocation` — это переменная, в которую мы сохранили данные от GPS на ШАГЕ 1.
@@ -200,13 +179,6 @@ private fun sendDataUpdate() {
         } else {
             null
         }
-
-        // Вычисляем задержку GPS.
-        // Здесь мы используем `loc.time` — это и есть то самое время от GPS,
-        // которое система передала нам на ШАГЕ 1.
-        gpsLatency = now - loc.time
-        // Также форматируем время GPS для лога.
-        formattedGpsTime = sdf.format(Date(loc.time))
 
         // Вычисляем магнитное склонение.
         // Это разница между истинным севером и магнитным севером в данной точке.
@@ -232,9 +204,9 @@ private fun sendDataUpdate() {
 GPS-время принципиально отличается от UTC. GPS использует свою собственную временную шкалу, которая не синхронизирована с UTC. Официальная разница составляет около 15–17 секунд.
 Время GPS не обновляется с учётом високосных секунд. С 1980 года накопилось около 18 секунд разницы между GPS-временем и UTC. Это фундаментальное свойство системы GPS, а не ошибка устройства.
 Системное время телефона синхронизируется с сетевыми серверами (NTP) и может отличаться от GPS-времени на ещё несколько секунд. В сумме это даёт те самые 20–25 секунд.
-*/
-    println("GpsInfoPlugin: Update -> AppTime: $formattedAppTime | GPSTime: $formattedGpsTime | Latency: ${gpsLatency ?: "N/A"}ms | Coords: ${data["latitude"] ?: "N/A"}, ${data["longitude"] ?: "N/A"}")
 
+    println ("GpsInfoPlugin: Update -> AppTime: $formattedAppTime | GPSTime: $formattedGpsTime | Latency: ${gpsLatency ?: "N/A"}ms | Coords: ${data["latitude"] ?: "N/A"}, ${data["longitude"] ?: "N/A"}")
+*/
     // Отправляем данные во Flutter.
     // `activity?.runOnUiThread` гарантирует, что отправка будет выполнена
     // в основном (UI) потоке приложения, что является требованием для
@@ -294,14 +266,11 @@ GPS-время принципиально отличается от UTC. GPS и�
 
     @Suppress("deprecation")
     private fun startGpsListener() {
-        println("GpsInfoPlugin: startGpsListener isListening=$isListening")
         if (isListening) {
-            println("GpsInfoPlugin: Already listening, skipping")
             return
         }
 
         if (activity == null) {
-            println("GpsInfoPlugin ERROR: Activity is null")
             eventSink?.error(
                 "NO_ACTIVITY",
                 "Plugin is not attached to an activity.",
@@ -311,7 +280,6 @@ GPS-время принципиально отличается от UTC. GPS и�
         }
 
         if (!hasLocationPermission()) {
-            println("GpsInfoPlugin: No permission, requesting...")
             requestLocationPermission()
             return
         }
@@ -332,9 +300,7 @@ GPS-время принципиально отличается от UTC. GPS и�
                 locationListener
             )
             isListening = true
-            println("GpsInfoPlugin: GPS listener started successfully")
         } catch (e: SecurityException) {
-            println("GpsInfoPlugin ERROR: SecurityException ${e.message}")
             eventSink?.error(
                 "SECURITY_EXCEPTION",
                 "Failed to register GPS listener.",
@@ -345,15 +311,12 @@ GPS-время принципиально отличается от UTC. GPS и�
 
     @Suppress("deprecation")
     private fun stopGpsListener() {
-        println("GpsInfoPlugin: stopGpsListener isListening=$isListening")
         if (!isListening) {
-            println("GpsInfoPlugin: Not listening, skipping")
             return
         }
 
         try {
             locationManager.removeUpdates(locationListener)
-            println("GpsInfoPlugin: removeUpdates called")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 gnssStatusCallback?.let {
                     locationManager.unregisterGnssStatusCallback(it)
@@ -363,16 +326,13 @@ GPS-время принципиально отличается от UTC. GPS и�
                 }
             }
             isListening = false
-            println("GpsInfoPlugin: GPS listener stopped successfully")
         } catch (e: Exception) {
-            println("GpsInfoPlugin ERROR: Error stopping GPS listener ${e.message}")
         }
     }
 
     override fun onDetachedFromEngine(
         binding: FlutterPlugin.FlutterPluginBinding
     ) {
-        println("GpsInfoPlugin: onDetachedFromEngine")
         stopGpsListener()
         eventSink = null
     }

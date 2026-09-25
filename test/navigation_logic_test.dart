@@ -21,9 +21,9 @@ void main() {
       expect(bearing, closeTo(90.0, 0.1));
     });
 
-    test('круговая медиана корректно обрабатывает переход через 360°', () async {
+    test('круговая медиана корректно обрабатывает переход через 360°', () {
       final angles = [350.0, 5.0, 10.0];
-      final median = await calculateCircularMedian(angles);
+      final median = calculateCircularMedianSync(angles);
       expect(median, closeTo(5.0, 2.0));
     });
 

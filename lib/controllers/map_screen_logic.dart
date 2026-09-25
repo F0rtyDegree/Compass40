@@ -35,8 +35,10 @@ class MapScreenLogic {
   final void Function(String message) showSnackBar;
   final MapStorageService storageService;
   final ValueNotifier<GpsData> gpsDataNotifier;
-  final double magneticDeclination;
+  final ValueNotifier<double> magneticDeclinationNotifier;
   final ValueNotifier<double> headingNotifier;
+
+  double get magneticDeclination => magneticDeclinationNotifier.value;
   final MapCalibrationService _calibrationService = MapCalibrationService();
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
@@ -59,7 +61,7 @@ class MapScreenLogic {
     required this.showSnackBar,
     required this.storageService,
     required this.gpsDataNotifier,
-    required this.magneticDeclination,
+    required this.magneticDeclinationNotifier,
     required this.headingNotifier,
     this.onAnchorAdded,
     this.onStartNavigation,
@@ -168,6 +170,7 @@ class MapScreenLogic {
     );
     await followController.loadRotateModeTimeout();
     _calibrationService.setMagneticDeclination(magneticDeclination);
+    magneticDeclinationNotifier.addListener(_onMagneticDeclinationChanged);
     await _loadLastProject();
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     gpsDataNotifier.addListener(_onGpsDataChanged);
@@ -182,6 +185,7 @@ class MapScreenLogic {
 
   void dispose() {
     headingNotifier.removeListener(_onHeadingChanged);
+    magneticDeclinationNotifier.removeListener(_onMagneticDeclinationChanged);
     GpsCompassService.instance.isActiveNotifier.removeListener(
       _onGpsActiveChanged,
     );
@@ -265,6 +269,9 @@ class MapScreenLogic {
 
     final imgW = decoded.width.toDouble();
     final imgH = decoded.height.toDouble();
+
+    // Освобождаем нативный ресурс — размеры уже извлечены.
+    decoded.dispose();
 
     setState(() {
       state.imageSize = Size(imgW, imgH);
@@ -409,6 +416,8 @@ class MapScreenLogic {
       state.canPlaceTarget = false;
     });
     _calibrationService.updateAnchors([]);
+    _calibrationService.setPinnedAnchorIds([]);
+    await recalculateTargetsAfterNewAnchor();
 //    showSnackBar('Все якоря удалены');
   }
 
@@ -778,8 +787,8 @@ class MapScreenLogic {
     anchorManager.handleLongPressOnMap(context, screenPosition);
   }
 
-  void deleteAnchorAndUpdate(String anchorId) async {
-    anchorManager.deleteAnchorAndUpdate(anchorId);
+  Future<void> deleteAnchorAndUpdate(String anchorId) async {
+    await anchorManager.deleteAnchorAndUpdate(anchorId);
   }
 
   // --------------------------------------------------------
@@ -812,6 +821,22 @@ class MapScreenLogic {
         }
       }
       _calibrationService.setCalibrationMode(candidate);
+
+      // Сохраняем режим в проект, иначе после перезапуска
+      // приложение восстановит прежний режим из SharedPreferences.
+      final project = state.project;
+      if (project != null) {
+        final updated = project.copyWith(
+          manualMode: _calibrationService.isManualMode,
+          calibrationMode: _calibrationService.currentMode.name,
+          pinnedAnchorIds: _calibrationService.pinnedAnchorIdsList,
+        );
+        storageService.saveProject(updated);
+        setState(() {
+          state.project = updated;
+        });
+      }
+
       _recalculateWorkingPairAndRotation();
       return;
     }
@@ -868,8 +893,15 @@ class MapScreenLogic {
     });
 
     onAnchorsChangedForStatus?.call();
+    _recalculateCanPlaceTarget();
   }
 
+  // Всегда ставит true. Проверка привязки отсутствует осознанно.
+  // Сценарий проявления: удалить все якоря, перезапустить приложение,
+  // открыть карту. Кнопка "ЦЕЛЬ" будет активна без привязки. Последствие
+  // слабое: одно лишнее нажатие до сообщения "Координаты цели не
+  // определены — добавьте привязку". Вероятность низкая. Возвращаться
+  // к вопросу — только если появятся реальные жалобы.
   void _recalculateCanPlaceTarget() {
     setState(() {
       state.canPlaceTarget = true;
@@ -962,7 +994,10 @@ void _recalculateUserImagePoint() {
     final project = state.project;
     if (project == null) return;
 
+    // Пересчитываем только активную цель. Пройденные — история,
+    // их координаты фиксированы на момент прохождения.
     final updatedTargets = project.targets.map((t) {
+      if (t.status != MapTargetStatus.active) return t;
       final geo = _calibrationService.imagePointToGeoFromCurrent(
         Offset(t.imageX, t.imageY),
       );
@@ -1024,6 +1059,13 @@ void _recalculateUserImagePoint() {
 
   void resetRotateModeTimer() {
     followController.resetRotateModeTimer();
+  }
+
+  void _onMagneticDeclinationChanged() {
+    _calibrationService.setMagneticDeclination(magneticDeclination);
+    photoSeverController.magneticDeclination = magneticDeclination;
+    _recalculateWorkingPairAndRotation();
+    _recalculatePreview();
   }
 
   void _onHeadingChanged() {

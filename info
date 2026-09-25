@@ -3,9 +3,10 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 7.1.1 убрали загрузку сервиса после рестарта телефона.
+ver. 7.1.2 Исправления: краш журнала на импортированных якорях, магнитный азимут в логе цели, сброс pinned при очистке якорей, пересчёт активной цели при удалении якоря, сохранение режима привязки при смене через интент.
 "
 
+ver. 7.1.1 убрали загрузку сервиса после рестарта телефона.
 ver. 7.1.0 чистка: удалены мёртвые currentUserScreenPoint, declinationRad в computeResetRotation; _subscribeToGpsDataStream возвращает Future. И по сумме изменений повышаем версию.
 ver. 7.0.24 Рефакторинг. Управление картой жестами.
 ver. 7.0.23 Рефакторинг. _buildAnchorBadge — 150 строк inline. -> lib/widgets/map_scale_badge.dart.

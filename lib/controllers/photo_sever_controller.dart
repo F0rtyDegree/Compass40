@@ -16,7 +16,11 @@ class PhotoSeverController {
 
   bool isActive = false;
   final List<Offset> points = [];
-  final double magneticDeclination;
+  double magneticDeclination;
+
+  /// Трансформация карты до поворота в _applyNorthRotation.
+  /// Восстанавливается, если пользователь отменяет ввод расстояния.
+  MapTransformState? _savedTransformBeforeRotation;
 
   PhotoSeverController({
     required this.state,
@@ -32,8 +36,15 @@ class PhotoSeverController {
 
   void start() {
     setState(() {
+      // Выключаем follow mode: в нём прицел смещён в 3/4 высоты,
+      // точки ФотоСевера ставятся в неудобной позиции.
+      if (state.followMode) {
+        state.followMode = false;
+        state.crosshairInCenter = true;
+      }
       isActive = true;
       points.clear();
+      _savedTransformBeforeRotation = null;
     });
     showSnackBar('Укажите первую точку (юг)');
   }
@@ -82,6 +93,8 @@ class PhotoSeverController {
     final delta = pivotScreen - pivotScreenAfter;
     final newTranslation = current.translation + delta;
 
+    _savedTransformBeforeRotation = state.transformState;
+
     updateTransform(
       current.copyWith(
         rotationRadians: neededRotation,
@@ -93,10 +106,16 @@ class PhotoSeverController {
   Future<void> finish() async {
     final dist = await askDistanceDialog();
     if (dist == null) {
+      final saved = _savedTransformBeforeRotation;
       setState(() {
         isActive = false;
         points.clear();
+        _savedTransformBeforeRotation = null;
       });
+      // Откатываем поворот карты, сделанный на третьей точке.
+      if (saved != null) {
+        updateTransform(saved);
+      }
 //      showSnackBar('ФотоСевер отменён');
       return;
     }
@@ -135,6 +154,7 @@ class PhotoSeverController {
       state.project = updatedProject;
       isActive = false;
       points.clear();
+      _savedTransformBeforeRotation = null;
       // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
       state.mapRotation = -math.pi / 2 - northAngle;
     });

@@ -33,6 +33,8 @@ class HomeState {
   double autoSwitchSpeedKmh = 3.0;
 
   double magneticDeclination = 0.0;
+  final ValueNotifier<double> magneticDeclinationNotifier =
+      ValueNotifier(0.0);
   bool useManualDeclination = false;
 
   GpsData? waypoint;
@@ -55,6 +57,7 @@ class HomeState {
   void disposeNotifiers() {
     gpsDataNotifier.dispose();
     headingNotifier.dispose();
+    magneticDeclinationNotifier.dispose();
     accuracyNotifier.dispose();
     calibrationProgressNotifier.dispose();
     distanceToWaypoint.dispose();

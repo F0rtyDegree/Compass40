@@ -69,7 +69,9 @@
               .toDouble();
 
       final modeIndex = prefs.getInt(AppConstants.prefCompassMode) ?? 0;
-      _compassMode = CompassMode.values[modeIndex];
+      _compassMode = (modeIndex >= 0 && modeIndex < CompassMode.values.length)
+          ? CompassMode.values[modeIndex]
+          : CompassMode.magnetic;
     }
 
     Future<void> _saveSettings() async {

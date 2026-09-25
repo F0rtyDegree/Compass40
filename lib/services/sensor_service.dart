@@ -25,7 +25,10 @@ class SensorService {
 
     final compassModeIndex =
         prefs.getInt(AppConstants.prefCompassMode) ?? 0;
-    final compassMode = CompassMode.values[compassModeIndex];
+    final compassMode =
+        (compassModeIndex >= 0 && compassModeIndex < CompassMode.values.length)
+            ? CompassMode.values[compassModeIndex]
+            : CompassMode.magnetic;
     final autoSwitchSpeedKmh =
         prefs.getDouble(AppConstants.prefAutoSwitchSpeedKmh) ??
         AppConstants.autoSwitchSpeedDefaultKmh;

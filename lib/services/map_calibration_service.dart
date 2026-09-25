@@ -302,6 +302,19 @@ class MapCalibrationService {
     _buildTransformFromAnchors();
   }
 
+  /// Возвращает список якорей, где последний добавленный (по порядку
+  /// в _anchors) стоит первым. Остальные сохраняют относительный порядок.
+  List<MapAnchor> _orderWithLatestFirst(List<MapAnchor> points) {
+    if (points.isEmpty || _anchors.isEmpty) return points;
+    final latestAnchor = _anchors.last;
+    final latestInPoints = points.firstWhere(
+      (a) => a.id == latestAnchor.id,
+      orElse: () => points.first,
+    );
+    final rest = points.where((a) => a.id != latestInPoints.id).toList();
+    return [latestInPoints, ...rest];
+  }
+
   bool _isCollinear(List<MapAnchor> points) {
     if (points.length < 3) return false;
     // Ищем хотя бы одну неколлинеарную тройку
@@ -405,16 +418,21 @@ class MapCalibrationService {
       final pinnedList = pinnedAnchors;
       if (pinnedList.length >= 3) {
         try {
+          // Переупорядочиваем: последний добавленный якорь — первым.
+          // buildWeights даёт вес latestPointWeight элементу [0],
+          // а смысл веса — больше доверия свежей точке.
+          final orderedList = _orderWithLatestFirst(pinnedList);
           final affine = AffineTransform.fromPoints(
-            pinnedList.map((a) => Offset(a.imageX, a.imageY)).toList(),
-            pinnedList.map((a) => Offset(a.longitude, a.latitude)).toList(),
-            weights: PointSelector.buildWeights(pinnedList.length),
+            orderedList.map((a) => Offset(a.imageX, a.imageY)).toList(),
+            orderedList.map((a) => Offset(a.longitude, a.latitude)).toList(),
+            weights: PointSelector.buildWeights(orderedList.length),
           );
-          final rmse = PointSelector.computeRmse(pinnedList, affine);
-          final selfError = PointSelector.computeSelfError(pinnedList, affine);
+          final rmse = PointSelector.computeRmse(orderedList, affine);
+          final selfError =
+              PointSelector.computeSelfError(orderedList, affine);
           _currentTransform = _AffineTransformerAdapter._(
             affine: affine,
-            selectedPoints: pinnedList,
+            selectedPoints: orderedList,
             rmse: rmse,
             selfError: selfError,
           );

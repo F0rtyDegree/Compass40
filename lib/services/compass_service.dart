@@ -4,10 +4,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'computation_service.dart';
 import 'sensor_service.dart';
 import '../utils/calibration_utils.dart';
 import '../utils/app_constants.dart';
+import '../utils/angle_utils.dart';
 
 class CompassData {
   final double heading;
@@ -91,10 +91,12 @@ class CompassService {
   int _medianWindowMs = 250;
   final List<(int, double)> _rawHeadingBuffer = [];
 
-  void start() {
+  Future<void> start() async {
     if (_magSub != null) stop();
 
-    _loadCalibration();
+    // Ждём загрузки офсетов из SharedPreferences, иначе первые
+    // показания курса будут считаться с нулевыми офсетами.
+    await _loadCalibration();
 
     _accSub = accelerometerEventStream().listen((e) {
       _accFiltered[0] = _accFiltered[0] * (1 - _accAlpha) + e.x * _accAlpha;
@@ -226,9 +228,23 @@ class CompassService {
     for (int i = 0; i < _sectorCount; i++) {
       _sectorSamples[i] = 0;
     }
+    // Обнуляем офсеты и сглаживание, чтобы до новой калибровки
+    // курс считался без старых искажений.
+    _cx = 0;
+    _cy = 0;
+    _cz = 0;
+    _smoothCos = 0.0;
+    _smoothSin = 0.0;
+    _rawHeadingBuffer.clear();
 
     final p = await SharedPreferences.getInstance();
-    await p.setBool(_prefKeyCalibrated, false);
+    await p.remove(_prefKeyX);
+    await p.remove(_prefKeyY);
+    await p.remove(_prefKeyZ);
+    await p.remove(_prefKeyRangeX);
+    await p.remove(_prefKeyRangeY);
+    await p.remove(_prefKeyRangeZ);
+    await p.remove(_prefKeyCalibrated);
   }
 
   /// Полный сброс калибровки: обнуляет офсеты, размахи, счётчики секторов,
@@ -344,7 +360,7 @@ class CompassService {
     }
     final medianHeading = _rawHeadingBuffer.length == 1
         ? _rawHeadingBuffer.first.$2
-        : calculateCircularMedian(
+        : calculateCircularMedianSync(
             _rawHeadingBuffer.map((e) => e.$2).toList(),
           );
 

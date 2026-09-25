@@ -5,9 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
 import 'gps_manager.dart';
-import '../utils/angle_utils.dart' hide calculateCircularMedian;
+import '../utils/angle_utils.dart';
 import '../utils/app_constants.dart';
-import 'computation_service.dart';
 
 class GpsCompassService {
   static final GpsCompassService instance = GpsCompassService._();
@@ -61,6 +60,10 @@ class GpsCompassService {
       if (_samples.length > _maxSamples) _samples.removeAt(0);
       _processSamples();
     } else {
+      // Скорость упала ниже порога — буфер устарел.
+      // Чистим, чтобы при следующем наборе скорости не использовать
+      // сэмплы из старого направления движения.
+      _samples.clear();
       isActiveNotifier.value = false;
     }
   }
@@ -74,7 +77,7 @@ class GpsCompassService {
     isActiveNotifier.value = true;
 
     final recent = _samples.sublist(_samples.length - windowSize);
-    final median = calculateCircularMedian(List.from(recent));
+    final median = calculateCircularMedianSync(List.from(recent));
     final s = (_settings?.compassSmoothness ?? AppConstants.compassSmoothnessDefault)
         .clamp(0, 100) / 100.0;
     final smoothing = 0.05 + 0.85 * s;

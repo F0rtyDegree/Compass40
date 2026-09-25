@@ -55,7 +55,7 @@ class HomeLogic {
     await _checkAndRecoverTrack();
     await _initServicesAndPermissions();
 
-    _compassService.start();
+    await _compassService.start();
     _headingSubscription = _compassService.dataStream.listen((data) {
       final useGps = _useGpsCompass();
       if (!useGps) {
@@ -96,6 +96,7 @@ class HomeLogic {
     setState(() {
       state.useManualDeclination = settings.useManualDeclination;
       state.magneticDeclination = settings.magneticDeclination;
+      state.magneticDeclinationNotifier.value = settings.magneticDeclination;
       state.uiUpdatePeriod = settings.uiUpdatePeriod;
       state.compassMode = settings.compassMode;
       state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
@@ -148,8 +149,10 @@ class HomeLogic {
       (gpsData) {
         state.gpsDataNotifier.value = gpsData;
         if (!state.useManualDeclination) {
+          final decl = gpsData.magneticDeclination ?? 0.0;
           setState(() {
-            state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
+            state.magneticDeclination = decl;
+            state.magneticDeclinationNotifier.value = decl;
           });
         }
       },
@@ -288,17 +291,12 @@ class HomeLogic {
       return;
     }
 
-    final distance = calculateDistance(
-      currentGps.latitude!,
-      currentGps.longitude!,
-      latitude,
-      longitude,
-    );
-    final azimuth = calculateTrueBearing(
-      currentGps.latitude!,
-      currentGps.longitude!,
-      latitude,
-      longitude,
+    final nav = calculateNavigationData(
+      fromLat: currentGps.latitude!,
+      fromLon: currentGps.longitude!,
+      toLat: latitude,
+      toLon: longitude,
+      magneticDeclination: state.magneticDeclination,
     );
 
     setTarget({'latitude': latitude, 'longitude': longitude});
@@ -306,8 +304,8 @@ class HomeLogic {
     await addTargetCreationLogEntry(
       baseLatitude: currentGps.latitude!,
       baseLongitude: currentGps.longitude!,
-      azimuth: azimuth,
-      distance: distance,
+      azimuth: nav.magneticBearing,
+      distance: nav.distanceMeters,
       targetLatitude: latitude,
       targetLongitude: longitude,
     );

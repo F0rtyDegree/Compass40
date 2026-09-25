@@ -147,7 +147,8 @@ class TrackRecorder {
   }
 
   /// Инициализирует состояние для восстановления записи после сбоя.
-  /// Устанавливает путь к существующему CSV-файлу, чтобы последующий экспорт работал.
+  /// Устанавливает путь к существующему CSV-файлу, возобновляет запись
+  /// и подписку на GPS. Новые точки дописываются в тот же файл.
   Future<void> initializeForRecovery() async {
     final dir = Directory(
       '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
@@ -158,6 +159,9 @@ class TrackRecorder {
     if (await csvFile.exists()) {
       _csvPath = csvFile.path;
     }
+
+    _isRecording = true;
+    _subscription = _gpsManager.gpsStream.listen(_onGpsData);
   }
 
   Future<void> dispose() async {

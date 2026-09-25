@@ -1,24 +1,32 @@
-Приоритеты исправлений
-_updateCompensation (0.8/0.1) — влияет на точность якорей.
-PhotoSeverController.finish() — mapRotation вне setState.
-GpsManager.subscribe — перезапись onDone.
-_recalculateCanPlaceTarget — привести в соответствие с именем.
-Убрать подписки на неиспользуемые сенсоры в HomeLogic, поправить dispose.
-Убрать compute() в FileLogger, заменить на очередь + async write.
-Изолировать writeAsStringSync из UI-потока.
-Удалить/подключить packages/my_compass.
-Централизовать ключи SharedPreferences и пути в AppConstants.
-Покрыть TrackRecorder и GpxExportService тестами.
-
 ============= info ===
 flutter clean & flutter pub get --offline
 
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 7.0.8 исправляем запись трека. пишем пакетами по 20 точек.
+ver. 7.1.2 Исправления по второму аудиту: краш журнала на импортированных якорях, круговая медиана, восстановление записи трека после сбоя, живое обновление склонения, откат поворота в PhotoSever, пересчёт активной цели, сброс pinned при очистке якорей, u.Image.dispose, защита от битых prefs, чистка println в Kotlin-плагине, справка.
 "
 
+ver. 7.1.1 убрали загрузку сервиса после рестарта телефона.
+ver. 7.1.0 чистка: удалены мёртвые currentUserScreenPoint, declinationRad в computeResetRotation; _subscribeToGpsDataStream возвращает Future. И по сумме изменений повышаем версию.
+ver. 7.0.24 Рефакторинг. Управление картой жестами.
+ver. 7.0.23 Рефакторинг. _buildAnchorBadge — 150 строк inline. -> lib/widgets/map_scale_badge.dart.
+ver. 7.0.22 MapScreenState.heading и magneticHeading дублируют друг друга. Исправлено.
+ver. 7.0.21 MapCalibrationService.bearingAndDistance дублирует calculateNavigationData. Исправлено.
+ver. 7.0.20 userPath растёт неограниченно в течение сессии. Сделано прореживание пути.
+ver. 7.0.19 Увеличиваем рзмер кнопки ЯЗдесь. Якорь ставим сразу.
+ver. 7.0.18 Убрали еще обнаруженный мертвый код.
+ver. 7.0.17 Централизованы ключи SharedPreferences и пути в AppConstants.
+ver. 7.0.16 удалилили my_compass
+ver. 7.0.15 Оптимизация:  Изолировать writeAsStringSync из UI-потока.
+ver. 7.0.14 Оптимизация:  FileLogger: синхронная запись лога без изолята.
+ver. 7.0.13 Оптимизация: GpsManager.subscribe — перезапись onDone. Тепрь единый подписчик GPS.
+ver. 7.0.12 Компас. Упростили условиями калибровки. Удалили лишние принты.
+ver. 7.0.11 Починили компас. Добавлен автоконтроль потери калибровки и ручной сброс калибровки.
+ver. 7.0.10 PhotoSeverController.finish() — mapRotation вне setState. - исправлено.
+ver. 7.0.9 _updateCompensation (0.8/0.1) -  исправлено.
+ver. 7.0.8 исправляем запись трека. пишем пакетами по 20 точек.
+ver. 7.0.7 считать медиану прямо в текущем потоке.
 ver. 7.0.6 карта: путь в AppConstants, убрана проверка нулевой координаты, вынос recalc-методов в MapScreenState, sentinel в MapProject.copyWith, тесты.
 ver. 7.0.5 новый магнитный компас: магнитное склонение добавили тест.
 ver. 7.0.4 новый магнитный компас: обновили настройки и справку.
@@ -312,7 +320,7 @@ description: >
   Показывает направление, используя магнитные сенсоры или данные GPS, и отображает детальную информацию: координаты, скорость и высоту. 
   Умеет работать с картами: пользователь может загрузить изображение карты, привязать его к GPS-координатам и отслеживать свое местоположение на этой карте в реальном времени.
 publish_to: 'none'
-version: 7.0.8
+version: 7.1.2
 environment:
   sdk: ^3.9.0
 
@@ -441,6 +449,17 @@ linter:
     android:foregroundServiceType="location"
     android:exported="false" 
     tools:replace="android:exported"/>
+        <!-- Отключаем автозапуск сервиса после перезагрузки устройства.
+             Плагин flutter_background_service по умолчанию регистрирует
+             BootReceiver, который перезапускает сервис при BOOT_COMPLETED.
+             Нам это не нужно: сервис должен работать только пока работает
+             приложение. Если приложение убито системой без вызова dispose,
+             флаг "сервис запущен" остаётся, и после ребута сервис стартует
+             сам. Отключаем receiver. -->
+        <receiver
+            android:name="id.flutter.flutter_background_service.BootReceiver"
+            android:enabled="false"
+            tools:replace="android:enabled" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
@@ -474,8 +493,9 @@ linter:
 
 *   **Красный «нет данных»:** Магнитометр не выдаёт показаний. Крутить восьмёрку бесполезно — сенсор недоступен.
 *   **Красный «Калибровка: нет»:** Калибровка не пройдена. Требуется вращение восьмёркой.
-*   **Оранжевый «Калибровка: идёт»:** Идёт накопление данных. Рядом показан прогресс: количество пройденных секторов из 8.
+*   **Оранжевый «Калибровка: средняя»:** Идёт накопление данных. Рядом показан прогресс: количество пройденных секторов из 8.
 *   **Зелёный «Калибровка: ОК»:** Компас откалиброван.
+*   **Красный «Калибровка: ОК»:** Калибровка сохранена, но магнитное поле вокруг изменилось (после переезда, переноса телефона в другое место и т.п.). Компас может показывать неверно. Рекомендуется «Сбросить калибровку компаса» в настройках и пройти калибровку заново.
 *   **Серый «GPS компас»:** Компас работает по данным GPS (в режиме GPS или Авто при скорости выше порога).
 
 ### Как калибровать
@@ -498,7 +518,7 @@ linter:
 *   **Скорость:** Ваша текущая скорость в км/ч.
 *   **Спутники:** Используемые / в зоне видимости.
 *   **Точность GPS:** Погрешность в метрах.
-*   **Высота:** Высота над уровнем моря.
+*   **Высота:** Высота над эллипсоидом WGS84.
 *   **Магнитное склонение:** Текущая поправка.
 *   **Координаты:** Текущие широта и долгота. Долгое нажатие копирует их в буфер обмена.
 *   **Строка Цели (зелёная):** Отображает азимут и расстояние до Цели. Смахните в сторону, чтобы завершить ведение.
@@ -535,9 +555,9 @@ linter:
 
 *   **Изображение карты** — масштабируется, поворачивается и перемещается жестами.
 *   **Прицел (красный крест)** — используется для точного указания точек на карте.
-*   **Точки привязки (якоря)** — фиолетовые круги с крестом. Минимум 2 точки, расстояние ≥50 м, чтобы карта считалась привязанной.
-*   **Путь пользователя** — синяя линия, показывающая ваше перемещение по карте. Пунктирные участки обозначают моменты «перескока» GPS после добавления новых привязок.
-*   **Текущее положение** — синий треугольник, в движении указатель направления.
+*   **Точки привязки (якоря)** — фиолетовые круги с крестом. Минимум 2 точки, расстояние ≥30 м, чтобы карта считалась привязанной.
+*   **Путь пользователя** — красная линия, показывающая ваше перемещение по карте. Пунктирные участки обозначают моменты «перескока» GPS после добавления новых привязок.
+*   **Текущее положение** — красный треугольник, в движении указатель направления.
 *   **Цели** — флажки: жёлтый (запланированная), красный (активная), зелёный (пройденная).
 
 ---
@@ -580,7 +600,7 @@ linter:
 
 ## Режим сопровождения (Follow mode)
 
-Включается коротким тапом по прицелу.
+Включается двойным тапом по области прицела.
 
 **При включении:**
 *   Карта автоматически поворачивается так, чтобы ваше направление движения совпадало с вертикалью экрана (ориентация по компасу).
@@ -672,7 +692,7 @@ linter:
 *   **Режим:** Позволяет выбрать основной источник данных для компаса:
     *   **Магнитный:** Используются только данные внутреннего магнитного сенсора телефона.
     *   **GPS:** Курс строится на основе вашего перемещения (требуется движение). Не зависит от магнитных помех.
-    *   **Авто:** Приложение автоматически переключается с магнитного режима на GPS, как только ваша скорость превысит заданный порог (по умолчанию 3.0 км/ч).
+    *   **Авто:** Приложение автоматически переключается с магнитного режима на GPS, как только ваша скорость превысит заданный порог (по умолчанию 2.5 км/ч).
 
 ### Настройки для GPS и Авто режимов
 
@@ -791,7 +811,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gps_info/gps_info.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_manager.dart';
@@ -812,10 +831,9 @@ class HomeLogic {
   final SensorService sensorService;
   final GpsManager _gpsManager = GpsManager();
   final CompassService _compassService = CompassService();
-
+  
   StreamSubscription<GpsData>? _gpsSubscription;
   StreamSubscription? _headingSubscription;
-  StreamSubscription? _gyroscopeSubscription;
 
   final TrackRecorder _trackRecorder = TrackRecorder();
   bool _wasTrackRecovered = false;
@@ -843,15 +861,15 @@ class HomeLogic {
     await _checkAndRecoverTrack();
     await _initServicesAndPermissions();
 
-    _compassService.start();
+    await _compassService.start();
     _headingSubscription = _compassService.dataStream.listen((data) {
       final useGps = _useGpsCompass();
-      print('MAG: heading=${data.heading.toStringAsFixed(1)} useGps=$useGps');
       if (!useGps) {
         state.headingNotifier.value = data.heading;
       }
       state.accuracyNotifier.value = data.accuracy;
       state.calibrationProgressNotifier.value = data.calibrationProgress;
+      state.calibrationStaleNotifier.value = data.calibrationStale;
     });
   }
 
@@ -859,22 +877,17 @@ class HomeLogic {
     if (_disposed) return;
     _disposed = true;
 
-    print('dispose: (5)');
     FileLogger.writeLog('Compass40 stop');
-    print('dispose(): (4)');
 
     stopBackgroundService();
 
     _gpsSubscription?.cancel();
     _gpsSubscription = null;
     _headingSubscription?.cancel();
-    _gyroscopeSubscription?.cancel();
 
-    _gpsManager.dispose();
+    _gpsManager.stop();
     _compassService.stop();
-    print('dispose(): (3)');
     state.uiUpdateTimer?.cancel();
-    print('dispose(): (1)');
     GpsCompassService.instance.bearingNotifier.removeListener(
       _onGpsBearingChanged,
     );
@@ -882,7 +895,6 @@ class HomeLogic {
       _onGpsActiveChanged,
     );
     state.disposeNotifiers();
-    print('dispose(): exit');
   }
 
   Future<void> _loadAllSettings() async {
@@ -890,6 +902,7 @@ class HomeLogic {
     setState(() {
       state.useManualDeclination = settings.useManualDeclination;
       state.magneticDeclination = settings.magneticDeclination;
+      state.magneticDeclinationNotifier.value = settings.magneticDeclination;
       state.uiUpdatePeriod = settings.uiUpdatePeriod;
       state.compassMode = settings.compassMode;
       state.autoSwitchSpeedKmh = settings.autoSwitchSpeedKmh;
@@ -922,8 +935,6 @@ class HomeLogic {
   }
 
   Future<void> _initServicesAndPermissions() async {
-    _subscribeToSensorStreams();
-
     if (await sensorService.requestLocationPermission()) {
       final settings = await sensorService.loadSettings();
       GpsCompassService.instance.start(settings);
@@ -933,19 +944,21 @@ class HomeLogic {
       GpsCompassService.instance.isActiveNotifier.addListener(
         _onGpsActiveChanged,
       );
-      _subscribeToGpsDataStream();
+      await _subscribeToGpsDataStream();
     }
   }
 
-  void _subscribeToGpsDataStream() async {
+  Future<void> _subscribeToGpsDataStream() async {
     final settings = await sensorService.loadSettings();
-    _gpsSubscription = _gpsManager.subscribe(
-      intervalSeconds: settings.gpsInterval,
-      onData: (gpsData) {
+    _gpsManager.start(settings.gpsInterval);
+    _gpsSubscription = _gpsManager.gpsStream.listen(
+      (gpsData) {
         state.gpsDataNotifier.value = gpsData;
         if (!state.useManualDeclination) {
+          final decl = gpsData.magneticDeclination ?? 0.0;
           setState(() {
-            state.magneticDeclination = gpsData.magneticDeclination ?? 0.0;
+            state.magneticDeclination = decl;
+            state.magneticDeclinationNotifier.value = decl;
           });
         }
       },
@@ -956,28 +969,6 @@ class HomeLogic {
         print('GPS stream closed in HomeLogic');
       },
     );
-  }
-
-  void _subscribeToSensorStreams() {
-    userAccelerometerEventStream().listen((UserAccelerometerEvent event) {
-      print(
-        'Raw Accelerometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
-      );
-    });
-
-    magnetometerEventStream().listen((MagnetometerEvent event) {
-      print(
-        'Raw Magnetometer: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
-      );
-    });
-
-    _gyroscopeSubscription = gyroscopeEventStream().listen((
-      GyroscopeEvent event,
-    ) {
-      print(
-        'Raw Gyroscope: x=${event.x.toStringAsFixed(2)}, y=${event.y.toStringAsFixed(2)}, z=${event.z.toStringAsFixed(2)}',
-      );
-    });
   }
 
   void startUiUpdateTimer() {
@@ -1106,17 +1097,12 @@ class HomeLogic {
       return;
     }
 
-    final distance = calculateDistance(
-      currentGps.latitude!,
-      currentGps.longitude!,
-      latitude,
-      longitude,
-    );
-    final azimuth = calculateTrueBearing(
-      currentGps.latitude!,
-      currentGps.longitude!,
-      latitude,
-      longitude,
+    final nav = calculateNavigationData(
+      fromLat: currentGps.latitude!,
+      fromLon: currentGps.longitude!,
+      toLat: latitude,
+      toLon: longitude,
+      magneticDeclination: state.magneticDeclination,
     );
 
     setTarget({'latitude': latitude, 'longitude': longitude});
@@ -1124,8 +1110,8 @@ class HomeLogic {
     await addTargetCreationLogEntry(
       baseLatitude: currentGps.latitude!,
       baseLongitude: currentGps.longitude!,
-      azimuth: azimuth,
-      distance: distance,
+      azimuth: nav.magneticBearing,
+      distance: nav.distanceMeters,
       targetLatitude: latitude,
       targetLongitude: longitude,
     );
@@ -1154,9 +1140,6 @@ class HomeLogic {
         state.isRecordingTrack = false;
         state.isRecordingTrackNotifier.value = false;
       });
-      print(
-        '🔔 toggleTrackRecording: calling updateNotification with "stop Record"',
-      );
       updateNotification(content: 'Запись трэка остановлена');
     } else {
       await _trackRecorder.start();
@@ -1254,13 +1237,11 @@ Color getAccuracyStatusColor(double accuracy) {
   }
 
   bool _useGpsCompass() {
-    final result = switch (state.compassMode) {
+    return switch (state.compassMode) {
       CompassMode.magnetic => false,
       CompassMode.gps => true,
       CompassMode.auto => GpsCompassService.instance.isActiveNotifier.value,
     };
-    print('USE_GPS: mode=${state.compassMode} active=${GpsCompassService.instance.isActiveNotifier.value} → $result');
-    return result;
   }
 
   void _onGpsBearingChanged() {
@@ -1274,7 +1255,6 @@ Color getAccuracyStatusColor(double accuracy) {
   void _updateHeadingFromGps({required String source}) {
     final useGps = _useGpsCompass();
     final bearing = GpsCompassService.instance.bearingNotifier.value;
-    print('GPS_$source: bearing=$bearing useGps=$useGps');
 
     state.isGpsCompassActiveNotifier.value = useGps;
 
@@ -1394,15 +1374,23 @@ import '../log_entry.dart';
 // Режимы компаса
 enum CompassMode { auto, magnetic, gps }
 
+/// Состояние главного экрана.
+///
+/// ВНИМАНИЕ: обычные поля и ValueNotifier смешаны исторически.
+/// Часть значений обновляется через setState (waypoint, target, logItems),
+/// часть — через ValueNotifier (gpsDataNotifier, headingNotifier и т.д.).
+/// Это не ошибка, а следствие эволюции кода: сначала всё было на setState,
+/// затем для часто меняющихся значений добавили ValueNotifier.
+/// Не рефакторить без явной необходимости — затрагивает все контроллеры
+/// и экраны, риск сломать работающее выше пользы.
 class HomeState {
-  final GpsInfo gpsInfo = GpsInfo();
-
   final ValueNotifier<GpsData> gpsDataNotifier = ValueNotifier(GpsData());
   final ValueNotifier<double> headingNotifier = ValueNotifier(0);
   final ValueNotifier<double> accuracyNotifier = ValueNotifier(0);
   final ValueNotifier<int> calibrationProgressNotifier = ValueNotifier(0);
   final ValueNotifier<bool> headingValidNotifier = ValueNotifier(true);
   final ValueNotifier<bool> isGpsCompassActiveNotifier = ValueNotifier(false);
+  final ValueNotifier<bool> calibrationStaleNotifier = ValueNotifier(false);
 
   // Режим компаса
   CompassMode compassMode = CompassMode.auto;
@@ -1411,6 +1399,8 @@ class HomeState {
   double autoSwitchSpeedKmh = 3.0;
 
   double magneticDeclination = 0.0;
+  final ValueNotifier<double> magneticDeclinationNotifier =
+      ValueNotifier(0.0);
   bool useManualDeclination = false;
 
   GpsData? waypoint;
@@ -1426,8 +1416,6 @@ class HomeState {
 
   int uiUpdatePeriod = 250;
 
-  static const int maxSamples = 50;
-
   // Запись трека
   bool isRecordingTrack = false;
   final ValueNotifier<bool> isRecordingTrackNotifier = ValueNotifier(false);
@@ -1435,6 +1423,7 @@ class HomeState {
   void disposeNotifiers() {
     gpsDataNotifier.dispose();
     headingNotifier.dispose();
+    magneticDeclinationNotifier.dispose();
     accuracyNotifier.dispose();
     calibrationProgressNotifier.dispose();
     distanceToWaypoint.dispose();
@@ -1443,6 +1432,7 @@ class HomeState {
     bearingToTarget.dispose();
     headingValidNotifier.dispose();
     isGpsCompassActiveNotifier.dispose();
+    calibrationStaleNotifier.dispose();
     isRecordingTrackNotifier.dispose();
   }
 }
@@ -1475,7 +1465,6 @@ class MapAnchorManager {
   onAnchorAdded;
   final VoidCallback? onStartPhotoSever;
 
-  GpsData? lastGpsData;
   List<Map<String, String>>? cachedGpxPoints;
 
   final VoidCallback onAnchorsChanged;
@@ -1492,7 +1481,6 @@ class MapAnchorManager {
     required this.onRecalculateTargets,
     required this.screenToImage,
     this.onAnchorAdded,
-    this.lastGpsData,
     this.onStartPhotoSever,
   });
 
@@ -1633,7 +1621,8 @@ class MapAnchorManager {
       }
 
       if (!context.mounted) return;
-      _saveGpxCacheToProject(points);
+      await _saveGpxCacheToProject(points);
+      if (!context.mounted) return;
       _showGpxPointsList(context, points);
       cachedGpxPoints = points;
     } catch (e) {
@@ -1732,10 +1721,6 @@ class MapAnchorManager {
     final creationTimestamp =
         creationTime ?? DateTime.fromMillisecondsSinceEpoch(0);
 
-    print(
-      '🔔 ТП создана: время=$creationTimestamp (источник: ${creationTime != null ? 'GPS' : 'импорт'})',
-    );
-
     final anchor = MapAnchor(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       /* формируем уникальный id из текущего времени */
@@ -1769,7 +1754,6 @@ class MapAnchorManager {
     onAnchorsChanged();
     await onRecalculateTargets(restartNavigation: true);
 
-    print('Peredacha TP v zhurnal: vremia=$creationTimestamp');
     onAnchorAdded?.call(
       latitude,
       longitude,
@@ -1825,7 +1809,7 @@ class MapAnchorManager {
     );
   }
 
-  void deleteAnchorAndUpdate(String anchorId) async {
+  Future<void> deleteAnchorAndUpdate(String anchorId) async {
     final project = state.project;
     if (project == null) return;
 
@@ -1846,6 +1830,7 @@ class MapAnchorManager {
 
     calibrationService.removeAnchor(anchorId);
     onAnchorsChanged();
+    await onRecalculateTargets();
   }
 
   Future<void> showModePicker(BuildContext context) async {
@@ -1876,7 +1861,6 @@ class MapAnchorManager {
                 showHintAndClose('Нужно ФотоСевер & 1 якорь', ctx);
                 return;
               }
-              print('Vybran rezhim P');
               calibrationService.setCalibrationMode(CalibrationMode.photoSever);
               calibrationService.updatePhotoSeverData(
                 lineMeters: project.photoSeverLineMeters,
@@ -1973,9 +1957,6 @@ class MapAnchorManager {
   }
 
   void _saveCalibrationState() {
-    print(
-      '💾 _saveCalibrationState called, mode=${calibrationService.currentMode}, pinned=${calibrationService.pinnedAnchorIdsList}',
-    );
     final project = state.project;
     if (project != null) {
       final updated = project.copyWith(
@@ -1987,9 +1968,7 @@ class MapAnchorManager {
       setState(() {
         state.project = updated;
       });
-      print('calling onAnchorsChanged()');
       onAnchorsChanged();
-      print('after onAnchorsChanged()');
     }
   }
 
@@ -2024,13 +2003,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/map_transform_state.dart';
+import '../utils/app_constants.dart';
 import 'map_screen_state.dart';
 
 class MapFollowController {
   final MapScreenState state;
   final void Function(VoidCallback fn) setState;
   final void Function(String message) showSnackBar;
-  final double magneticDeclination;
 
   final Offset Function(Offset screenPoint) screenToImage;
   final Offset Function(Offset imagePoint) imageToScreen;
@@ -2044,7 +2023,6 @@ class MapFollowController {
     required this.state,
     required this.setState,
     required this.showSnackBar,
-    required this.magneticDeclination,
     required this.screenToImage,
     required this.imageToScreen,
     required this.updateTransform,
@@ -2052,7 +2030,9 @@ class MapFollowController {
 
   Future<void> loadRotateModeTimeout() async {
     final prefs = await SharedPreferences.getInstance();
-    rotateModeTimeoutMs = prefs.getInt('rotateModeTimeoutMs') ?? 1000;
+    rotateModeTimeoutMs =
+        prefs.getInt(AppConstants.prefRotateModeTimeoutMs) ??
+            AppConstants.rotateModeTimeoutDefaultMs;
   }
 
   void enableFollowMode() {
@@ -2062,25 +2042,21 @@ class MapFollowController {
       );
       return;
     }
-    state.followRestoreTimer?.cancel();
     setState(() {
       state.followMode = true;
       state.crosshairInCenter = false;
     });
     _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
     centerMapOnUser();
     applyHeadingRotation();
   }
 
   void disableFollowMode() {
-    state.followRestoreTimer?.cancel();
     setState(() {
       state.followMode = false;
       state.crosshairInCenter = true;
     });
     _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
   }
 
   void toggleFollowMode() {
@@ -2125,8 +2101,6 @@ class MapFollowController {
     setState(() {
       state.transformState = t.copyWith(translation: newTranslation);
     });
-
-    _recalculateUserScreenPoint();
   }
 
   void enableRotateMode() {
@@ -2164,7 +2138,9 @@ class MapFollowController {
   }
 
   void applyHeadingRotation() {
-    if (!state.followMode || state.heading == null || (state.workingPair == null && !_isPhotoSeverActive())) {
+    if (!state.followMode ||
+        state.magneticHeading == null ||
+        (state.workingPair == null && !_isPhotoSeverActive())) {
       return;
     }
 
@@ -2202,11 +2178,6 @@ class MapFollowController {
     });
   }
 
-  void _recalculateUserScreenPoint() {
-    setState(() {
-      state.recalculateUserScreenPoint(imageToScreen);
-    });
-  }
     bool _isPhotoSeverActive() {
     final project = state.project;
     return project != null && project.photoSeverLinePixels > 0;
@@ -2274,6 +2245,9 @@ import 'map_target_manager.dart';
 import 'map_follow_controller.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
+import '../utils/compensation_utils.dart';
+import '../utils/geo_utils.dart';
+import '../utils/user_path_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -2283,8 +2257,10 @@ class MapScreenLogic {
   final void Function(String message) showSnackBar;
   final MapStorageService storageService;
   final ValueNotifier<GpsData> gpsDataNotifier;
-  final double magneticDeclination;
+  final ValueNotifier<double> magneticDeclinationNotifier;
   final ValueNotifier<double> headingNotifier;
+
+  double get magneticDeclination => magneticDeclinationNotifier.value;
   final MapCalibrationService _calibrationService = MapCalibrationService();
   final SensorService sensorService = SensorService();
   final LogService logService = LogService();
@@ -2307,7 +2283,7 @@ class MapScreenLogic {
     required this.showSnackBar,
     required this.storageService,
     required this.gpsDataNotifier,
-    required this.magneticDeclination,
+    required this.magneticDeclinationNotifier,
     required this.headingNotifier,
     this.onAnchorAdded,
     this.onStartNavigation,
@@ -2362,7 +2338,8 @@ class MapScreenLogic {
 
   // Динамическая компенсация (мс)
   double _compensationMs = 1500.0;
-  static const String _compensationPrefKey = 'anchor_compensation_ms';
+  static const String _compensationPrefKey =
+      AppConstants.prefAnchorCompensationMs;
 
   Future<void> init() async {
     anchorManager = MapAnchorManager(
@@ -2390,7 +2367,6 @@ class MapScreenLogic {
       state: state,
       setState: setState,
       showSnackBar: showSnackBar,
-      magneticDeclination: magneticDeclination,
       screenToImage: screenToImage,
       imageToScreen: imageToScreen,
       updateTransform: updateTransform,
@@ -2416,11 +2392,11 @@ class MapScreenLogic {
     );
     await followController.loadRotateModeTimeout();
     _calibrationService.setMagneticDeclination(magneticDeclination);
+    magneticDeclinationNotifier.addListener(_onMagneticDeclinationChanged);
     await _loadLastProject();
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     gpsDataNotifier.addListener(_onGpsDataChanged);
     _lastGpsData = gpsDataNotifier.value;
-    anchorManager.lastGpsData = gpsDataNotifier.value;
     headingNotifier.addListener(_onHeadingChanged);
     _onHeadingChanged();
     GpsCompassService.instance.isActiveNotifier.addListener(
@@ -2431,15 +2407,20 @@ class MapScreenLogic {
 
   void dispose() {
     headingNotifier.removeListener(_onHeadingChanged);
+    magneticDeclinationNotifier.removeListener(_onMagneticDeclinationChanged);
     GpsCompassService.instance.isActiveNotifier.removeListener(
       _onGpsActiveChanged,
     );
     gpsDataNotifier.removeListener(_onGpsDataChanged);
     if (state.project != null) {
+      // saveProject асинхронный, но dispose синхронный — await здесь невозможен.
+      // Осознанно оставлено без await. Все критичные изменения проекта уже
+      // сохранены раньше (addAnchor, closeMap, pickImage и т.д.). Здесь —
+      // вторичная страховка. Риск потери минимален. Возвращаться к вопросу
+      // только при реальных проблемах.
       storageService.saveProject(state.project!);
     }
     state.rotateModeTimer?.cancel();
-    state.followRestoreTimer?.cancel();
     state.crosshairFeedback.dispose();
     state.isDisposed = true;
   }
@@ -2510,6 +2491,9 @@ class MapScreenLogic {
 
     final imgW = decoded.width.toDouble();
     final imgH = decoded.height.toDouble();
+
+    // Освобождаем нативный ресурс — размеры уже извлечены.
+    decoded.dispose();
 
     setState(() {
       state.imageSize = Size(imgW, imgH);
@@ -2621,7 +2605,7 @@ class MapScreenLogic {
       state.plannedTarget = null;
       state.activeTarget = null;
       state.currentUserImagePoint = null;
-      state.currentUserScreenPoint = null;
+      state.pendingAnchor = null;
     });
 
     if (imagePathToDelete != null) {
@@ -2654,6 +2638,8 @@ class MapScreenLogic {
       state.canPlaceTarget = false;
     });
     _calibrationService.updateAnchors([]);
+    _calibrationService.setPinnedAnchorIds([]);
+    await recalculateTargetsAfterNewAnchor();
 //    showSnackBar('Все якоря удалены');
   }
 
@@ -2684,7 +2670,6 @@ class MapScreenLogic {
     }
 
     _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
 
     if (state.project != null) {
       storageService.saveTransform(state.project!.id, newTransform);
@@ -2697,7 +2682,6 @@ class MapScreenLogic {
       state.viewportSize = size;
     });
     _recalculateCrosshairImagePoint();
-    _recalculateUserScreenPoint();
   }
 
   void zoomIn() {
@@ -2876,6 +2860,9 @@ class MapScreenLogic {
 /// подстраивается под текущие условия, используя измеренную задержку
 /// между нажатием и получением следующего GPS-пакета.
 /// ============================================================
+    // Если уже идёт ожидание GPS — игнорируем повторное нажатие.
+    if (state.pendingAnchor != null) return;
+
     final DateTime anchorRequestTime = rawRequestTime.add(
       Duration(milliseconds: _compensationMs.round()),
     );
@@ -2886,8 +2873,24 @@ class MapScreenLogic {
       return;
     }
 
-    GpsData gps1 = gpsDataNotifier.value;
-//    showSnackBar('Ожидание GPS...');
+    // Показываем серый якорь сразу, по текущему (грубому) GPS.
+    final roughGps = gpsDataNotifier.value;
+    if (roughGps.latitude == null || roughGps.longitude == null) {
+      showSnackBar('Нет сигнала GPS');
+      return;
+    }
+    setState(() {
+      state.pendingAnchor = MapAnchor(
+        id: 'pending',
+        imageX: crosshair.dx,
+        imageY: crosshair.dy,
+        latitude: roughGps.latitude!,
+        longitude: roughGps.longitude!,
+        createdAt: rawRequestTime,
+      );
+    });
+
+    GpsData gps1 = roughGps;
 
     const int maxIterations = 100;
     const Duration step = Duration(milliseconds: 50);
@@ -2955,6 +2958,9 @@ class MapScreenLogic {
     }
 
     if (finalGps == null) {
+      setState(() {
+        state.pendingAnchor = null;
+      });
       showSnackBar(
         'Не удалось определить точное положение. Попробуйте еще раз.',
       );
@@ -2966,12 +2972,12 @@ class MapScreenLogic {
       final double delta = (gps2.time! - rawRequestTime.millisecondsSinceEpoch)
           .toDouble();
       _updateCompensation(delta);
-      print(
-        '🔔 Компенсация обновлена: delta=$delta, new compensation=${_compensationMs.round()}мс',
-      );
     }
 
-    print('anchorRequestTime (с компенсацией): $anchorRequestTime');
+    setState(() {
+      state.pendingAnchor = null;
+    });
+
     await anchorManager.addAnchorFromGps(
       finalGps,
       crosshair,
@@ -3003,8 +3009,8 @@ class MapScreenLogic {
     anchorManager.handleLongPressOnMap(context, screenPosition);
   }
 
-  void deleteAnchorAndUpdate(String anchorId) async {
-    anchorManager.deleteAnchorAndUpdate(anchorId);
+  Future<void> deleteAnchorAndUpdate(String anchorId) async {
+    await anchorManager.deleteAnchorAndUpdate(anchorId);
   }
 
   // --------------------------------------------------------
@@ -3037,6 +3043,22 @@ class MapScreenLogic {
         }
       }
       _calibrationService.setCalibrationMode(candidate);
+
+      // Сохраняем режим в проект, иначе после перезапуска
+      // приложение восстановит прежний режим из SharedPreferences.
+      final project = state.project;
+      if (project != null) {
+        final updated = project.copyWith(
+          manualMode: _calibrationService.isManualMode,
+          calibrationMode: _calibrationService.currentMode.name,
+          pinnedAnchorIds: _calibrationService.pinnedAnchorIdsList,
+        );
+        storageService.saveProject(updated);
+        setState(() {
+          state.project = updated;
+        });
+      }
+
       _recalculateWorkingPairAndRotation();
       return;
     }
@@ -3070,13 +3092,8 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void _recalculateWorkingPairAndRotation() {
-    print(
-      '_recalculateWorkingPairAndRotation called, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
-    );
     final anchors = state.project?.anchors ?? [];
-    print('before updateAnchors, used=${_calibrationService.usedAnchorCount}');
     _calibrationService.updateAnchors(anchors);
-    print('after updateAnchors, used=${_calibrationService.usedAnchorCount}');
     final newPair = _calibrationService.selectWorkingPair(anchors);
     final declinationRad = magneticDeclination * math.pi / 180;
 
@@ -3097,12 +3114,16 @@ class MapScreenLogic {
       }
     });
 
-    print(
-      '🔔 after setState, used=${_calibrationService.usedAnchorCount}, total=${_calibrationService.totalAnchorCount}',
-    );
     onAnchorsChangedForStatus?.call();
+    _recalculateCanPlaceTarget();
   }
 
+  // Всегда ставит true. Проверка привязки отсутствует осознанно.
+  // Сценарий проявления: удалить все якоря, перезапустить приложение,
+  // открыть карту. Кнопка "ЦЕЛЬ" будет активна без привязки. Последствие
+  // слабое: одно лишнее нажатие до сообщения "Координаты цели не
+  // определены — добавьте привязку". Вероятность низкая. Возвращаться
+  // к вопросу — только если появятся реальные жалобы.
   void _recalculateCanPlaceTarget() {
     setState(() {
       state.canPlaceTarget = true;
@@ -3131,11 +3152,18 @@ void _recalculateUserImagePoint() {
     return;
   }
 
-  final updatedPath = [...state.project!.userPath, imagePoint];
+  final rawPath = [...state.project!.userPath, imagePoint];
+  final pruned = pruneUserPath(
+    path: rawPath,
+    jumpIndices: state.project!.pathJumpIndices,
+  );
 
   setState(() {
     state.currentUserImagePoint = imagePoint;
-    state.project = state.project!.copyWith(userPath: updatedPath);
+    state.project = state.project!.copyWith(
+      userPath: pruned.path,
+      pathJumpIndices: pruned.jumpIndices,
+    );
   });
 
   // Вычисление длины прыжка (один раз для новой точки)
@@ -3149,19 +3177,12 @@ void _recalculateUserImagePoint() {
       if (metersPerPixel != null && metersPerPixel > 0) {
         final jumpMeters = pixelDistance * metersPerPixel;
         showSnackBar('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
-        print('Прыжок: ${jumpMeters.toStringAsFixed(1)} м');
       }
     }
   }
 
-  _recalculateUserScreenPoint();
   _recalculatePreview();
 }
-  void _recalculateUserScreenPoint() {
-    setState(() {
-      state.recalculateUserScreenPoint(imageToScreen);
-    });
-  }
 
   void _recalculatePreview() {
     final gps = _lastGpsData;
@@ -3175,7 +3196,7 @@ void _recalculateUserImagePoint() {
       return;
     }
 
-    final bd = _calibrationService.bearingAndDistance(
+    final nav = calculateNavigationData(
       fromLat: gps!.latitude!,
       fromLon: gps.longitude!,
       toLat: active!.latitude!,
@@ -3184,8 +3205,8 @@ void _recalculateUserImagePoint() {
     );
 
     setState(() {
-      state.previewDistanceMeters = bd.distanceMeters;
-      state.previewBearingDegrees = bd.magneticBearing;
+      state.previewDistanceMeters = nav.distanceMeters;
+      state.previewBearingDegrees = nav.magneticBearing;
     });
   }
 
@@ -3195,7 +3216,10 @@ void _recalculateUserImagePoint() {
     final project = state.project;
     if (project == null) return;
 
+    // Пересчитываем только активную цель. Пройденные — история,
+    // их координаты фиксированы на момент прохождения.
     final updatedTargets = project.targets.map((t) {
+      if (t.status != MapTargetStatus.active) return t;
       final geo = _calibrationService.imagePointToGeoFromCurrent(
         Offset(t.imageX, t.imageY),
       );
@@ -3259,10 +3283,16 @@ void _recalculateUserImagePoint() {
     followController.resetRotateModeTimer();
   }
 
+  void _onMagneticDeclinationChanged() {
+    _calibrationService.setMagneticDeclination(magneticDeclination);
+    photoSeverController.magneticDeclination = magneticDeclination;
+    _recalculateWorkingPairAndRotation();
+    _recalculatePreview();
+  }
+
   void _onHeadingChanged() {
     final magneticHeading = headingNotifier.value;
     setState(() {
-      state.heading = magneticHeading;
       state.magneticHeading = magneticHeading;
     });
     if (state.followMode) {
@@ -3284,7 +3314,6 @@ void _recalculateUserImagePoint() {
     final gpsData = gpsDataNotifier.value;
     if (gpsData.latitude == null || gpsData.longitude == null) return;
     _lastGpsData = gpsData;
-    anchorManager.lastGpsData = gpsData;
     _recalculateUserImagePoint();
     if (state.followMode) {
       followController.centerMapOnUser();
@@ -3295,7 +3324,6 @@ void _recalculateUserImagePoint() {
     required double mapRotation,
     required double photoSeverNorthAngle,
     required double photoSeverLinePixels,
-    required double declinationRad,
   }) {
     if (photoSeverLinePixels > 0) {
       return -math.pi / 2 - photoSeverNorthAngle;
@@ -3317,10 +3345,7 @@ void _recalculateUserImagePoint() {
   }
 
   void _updateCompensation(double delta) {
-    // Экспоненциальное скользящее среднее
-    _compensationMs = _compensationMs * 0.8 + delta * 0.1;
-    // Ограничиваем разумными пределами
-    _compensationMs = _compensationMs.clamp(500.0, 3000.0);
+    _compensationMs = updateCompensationEma(_compensationMs, delta);
     _saveCompensation();
   }
 }
@@ -3328,11 +3353,20 @@ void _recalculateUserImagePoint() {
 ============= lib/controllers/map_screen_state.dart ===
 import 'dart:async';
 import 'package:flutter/widgets.dart';
+import '../models/map_anchor.dart';
 import '../models/map_project.dart';
 import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
 import '../models/map_working_pair.dart';
 
+/// Состояние экрана карты.
+///
+/// ВНИМАНИЕ: обычные поля и ValueNotifier смешаны исторически.
+/// Часть значений обновляется через setState (workingPair, followMode,
+/// transformState и т.д.), часть — через ValueNotifier (crosshairFeedback).
+/// Это не ошибка, а следствие эволюции кода. Не рефакторить без явной
+/// необходимости — затрагивает все контроллеры и виджеты карты, риск
+/// сломать работающее выше пользы.
 class MapScreenState {
   // Проект и изображение
   String? imagePath;
@@ -3351,7 +3385,6 @@ class MapScreenState {
 
   // Режимы
   bool followMode = false;
-  bool rotateMapByHeading = false;
   bool crosshairInCenter = true;
   bool rotateMode = false;
   
@@ -3367,10 +3400,11 @@ class MapScreenState {
   // Обратная связь при копировании
   final ValueNotifier<bool> crosshairFeedback = ValueNotifier<bool>(false);
 
+  /// Временный якорь, отображается серым до получения точных координат GPS.
+  MapAnchor? pendingAnchor;
+
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;
-  Offset? currentUserScreenPoint;
-  double? heading; // Азимут
   bool isGpsActive = false;
 
   // Предпросмотр расстояния/азимута (до точки под прицелом или до цели)
@@ -3381,10 +3415,7 @@ class MapScreenState {
   MapTarget? plannedTarget;
   MapTarget? activeTarget;
 
-  // Таймер восстановления режима сопровождения
-  Timer? followRestoreTimer;
-  Timer?
-  rotateModeTimer; // Таймер для автоматического отключения режима вращения
+  Timer? rotateModeTimer; // Таймер автоматического отключения режима вращения
 
   // Флаг для предотвращения утечек
   bool isDisposed = false;
@@ -3400,24 +3431,11 @@ class MapScreenState {
     }
   }
 
-  List<MapTarget> get passedTargets =>
-      project?.targets
-          .where((t) => t.status == MapTargetStatus.passed)
-          .toList() ??
-      [];
-
-  List<MapTarget> get allTargets => project?.targets ?? [];
-
   void recalculateCrosshairImagePoint(Offset Function(Offset) screenToImage) {
     if (imageSize == null || viewportSize == null) return;
     crosshairImagePoint = screenToImage(crosshairScreenPoint);
   }
 
-  void recalculateUserScreenPoint(Offset Function(Offset) imageToScreen) {
-    final imagePoint = currentUserImagePoint;
-    if (imagePoint == null) return;
-    currentUserScreenPoint = imageToScreen(imagePoint);
-  }
 }
 
 ============= lib/controllers/map_target_manager.dart ===
@@ -3625,7 +3643,11 @@ class PhotoSeverController {
 
   bool isActive = false;
   final List<Offset> points = [];
-  final double magneticDeclination;
+  double magneticDeclination;
+
+  /// Трансформация карты до поворота в _applyNorthRotation.
+  /// Восстанавливается, если пользователь отменяет ввод расстояния.
+  MapTransformState? _savedTransformBeforeRotation;
 
   PhotoSeverController({
     required this.state,
@@ -3641,8 +3663,15 @@ class PhotoSeverController {
 
   void start() {
     setState(() {
+      // Выключаем follow mode: в нём прицел смещён в 3/4 высоты,
+      // точки ФотоСевера ставятся в неудобной позиции.
+      if (state.followMode) {
+        state.followMode = false;
+        state.crosshairInCenter = true;
+      }
       isActive = true;
       points.clear();
+      _savedTransformBeforeRotation = null;
     });
     showSnackBar('Укажите первую точку (юг)');
   }
@@ -3691,6 +3720,8 @@ class PhotoSeverController {
     final delta = pivotScreen - pivotScreenAfter;
     final newTranslation = current.translation + delta;
 
+    _savedTransformBeforeRotation = state.transformState;
+
     updateTransform(
       current.copyWith(
         rotationRadians: neededRotation,
@@ -3702,10 +3733,16 @@ class PhotoSeverController {
   Future<void> finish() async {
     final dist = await askDistanceDialog();
     if (dist == null) {
+      final saved = _savedTransformBeforeRotation;
       setState(() {
         isActive = false;
         points.clear();
+        _savedTransformBeforeRotation = null;
       });
+      // Откатываем поворот карты, сделанный на третьей точке.
+      if (saved != null) {
+        updateTransform(saved);
+      }
 //      showSnackBar('ФотоСевер отменён');
       return;
     }
@@ -3744,9 +3781,10 @@ class PhotoSeverController {
       state.project = updatedProject;
       isActive = false;
       points.clear();
+      _savedTransformBeforeRotation = null;
+      // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
+      state.mapRotation = -math.pi / 2 - northAngle;
     });
-    // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
-    state.mapRotation = -math.pi / 2 - northAngle;
 //    showSnackBar('Калибровка ФотоСевер сохранена');
     
     // Вызываем callback после сохранения
@@ -3877,15 +3915,13 @@ class MapAnchorLogEntry extends LogItem {
   };
 
   factory MapAnchorLogEntry.fromJson(Map<String, dynamic> json) {
-    final entry = MapAnchorLogEntry(
+    return MapAnchorLogEntry(
       id: json['id'],
       latitude: json['latitude'],
       longitude: json['longitude'],
       distanceFromPrevious: json['distanceFromPrevious'],
       createdAt: DateTime.parse(json['timestamp']),
     );
-    print('loadLogEntries: parsed timestamp = ${entry.timestamp}');
-    return entry;
   }
 }
 
@@ -3955,6 +3991,7 @@ import 'services/background_tracker.dart';
 
 import 'package:flutter/services.dart';
 import 'package:compass40/controllers/map_screen_controller.dart';
+import '../utils/app_constants.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final FlutterLocalNotificationsPlugin _notificationsPlugin =
@@ -3979,8 +4016,8 @@ Future<void> _handleIntent(MethodCall call) async {
 
 Future<void> _createNotificationChannel() async {
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'compass40_tracking_channel', // id
-    'Compass40 трекер', // название
+    AppConstants.notificationChannelId,
+    'Compass40 трекер',
     description: 'Уведомление о записи трека в фоне',
     importance: Importance.low,
   );
@@ -4003,7 +4040,10 @@ void main() async {
   initializeBackgroundService();
   startBackgroundService();
 
-  // Даём сервису время создать уведомление, затем обновляем
+  // Пауза 300 мс — эмпирическая. Ждём, пока Android создаст сервис
+  // и канал уведомлений. Без неё первое уведомление может потеряться.
+  // Магическое число, но в текущих условиях работает. Переделывать
+  // на событие готовности сервиса не нужно, пока нет проблем.
   await Future.delayed(const Duration(milliseconds: 300));
   updateNotification(title: 'Режим - Компас', content: 'Поехали !!!');
 
@@ -4045,18 +4085,6 @@ void main() async {
   }
 }
 
-============= lib/models/bearing_and_distance.dart ===
-class BearingAndDistance {
-  final double distanceMeters;
-  final double trueBearing;
-  final double magneticBearing;
-
-  const BearingAndDistance({
-    required this.distanceMeters,
-    required this.trueBearing,
-    required this.magneticBearing,
-  });
-}
 ============= lib/models/geo_point.dart ===
 class GeoPoint {
   final double latitude;
@@ -4204,7 +4232,10 @@ class MapProject extends Equatable {
           .map((i) => MapTarget.fromJson(i as Map<String, dynamic>))
           .toList(),
       userPath: ((json['userPath'] as List?) ?? [])
-          .map((p) => Offset(p['dx'] as double, p['dy'] as double))
+          .map((p) => Offset(
+                (p['dx'] as num).toDouble(),
+                (p['dy'] as num).toDouble(),
+              ))
           .toList(),
       pathJumpIndices: ((json['pathJumpIndices'] as List?) ?? [])
           .cast<int>()
@@ -4481,6 +4512,11 @@ class HelpViewerScreen extends StatelessWidget {
 
   const HelpViewerScreen({super.key, required this.helpFilePath});
 
+  // Markdown грузится при каждом открытии экрана без кэша.
+  // Осознанно: файл маленький (несколько КБ), чтение из ассетов —
+  // миллисекунды, экран открывается редко. Кэш добавил бы глобальное
+  // состояние и инвалидацию ради неощутимой экономии.
+  // Возвращаться к вопросу — только если появится реальная задержка.
   Future<String> _loadHelpContent(BuildContext context) async {
     try {
       return await rootBundle.loadString(helpFilePath);
@@ -4699,6 +4735,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   _state.calibrationProgressNotifier,
               headingValidNotifier: _state.headingValidNotifier,
               isGpsCompassActiveNotifier: _state.isGpsCompassActiveNotifier,
+              calibrationStaleNotifier: _state.calibrationStaleNotifier,
               bearingToTarget: _state.bearingToTarget,
               bearingToWaypoint: _state.bearingToWaypoint,
               logItems: _state.logItems,
@@ -4714,7 +4751,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                   MaterialPageRoute(
                     builder: (_) => MapScreen(
                       gpsDataNotifier: _state.gpsDataNotifier,
-                      magneticDeclination: _state.magneticDeclination,
+                      magneticDeclinationNotifier:
+                          _state.magneticDeclinationNotifier,
                       headingNotifier: _state.headingNotifier,
                       onAnchorAdded: (lat, lon, distance, createdAt) async {
                         final items = await _logService.addMapAnchorLogEntry(
@@ -4767,6 +4805,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../log_entry.dart';
+import '../utils/app_constants.dart';
 
 class LogScreen extends StatefulWidget {
   final List<LogItem> logItems;
@@ -4784,7 +4823,7 @@ class _LogScreenState extends State<LogScreen> {
 
   Future<void> _clearLogAndExit() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('log_items');
+    await prefs.remove(AppConstants.prefLogItems);
     if (mounted) {
       Navigator.of(context).pop({'logCleared': true});
     }
@@ -4982,15 +5021,10 @@ class _LogScreenState extends State<LogScreen> {
       final distanceText = entry.distanceFromPrevious != null
           ? ' ${entry.distanceFromPrevious!.round()}m'
           : ' ---';
-      print(
-        'log_screen: timestamp = ${entry.timestamp} (микросекунды: ${entry.timestamp.microsecond})',
-      );
-      print(
-        "Время с миллисекундами: ${DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp)}",
-      );
-  final timeStr = entry.timestamp.toIso8601String().substring(11, 26); // "HH:mm:ss.SSSSSS"
-  final text = 'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText $timeStr';
-      print("🔔 переменная text: $text");
+      final timeStr =
+          DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp);
+      final text =
+          'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText $timeStr';
 
       return InkWell(
         onTap: () => _handleTap(entry),
@@ -5084,6 +5118,7 @@ import '../controllers/map_screen_logic.dart';
 import '../widgets/map_crosshair.dart';
 import '../widgets/map_image_painter.dart';
 import '../widgets/map_overlay_painter.dart';
+import '../widgets/map_scale_badge.dart';
 import '../widgets/map_zoom_buttons.dart';
 import 'help_viewer_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5091,12 +5126,13 @@ import 'package:gps_info/gps_info.dart';
 import '../controllers/map_screen_controller.dart';
 import 'package:flutter/services.dart';
 import '../services/background_tracker.dart';
+import '../utils/app_constants.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
 class MapScreen extends StatefulWidget {
   final ValueNotifier<GpsData> gpsDataNotifier;
-  final double magneticDeclination;
+  final ValueNotifier<double> magneticDeclinationNotifier;
   final ValueNotifier<double> headingNotifier;
   final Function(double lat, double lon, double? distance, DateTime createdAt)?
       onAnchorAdded;
@@ -5106,7 +5142,7 @@ class MapScreen extends StatefulWidget {
   const MapScreen({
     super.key,
     required this.gpsDataNotifier,
-    this.magneticDeclination = 0.0,
+    required this.magneticDeclinationNotifier,
     required this.headingNotifier,
     this.onAnchorAdded,
     this.onStartNavigation,
@@ -5152,7 +5188,7 @@ class _MapScreenState extends State<MapScreen> {
       },
       storageService: _storageService,
       gpsDataNotifier: widget.gpsDataNotifier,
-      magneticDeclination: widget.magneticDeclination,
+      magneticDeclinationNotifier: widget.magneticDeclinationNotifier,
       headingNotifier: widget.headingNotifier,
       onAnchorAdded: widget.onAnchorAdded,
       onStartNavigation: widget.onStartNavigation,
@@ -5181,9 +5217,6 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _controlChannel.invokeMethod('setMapActive', false);
     MapScreenController().unregister();
-    print(
-      '🔔 MapScreen.dispose: calling updateNotification with "Compass activate"',
-    );
     updateNotification(title: 'Режим - Компас');
     _logic.dispose();
     super.dispose();
@@ -5299,6 +5332,7 @@ class _MapScreenState extends State<MapScreen> {
                   transformState: _state.transformState,
                   viewportSize: viewportSize,
                   anchors: _state.project?.anchors ?? [],
+                  pendingAnchor: _state.pendingAnchor,
                   targets: [
                     ..._state.project?.targets ?? [],
                     if (_state.plannedTarget != null) _state.plannedTarget!,
@@ -5317,10 +5351,10 @@ class _MapScreenState extends State<MapScreen> {
                       : null,
                   previewDistanceMeters: _state.previewDistanceMeters,
                   previewBearingDegrees: _state.previewBearingDegrees,
-                  heading: _state.heading,
+                  heading: _state.magneticHeading,
                   isGpsActive: _state.isGpsActive,
                   mapRotation: _state.mapRotation,
-                  magneticDeclination: widget.magneticDeclination,
+                  magneticDeclination: widget.magneticDeclinationNotifier.value,
                 ),
               ),
               Builder(
@@ -5360,7 +5394,16 @@ class _MapScreenState extends State<MapScreen> {
               ),
 
               if (_state.project != null && _state.project!.anchors.isNotEmpty)
-                Positioned(top: 12, right: 12, child: _buildAnchorBadge()),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: MapScaleBadge(
+                    totalCount: _logic.totalAnchorCount,
+                    usedCount: _logic.usedAnchorCount,
+                    metersPerPx: _logic.metersPerScreenPixel,
+                    distanceMeters: _logic.distanceToCrosshairMeters,
+                  ),
+                ),
               Positioned(top: 12, left: 12, child: _buildModeIndicator()),
 
               MapZoomButtons(
@@ -5399,14 +5442,12 @@ class _MapScreenState extends State<MapScreen> {
 
   void _resetRotation() {
     final current = _state.transformState;
-    final declinationRad = widget.magneticDeclination * math.pi / 180;
 
     // Вычисляем целевой поворот через статический метод логики
     final newRotation = MapScreenLogic.computeResetRotation(
       mapRotation: _state.mapRotation,
       photoSeverNorthAngle: _state.project?.photoSeverNorthAngle ?? 0.0,
       photoSeverLinePixels: _state.project?.photoSeverLinePixels ?? 0.0,
-      declinationRad: declinationRad,
     );
 
     // Нормализация в [-π, π]
@@ -5447,6 +5488,43 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  /// Применяет трансформацию (поворот + опционально масштаб) так, чтобы
+  /// точка [pivotImage] осталась на экранной позиции [pivotScreen].
+  ///
+  /// Если [pivotImage] равен null — просто применяет трансформацию
+  /// без удержания пивота.
+  void _applyTransformWithPivot({
+    required Offset? pivotImage,
+    required Offset pivotScreen,
+    required MapTransformState baseTransform,
+    required double newScale,
+    required double newRotation,
+  }) {
+    if (pivotImage == null) {
+      _logic.updateTransform(
+        baseTransform.copyWith(
+          scale: newScale,
+          rotationRadians: newRotation,
+        ),
+      );
+      return;
+    }
+    final tempTransform = baseTransform.copyWith(
+      scale: newScale,
+      rotationRadians: newRotation,
+    );
+    final oldTransform = _state.transformState;
+    _state.transformState = tempTransform;
+    final pivotScreenAfter = _logic.imageToScreen(pivotImage);
+    _state.transformState = oldTransform;
+    final delta = pivotScreen - pivotScreenAfter;
+    _logic.updateTransform(
+      tempTransform.copyWith(
+        translation: baseTransform.translation + delta,
+      ),
+    );
+  }
+
   void _onScaleStart(ScaleStartDetails details) {
     _gestureStartTranslation = _state.transformState.translation;
     _gestureStartScale = _state.transformState.scale;
@@ -5485,36 +5563,17 @@ class _MapScreenState extends State<MapScreen> {
         const sensitivity = 0.8;
         final newRotation =
             _gestureStartRotation + _accumulatedRotation * sensitivity;
-        if (_gestureStartPivotImage != null) {
-          final tempTransform = MapTransformState(
+        _applyTransformWithPivot(
+          pivotImage: _gestureStartPivotImage,
+          pivotScreen: pivotScreen,
+          baseTransform: MapTransformState(
             scale: _state.transformState.scale,
-            rotationRadians: newRotation,
+            rotationRadians: _gestureStartRotation,
             translation: _gestureStartTranslation,
-          );
-          final oldTransform = _state.transformState;
-          _state.transformState = tempTransform;
-          final pivotScreenAfterRotate = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
-          _state.transformState = oldTransform;
-          final delta = pivotScreen - pivotScreenAfterRotate;
-          final newTranslation = _gestureStartTranslation + delta;
-          _logic.updateTransform(
-            MapTransformState(
-              scale: _state.transformState.scale,
-              rotationRadians: newRotation,
-              translation: newTranslation,
-            ),
-          );
-        } else {
-          _logic.updateTransform(
-            MapTransformState(
-              scale: _state.transformState.scale,
-              rotationRadians: newRotation,
-              translation: _state.transformState.translation,
-            ),
-          );
-        }
+          ),
+          newScale: _state.transformState.scale,
+          newRotation: newRotation,
+        );
         _logic.resetRotateModeTimer();
       } else {
         final delta = details.focalPoint - _gestureStartFocalPoint;
@@ -5532,72 +5591,33 @@ class _MapScreenState extends State<MapScreen> {
     if (pointerCount == 2) {
       final scaleChange = (details.scale - 1.0).abs();
       final rotationChange = details.rotation.abs();
+      final pivotScreen = _logic.getCrosshairScreenPoint();
       if (scaleChange > rotationChange) {
         final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
-        if (_gestureStartPivotImage != null) {
-          final pivotScreen = _logic.getCrosshairScreenPoint();
-          final tempTransform = MapTransformState(
-            scale: newScale,
+        _applyTransformWithPivot(
+          pivotImage: _gestureStartPivotImage,
+          pivotScreen: pivotScreen,
+          baseTransform: MapTransformState(
+            scale: _gestureStartScale,
             rotationRadians: _state.transformState.rotationRadians,
             translation: _gestureStartTranslation,
-          );
-          final oldTransform = _state.transformState;
-          _state.transformState = tempTransform;
-          final pivotScreenAfterScale = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
-          _state.transformState = oldTransform;
-          final delta = pivotScreen - pivotScreenAfterScale;
-          final newTranslation = _gestureStartTranslation + delta;
-          _logic.updateTransform(
-            MapTransformState(
-              scale: newScale,
-              rotationRadians: _state.transformState.rotationRadians,
-              translation: newTranslation,
-            ),
-          );
-        } else {
-          _logic.updateTransform(
-            MapTransformState(
-              scale: newScale,
-              rotationRadians: _state.transformState.rotationRadians,
-              translation: _gestureStartTranslation,
-            ),
-          );
-        }
+          ),
+          newScale: newScale,
+          newRotation: _state.transformState.rotationRadians,
+        );
       } else {
-        final pivotScreen = _logic.getCrosshairScreenPoint();
         final currentRotation = _gestureStartRotation + details.rotation;
-        if (_gestureStartPivotImage != null) {
-          final tempTransform = MapTransformState(
+        _applyTransformWithPivot(
+          pivotImage: _gestureStartPivotImage,
+          pivotScreen: pivotScreen,
+          baseTransform: MapTransformState(
             scale: _state.transformState.scale,
-            rotationRadians: currentRotation,
+            rotationRadians: _gestureStartRotation,
             translation: _gestureStartTranslation,
-          );
-          final oldTransform = _state.transformState;
-          _state.transformState = tempTransform;
-          final pivotScreenAfterRotate = _logic.imageToScreen(
-            _gestureStartPivotImage!,
-          );
-          _state.transformState = oldTransform;
-          final delta = pivotScreen - pivotScreenAfterRotate;
-          final newTranslation = _gestureStartTranslation + delta;
-          _logic.updateTransform(
-            MapTransformState(
-              scale: _state.transformState.scale,
-              rotationRadians: currentRotation,
-              translation: newTranslation,
-            ),
-          );
-        } else {
-          _logic.updateTransform(
-            MapTransformState(
-              scale: _state.transformState.scale,
-              rotationRadians: currentRotation,
-              translation: _state.transformState.translation,
-            ),
-          );
-        }
+          ),
+          newScale: _state.transformState.scale,
+          newRotation: currentRotation,
+        );
       }
       return;
     }
@@ -5613,36 +5633,17 @@ class _MapScreenState extends State<MapScreen> {
       if (deltaAngle < -math.pi) deltaAngle += 2 * math.pi;
       const sensitivity = 0.8;
       final newRotation = _gestureStartRotation + deltaAngle * sensitivity;
-      if (_gestureStartPivotImage != null) {
-        final tempTransform = MapTransformState(
+      _applyTransformWithPivot(
+        pivotImage: _gestureStartPivotImage,
+        pivotScreen: pivotScreen,
+        baseTransform: MapTransformState(
           scale: _state.transformState.scale,
-          rotationRadians: newRotation,
+          rotationRadians: _gestureStartRotation,
           translation: _gestureStartTranslation,
-        );
-        final oldTransform = _state.transformState;
-        _state.transformState = tempTransform;
-        final pivotScreenAfterRotate = _logic.imageToScreen(
-          _gestureStartPivotImage!,
-        );
-        _state.transformState = oldTransform;
-        final delta = pivotScreen - pivotScreenAfterRotate;
-        final newTranslation = _gestureStartTranslation + delta;
-        _logic.updateTransform(
-          MapTransformState(
-            scale: _state.transformState.scale,
-            rotationRadians: newRotation,
-            translation: newTranslation,
-          ),
-        );
-      } else {
-        _logic.updateTransform(
-          MapTransformState(
-            scale: _state.transformState.scale,
-            rotationRadians: newRotation,
-            translation: _state.transformState.translation,
-          ),
-        );
-      }
+        ),
+        newScale: _state.transformState.scale,
+        newRotation: newRotation,
+      );
       return;
     }
   }
@@ -5734,7 +5735,7 @@ class _MapScreenState extends State<MapScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return null;
     final savedDistance =
-        prefs.getDouble('photoSeverDistance') ?? defaultDistance;
+        prefs.getDouble(AppConstants.prefPhotoSeverDistance) ?? defaultDistance;
 
     final controller = TextEditingController(
       text: savedDistance.toStringAsFixed(0),
@@ -5760,7 +5761,7 @@ class _MapScreenState extends State<MapScreen> {
             onPressed: () {
               final val = double.tryParse(controller.text);
               if (val != null && val > 0) {
-                prefs.setDouble('photoSeverDistance', val);
+                prefs.setDouble(AppConstants.prefPhotoSeverDistance, val);
               }
               Navigator.pop(ctx, val);
             },
@@ -5805,180 +5806,6 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
-
-  Widget _buildAnchorBadge() {
-    final totalCount = _logic.totalAnchorCount;
-    if (totalCount == 0) return const SizedBox.shrink();
-    final used = _logic.usedAnchorCount;
-    final metersPerPx = _logic.metersPerScreenPixel;
-
-    final Color textColor;
-    if (totalCount >= 3) {
-      textColor = Colors.green;
-    } else if (totalCount == 2 && used == 2) {
-      textColor = Colors.orange;
-    } else {
-      textColor = Colors.red;
-    }
-
-    double segmentWidth = 0;
-    String scaleLabel = '';
-    if (metersPerPx != null && metersPerPx > 0) {
-      final screenWidth = MediaQuery.of(context).size.width;
-      final maxWidth = screenWidth * 0.4;
-      const niceNumbers = [
-        1,
-        2,
-        5,
-        10,
-        20,
-        50,
-        100,
-        150,
-        200,
-        250,
-        500,
-        1000,
-        2000,
-        5000,
-      ];
-      for (final num in niceNumbers) {
-        final w = num / metersPerPx;
-        if (w <= maxWidth) {
-          segmentWidth = w;
-          scaleLabel = '$num м';
-        } else {
-          break;
-        }
-      }
-      if (segmentWidth == 0) {
-        segmentWidth = niceNumbers.last / metersPerPx;
-        scaleLabel = '${niceNumbers.last} м';
-      }
-    }
-
-    final double? dist = _logic.distanceToCrosshairMeters;
-    final String topLeftDisplay = '📏';
-    final String topRightDisplay = dist != null
-        ? (dist >= 1000
-              ? '${(dist / 1000).toStringAsFixed(1)} км'
-              : '${dist.round()} м')
-        : '---';
-
-    Widget topRowFullWidth = const SizedBox.shrink();
-    if (metersPerPx != null && segmentWidth > 0) {
-      if (topRightDisplay.isNotEmpty) {
-        topRowFullWidth = SizedBox(
-          width: segmentWidth,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                topLeftDisplay,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(color: Colors.white, blurRadius: 2),
-                    Shadow(color: Colors.white, blurRadius: 4),
-                    Shadow(color: Colors.white, blurRadius: 6),
-                  ],
-                ),
-              ),
-              Text(
-                topRightDisplay,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(color: Colors.white, blurRadius: 2),
-                    Shadow(color: Colors.white, blurRadius: 4),
-                    Shadow(color: Colors.white, blurRadius: 6),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      } else {
-        topRowFullWidth = SizedBox(
-          width: segmentWidth,
-          child: Text(
-            topLeftDisplay,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              shadows: [
-                Shadow(color: Colors.white, blurRadius: 2),
-                Shadow(color: Colors.white, blurRadius: 4),
-                Shadow(color: Colors.white, blurRadius: 6),
-              ],
-            ),
-          ),
-        );
-      }
-    }
-
-    Widget scaleWidget;
-    if (metersPerPx != null && segmentWidth > 0) {
-      scaleWidget = Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: topRowFullWidth,
-          ),
-          Container(
-            width: segmentWidth,
-            height: 2,
-            decoration: BoxDecoration(
-              color: Colors.black,
-              boxShadow: [
-                BoxShadow(color: Colors.white, blurRadius: 4, spreadRadius: 0),
-              ],
-            ),
-          ),
-          SizedBox(
-            width: segmentWidth,
-            child: Text(
-              scaleLabel,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                shadows: [
-                  Shadow(color: Colors.white, blurRadius: 2),
-                  Shadow(color: Colors.white, blurRadius: 4),
-                  Shadow(color: Colors.white, blurRadius: 6),
-                ],
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      );
-    } else {
-      scaleWidget = Text(
-        topLeftDisplay,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          shadows: [
-            Shadow(color: Colors.white, blurRadius: 2),
-            Shadow(color: Colors.white, blurRadius: 4),
-            Shadow(color: Colors.white, blurRadius: 6),
-          ],
-        ),
-      );
-    }
-
-    return Tooltip(message: 'Масштабная линейка', child: scaleWidget);
-  }
 }
 
 ============= lib/screens/settings_screen.dart ===
@@ -5990,6 +5817,7 @@ class _MapScreenState extends State<MapScreen> {
   import 'help_viewer_screen.dart';
   import '../theme_provider.dart';
   import '../controllers/home_state.dart';
+  import '../services/compass_service.dart';
 
   class SettingsScreen extends StatefulWidget {
     const SettingsScreen({super.key});
@@ -6019,58 +5847,80 @@ class _MapScreenState extends State<MapScreen> {
     Future<void> _loadSettings() async {
       final prefs = await SharedPreferences.getInstance();
 
-      _useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
-      _declinationController.text = (prefs.getDouble('manualDeclination') ?? '')
-          .toString();
-      _gpsIntervalController.text = (prefs.getInt('gpsUpdateInterval') ?? AppConstants.gpsUpdateIntervalDefaultSec)
-          .toString();
-      _uiUpdatePeriodController.text = (prefs.getInt('uiUpdatePeriod') ?? AppConstants.uiUpdatePeriodDefaultMs)
-          .toString();
+      _useManualDeclination =
+          prefs.getBool(AppConstants.prefUseManualDeclination) ?? false;
+      _declinationController.text =
+          (prefs.getDouble(AppConstants.prefManualDeclination) ?? '')
+              .toString();
+      _gpsIntervalController.text =
+          (prefs.getInt(AppConstants.prefGpsUpdateInterval) ??
+                  AppConstants.gpsUpdateIntervalDefaultSec)
+              .toString();
+      _uiUpdatePeriodController.text =
+          (prefs.getInt(AppConstants.prefUiUpdatePeriod) ??
+                  AppConstants.uiUpdatePeriodDefaultMs)
+              .toString();
       _autoSwitchSpeedController.text =
-          (prefs.getDouble('autoSwitchSpeedKmh') ?? AppConstants.autoSwitchSpeedDefaultKmh).toString();
+          (prefs.getDouble(AppConstants.prefAutoSwitchSpeedKmh) ??
+                  AppConstants.autoSwitchSpeedDefaultKmh)
+              .toString();
       _gpsAveragingSamplesController.text =
-          (prefs.getInt('gpsAveragingSamples') ?? AppConstants.gpsAveragingSamplesDefault).toString();
+          (prefs.getInt(AppConstants.prefGpsAveragingSamples) ??
+                  AppConstants.gpsAveragingSamplesDefault)
+              .toString();
       _rotateModeTimeoutController.text =
-          (prefs.getInt('rotateModeTimeoutMs') ?? AppConstants.rotateModeTimeoutDefaultMs).toString();
+          (prefs.getInt(AppConstants.prefRotateModeTimeoutMs) ??
+                  AppConstants.rotateModeTimeoutDefaultMs)
+              .toString();
 
       _compassSmoothness =
-          (prefs.getInt('compassSmoothness') ?? AppConstants.compassSmoothnessDefault)
+          (prefs.getInt(AppConstants.prefCompassSmoothness) ??
+                  AppConstants.compassSmoothnessDefault)
               .clamp(0, 100)
               .toDouble();
 
-      final modeIndex = prefs.getInt('compassMode') ?? 0;
-      _compassMode = CompassMode.values[modeIndex];
+      final modeIndex = prefs.getInt(AppConstants.prefCompassMode) ?? 0;
+      _compassMode = (modeIndex >= 0 && modeIndex < CompassMode.values.length)
+          ? CompassMode.values[modeIndex]
+          : CompassMode.magnetic;
     }
 
     Future<void> _saveSettings() async {
       final prefs = await SharedPreferences.getInstance();
 
-      await prefs.setBool('useManualDeclination', _useManualDeclination);
+      await prefs.setBool(
+          AppConstants.prefUseManualDeclination, _useManualDeclination);
 
       final declination = double.tryParse(_declinationController.text);
       if (declination != null) {
-        await prefs.setDouble('manualDeclination', declination);
+        await prefs.setDouble(AppConstants.prefManualDeclination, declination);
       } else {
-        await prefs.remove('manualDeclination');
+        await prefs.remove(AppConstants.prefManualDeclination);
       }
 
       final interval = int.tryParse(_gpsIntervalController.text);
-      await prefs.setInt('gpsUpdateInterval', interval ?? AppConstants.gpsUpdateIntervalDefaultSec);
+      await prefs.setInt(
+          AppConstants.prefGpsUpdateInterval,
+          interval ?? AppConstants.gpsUpdateIntervalDefaultSec);
 
       final uiPeriod = int.tryParse(_uiUpdatePeriodController.text);
-      await prefs.setInt('uiUpdatePeriod', uiPeriod ?? AppConstants.uiUpdatePeriodDefaultMs);
-      await prefs.setInt('compassSmoothness', _compassSmoothness.round());
-      await prefs.setInt('compassMode', _compassMode.index);
-
+      await prefs.setInt(AppConstants.prefUiUpdatePeriod,
+          uiPeriod ?? AppConstants.uiUpdatePeriodDefaultMs);
+      await prefs.setInt(
+          AppConstants.prefCompassSmoothness, _compassSmoothness.round());
+      await prefs.setInt(AppConstants.prefCompassMode, _compassMode.index);
 
       final autoSpeed = double.tryParse(_autoSwitchSpeedController.text);
-      await prefs.setDouble('autoSwitchSpeedKmh', autoSpeed ?? AppConstants.autoSwitchSpeedDefaultKmh);
+      await prefs.setDouble(AppConstants.prefAutoSwitchSpeedKmh,
+          autoSpeed ?? AppConstants.autoSwitchSpeedDefaultKmh);
 
       final gpsSamples = int.tryParse(_gpsAveragingSamplesController.text);
-      await prefs.setInt('gpsAveragingSamples', gpsSamples ?? AppConstants.gpsAveragingSamplesDefault);
+      await prefs.setInt(AppConstants.prefGpsAveragingSamples,
+          gpsSamples ?? AppConstants.gpsAveragingSamplesDefault);
 
       final rotateTimeout = int.tryParse(_rotateModeTimeoutController.text);
-      await prefs.setInt('rotateModeTimeoutMs', rotateTimeout ?? AppConstants.rotateModeTimeoutDefaultMs);
+      await prefs.setInt(AppConstants.prefRotateModeTimeoutMs,
+          rotateTimeout ?? AppConstants.rotateModeTimeoutDefaultMs);
     }
 
     Widget _buildTextFieldRow(
@@ -6382,6 +6232,24 @@ class _MapScreenState extends State<MapScreen> {
                         label: _compassSmoothness.round().toString(),
                         onChanged: (v) =>
                             setState(() => _compassSmoothness = v),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await CompassService().resetCalibration();
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Калибровка компаса сброшена'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Сбросить калибровку компаса'),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       const Divider(),
@@ -6725,6 +6593,7 @@ class AffineTransform {
 // ignore_for_file: avoid_print
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter/services.dart';
+import '../utils/app_constants.dart';
 
 final FlutterBackgroundService _service = FlutterBackgroundService();
 
@@ -6734,7 +6603,7 @@ void initializeBackgroundService() {
       onStart: onStart,
       autoStart: false,
       isForegroundMode: true,
-      notificationChannelId: 'compass40_tracking_channel',
+      notificationChannelId: AppConstants.notificationChannelId,
       foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(),
@@ -6751,7 +6620,6 @@ String _currentContent = '';
 void updateNotification({String? title, String? content}) {
   if (title != null) _currentTitle = title;
   if (content != null) _currentContent = content;
-  print('updateNotification called with title: $_currentTitle, content: $_currentContent');
   _notificationChannel.invokeMethod('updateNotification', {
     'title': _currentTitle,
     'content': _currentContent,
@@ -6772,13 +6640,9 @@ void onStart(ServiceInstance service) {
     service.stopSelf();
   });
 
-  service.on('startRecording').listen((_) {
-    print('[BackgroundService] Запись (удержание процесса)');
-  });
+  service.on('startRecording').listen((_) {});
 
-  service.on('stopRecording').listen((_) {
-    print('[BackgroundService] Запись остановлена');
-  });
+  service.on('stopRecording').listen((_) {});
 }
 
 ============= lib/services/compass_service.dart ===
@@ -6788,8 +6652,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'computation_service.dart';
 import 'sensor_service.dart';
+import '../utils/calibration_utils.dart';
+import '../utils/app_constants.dart';
+import '../utils/angle_utils.dart';
 
 class CompassData {
   final double heading;
@@ -6797,10 +6663,13 @@ class CompassData {
   final double accuracy;
   /// Количество посещённых секторов калибровки (0..8).
   final int calibrationProgress;
+  /// Признак устаревшей калибровки: поле вокруг изменилось.
+  final bool calibrationStale;
   CompassData({
     required this.heading,
     required this.accuracy,
     this.calibrationProgress = 0,
+    this.calibrationStale = false,
   });
 }
 class CompassService {
@@ -6822,21 +6691,35 @@ class CompassService {
   bool _hasMag = false;
   bool _hasAcc = false;
 
-  static const _prefKeyX = 'compass_calib_x';
-  static const _prefKeyY = 'compass_calib_y';
-  static const _prefKeyZ = 'compass_calib_z';
-  static const _prefKeyRangeX = 'compass_calib_range_x';
-  static const _prefKeyRangeY = 'compass_calib_range_y';
-  static const _prefKeyRangeZ = 'compass_calib_range_z';
-  static const _prefKeyCalibrated = 'compass_calibrated';
+  static const _prefKeyX = AppConstants.prefCompassCalibX;
+  static const _prefKeyY = AppConstants.prefCompassCalibY;
+  static const _prefKeyZ = AppConstants.prefCompassCalibZ;
+  static const _prefKeyRangeX = AppConstants.prefCompassCalibRangeX;
+  static const _prefKeyRangeY = AppConstants.prefCompassCalibRangeY;
+  static const _prefKeyRangeZ = AppConstants.prefCompassCalibRangeZ;
+  static const _prefKeyCalibrated = AppConstants.prefCompassCalibrated;
+  static const _prefKeyMagnitude = AppConstants.prefCompassCalibMagnitude;
 
   double _cx = 0, _cy = 0, _cz = 0;
   bool _isCalibrated = false;
 
+  /// Магнитуда поля (μT) на момент последней успешной калибровки.
+  double _calibMagnitude = 0.0;
+
+  /// Ожидаем накопления буфера после калибровки, чтобы зафиксировать эталон.
+  bool _awaitingCalibMagnitude = false;
+
+  /// Скользящий буфер магнитуды для вычисления устойчивого среднего.
+  static const int _magnitudeBufferSize = 60;
+  final List<double> _magnitudeBuffer = [];
+
+  /// Флаг устаревшей калибровки (поле вокруг сильно изменилось).
+  bool _calibrationStale = false;
+
   static const double _rangeThreshold = 30.0;
   static const double _recalibrationDelta = 30.0;
   static const int _sectorCount = 8;
-  static const int _samplesPerSector = 20;
+  static const int _samplesPerSector = 5;
   static const double _minMagnitude = 5.0;
 
   double _minX = double.infinity, _maxX = -double.infinity;
@@ -6856,10 +6739,12 @@ class CompassService {
   int _medianWindowMs = 250;
   final List<(int, double)> _rawHeadingBuffer = [];
 
-  void start() {
+  Future<void> start() async {
     if (_magSub != null) stop();
 
-    _loadCalibration();
+    // Ждём загрузки офсетов из SharedPreferences, иначе первые
+    // показания курса будут считаться с нулевыми офсетами.
+    await _loadCalibration();
 
     _accSub = accelerometerEventStream().listen((e) {
       _accFiltered[0] = _accFiltered[0] * (1 - _accAlpha) + e.x * _accAlpha;
@@ -6904,6 +6789,7 @@ class CompassService {
     _calibratedRangeY = p.getDouble(_prefKeyRangeY) ?? 0;
     _calibratedRangeZ = p.getDouble(_prefKeyRangeZ) ?? 0;
     _isCalibrated = p.getBool(_prefKeyCalibrated) ?? false;
+    _calibMagnitude = p.getDouble(_prefKeyMagnitude) ?? 0.0;
   }
 
   void _updateCalibrationBounds(double x, double y, double z) {
@@ -6961,6 +6847,13 @@ class CompassService {
     _calibratedRangeY = rangeY;
     _calibratedRangeZ = rangeZ;
     _isCalibrated = true;
+    _calibrationStale = false;
+
+    // Эталон магнитуды ещё не зафиксирован: он будет вычислен
+    // после накопления буфера уже с новыми офсетами.
+    _calibMagnitude = 0.0;
+    _awaitingCalibMagnitude = true;
+    _magnitudeBuffer.clear();
 
     final p = await SharedPreferences.getInstance();
     await p.setDouble(_prefKeyX, _cx);
@@ -6970,6 +6863,7 @@ class CompassService {
     await p.setDouble(_prefKeyRangeY, _calibratedRangeY);
     await p.setDouble(_prefKeyRangeZ, _calibratedRangeZ);
     await p.setBool(_prefKeyCalibrated, true);
+    await p.remove(_prefKeyMagnitude);
   }
 
   Future<void> _resetCalibration() async {
@@ -6982,11 +6876,59 @@ class CompassService {
     for (int i = 0; i < _sectorCount; i++) {
       _sectorSamples[i] = 0;
     }
+    // Обнуляем офсеты и сглаживание, чтобы до новой калибровки
+    // курс считался без старых искажений.
+    _cx = 0;
+    _cy = 0;
+    _cz = 0;
+    _smoothCos = 0.0;
+    _smoothSin = 0.0;
+    _rawHeadingBuffer.clear();
 
     final p = await SharedPreferences.getInstance();
-    await p.setBool(_prefKeyCalibrated, false);
+    await p.remove(_prefKeyX);
+    await p.remove(_prefKeyY);
+    await p.remove(_prefKeyZ);
+    await p.remove(_prefKeyRangeX);
+    await p.remove(_prefKeyRangeY);
+    await p.remove(_prefKeyRangeZ);
+    await p.remove(_prefKeyCalibrated);
   }
 
+  /// Полный сброс калибровки: обнуляет офсеты, размахи, счётчики секторов,
+  /// Полный сброс калибровки: обнуляет офсеты, размахи, счётчики секторов,
+  /// сглаживание и удаляет сохранённые значения из SharedPreferences.
+  Future<void> resetCalibration() async {
+    _cx = 0;
+    _cy = 0;
+    _cz = 0;
+    _calibratedRangeX = 0;
+    _calibratedRangeY = 0;
+    _calibratedRangeZ = 0;
+    _isCalibrated = false;
+    _calibMagnitude = 0.0;
+    _awaitingCalibMagnitude = false;
+    _calibrationStale = false;
+    _magnitudeBuffer.clear();
+    _minX = _minY = _minZ = double.infinity;
+    _maxX = _maxY = _maxZ = -double.infinity;
+    for (int i = 0; i < _sectorCount; i++) {
+      _sectorSamples[i] = 0;
+    }
+    _smoothCos = 0.0;
+    _smoothSin = 0.0;
+    _rawHeadingBuffer.clear();
+
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_prefKeyX);
+    await p.remove(_prefKeyY);
+    await p.remove(_prefKeyZ);
+    await p.remove(_prefKeyRangeX);
+    await p.remove(_prefKeyRangeY);
+    await p.remove(_prefKeyRangeZ);
+    await p.remove(_prefKeyCalibrated);
+    await p.remove(_prefKeyMagnitude);
+  }
   void _tryEmit() {
     if (!_hasMag || !_hasAcc) return;
 
@@ -6994,6 +6936,38 @@ class CompassService {
     final mx = _mag[0] - _cx;
     final my = _mag[1] - _cy;
     final mz = _mag[2] - _cz;
+
+    // Магнитуда поля после вычитания офсетов.
+    final magnitude = math.sqrt(mx * mx + my * my + mz * mz);
+    _magnitudeBuffer.add(magnitude);
+    if (_magnitudeBuffer.length > _magnitudeBufferSize) {
+      _magnitudeBuffer.removeAt(0);
+    }
+    // Если ждём фиксации эталона после калибровки и буфер заполнен —
+    // сохраняем эталон и записываем его в SharedPreferences.
+    if (_isCalibrated &&
+        _awaitingCalibMagnitude &&
+        _magnitudeBuffer.length >= _magnitudeBufferSize) {
+      _calibMagnitude =
+          _magnitudeBuffer.reduce((a, b) => a + b) / _magnitudeBuffer.length;
+      _awaitingCalibMagnitude = false;
+      SharedPreferences.getInstance().then((p) {
+        if (_calibMagnitude > 0) {
+          p.setDouble(_prefKeyMagnitude, _calibMagnitude);
+        }
+      });
+    }
+
+    final avgMagnitude = _magnitudeBuffer.isEmpty
+        ? 0.0
+        : _magnitudeBuffer.reduce((a, b) => a + b) / _magnitudeBuffer.length;
+    _calibrationStale = isCalibrationStale(
+      isCalibrated: _isCalibrated,
+      calibMagnitude: _calibMagnitude,
+      avgMagnitude: avgMagnitude,
+      bufferLength: _magnitudeBuffer.length,
+      bufferSize: _magnitudeBufferSize,
+    );
 
     final ax = _accFiltered[0];
     final ay = _accFiltered[1];
@@ -7034,7 +7008,7 @@ class CompassService {
     }
     final medianHeading = _rawHeadingBuffer.length == 1
         ? _rawHeadingBuffer.first.$2
-        : calculateCircularMedian(
+        : calculateCircularMedianSync(
             _rawHeadingBuffer.map((e) => e.$2).toList(),
           );
 
@@ -7055,6 +7029,7 @@ class CompassService {
         heading: filteredHeading,
         accuracy: _computeAccuracy(mx, my, mz),
         calibrationProgress: progress,
+        calibrationStale: _calibrationStale,
       ),
     );
   }
@@ -7084,80 +7059,11 @@ class CompassService {
     return 1.0;
   }
 }
-============= lib/services/computation_service.dart ===
-double calculateCircularMedian(List<double> angles) {
-  if (angles.isEmpty) {
-    return 0.0;
-  }
-
-  angles.sort();
-  final n = angles.length;
-  if (n % 2 == 1) {
-    return angles[n ~/ 2];
-  } else {
-    final m1 = angles[n ~/ 2 - 1];
-    final m2 = angles[n ~/ 2];
-    double median;
-    if ((m2 - m1).abs() > 180) {
-      median = (m1 + m2 + 360) / 2;
-      if (median >= 360) {
-        median -= 360;
-      }
-    } else {
-      median = (m1 + m2) / 2;
-    }
-    return median;
-  }
-}
-
 ============= lib/services/file_logger.dart ===
 // ignore_for_file: avoid_print
 
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import '../utils/app_constants.dart';
-
-// Эта функция выполняется в изоляте.
-// Она БОЛЬШЕ НЕ запрашивает разрешения. Предполагается, что они уже есть.
-Future<void> _writeLogInternal(String message) async {
-  try {
-    print('writeLog (isolate): entry');
-
-    Directory? downloadsDir;
-    if (Platform.isAndroid) {
-      downloadsDir = Directory(AppConstants.externalDownloadDir);
-      if (!await downloadsDir.exists()) {
-        downloadsDir = Directory(AppConstants.externalDownloadFallback);
-      }
-    } else {
-      print('writeLog (isolate): Not on Android, exiting.');
-      return;
-    }
-
-    if (!await downloadsDir.exists()) {
-      print('writeLog (isolate): Download directory not found.');
-      return;
-    }
-
-    final compassDir =
-        Directory('${downloadsDir.path}/${AppConstants.compassFolderName}');
-    if (!await compassDir.exists()) {
-      await compassDir.create(recursive: true);
-    }
-
-    const String logFileName = 'compass_log.txt';
-    final file = File('${compassDir.path}/$logFileName');
-    
-    // Используем append, так как файл уже очищен при инициализации
-    final timestamp = DateTime.now().toIso8601String().replaceFirst('T', ' ');
-    final logLine = '$timestamp  $message\n';
-
-    await file.writeAsString(logLine, mode: FileMode.append);
-    print('writeLog (isolate): exit');
-  } catch (e) {
-    print('writeLog (isolate) ERROR: $e');
-  }
-}
 
 class FileLogger {
   static bool _initialized = false;
@@ -7185,22 +7091,48 @@ class FileLogger {
         await compassDir.create(recursive: true);
       }
 
-      final file = File('${compassDir.path}/compass_log.txt');
+      final file = File('${compassDir.path}/${AppConstants.logFileName}');
       if (await file.exists()) {
         await file.delete();
       }
       await file.create(recursive: true);
       _initialized = true;
-      print('FileLogger.init: log file cleared');
     } catch (e) {
       print('FileLogger.init ERROR: $e');
     }
   }
 
-  /// Записать сообщение в лог-файл.
+  /// Записать сообщение в лог-файл. Синхронно.
   /// Файл должен быть предварительно инициализирован через [init].
   static void writeLog(String message) {
-    compute(_writeLogInternal, message);
+    try {
+      Directory? downloadsDir;
+      if (Platform.isAndroid) {
+        downloadsDir = Directory(AppConstants.externalDownloadDir);
+        if (!downloadsDir.existsSync()) {
+          downloadsDir = Directory(AppConstants.externalDownloadFallback);
+        }
+      } else {
+        return;
+      }
+
+      if (!downloadsDir.existsSync()) {
+        return;
+      }
+
+      final compassDir =
+          Directory('${downloadsDir.path}/${AppConstants.compassFolderName}');
+      if (!compassDir.existsSync()) {
+        compassDir.createSync(recursive: true);
+      }
+
+      final file = File('${compassDir.path}/${AppConstants.logFileName}');
+      final timestamp = DateTime.now().toIso8601String().replaceFirst('T', ' ');
+      final logLine = '$timestamp  $message\n';
+      file.writeAsStringSync(logLine, mode: FileMode.append);
+    } catch (e) {
+      print('writeLog ERROR: $e');
+    }
   }
 }
 ============= lib/services/gps_compass_service.dart ===
@@ -7211,9 +7143,8 @@ import 'package:flutter/foundation.dart';
 import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
 import 'gps_manager.dart';
-import '../utils/angle_utils.dart' hide calculateCircularMedian;
+import '../utils/angle_utils.dart';
 import '../utils/app_constants.dart';
-import 'computation_service.dart';
 
 class GpsCompassService {
   static final GpsCompassService instance = GpsCompassService._();
@@ -7232,10 +7163,7 @@ class GpsCompassService {
   void start(SensorSettings settings) {
     if (_subscription != null) return;
     _settings = settings;
-    _subscription = _gpsManager.subscribe(
-      intervalSeconds: settings.gpsInterval,
-      onData: _onGpsData,
-    );
+    _subscription = _gpsManager.gpsStream.listen(_onGpsData);
   }
 
   void updateSettings(SensorSettings settings) {
@@ -7265,17 +7193,15 @@ class GpsCompassService {
         ? null
         : trueToMagneticBearing(trueBearing, declination);
 
-    print(
-      'GPS_RAW: speed=${speedKmh.toStringAsFixed(1)}km/h '
-      'true=$trueBearing mag=$magneticBearing '
-      'decl=$declination manual=$useManual threshold=$threshold',
-    );
-
     if (magneticBearing != null && speedKmh >= threshold) {
       _samples.add(magneticBearing);
       if (_samples.length > _maxSamples) _samples.removeAt(0);
       _processSamples();
     } else {
+      // Скорость упала ниже порога — буфер устарел.
+      // Чистим, чтобы при следующем наборе скорости не использовать
+      // сэмплы из старого направления движения.
+      _samples.clear();
       isActiveNotifier.value = false;
     }
   }
@@ -7289,7 +7215,7 @@ class GpsCompassService {
     isActiveNotifier.value = true;
 
     final recent = _samples.sublist(_samples.length - windowSize);
-    final median = calculateCircularMedian(List.from(recent));
+    final median = calculateCircularMedianSync(List.from(recent));
     final s = (_settings?.compassSmoothness ?? AppConstants.compassSmoothnessDefault)
         .clamp(0, 100) / 100.0;
     final smoothing = 0.05 + 0.85 * s;
@@ -7315,10 +7241,23 @@ import 'package:gps_info/gps_info.dart';
 import 'sensor_service.dart';
 
 /// Единый менеджер GPS-данных.
-/// Подписывается на SensorService ровно один раз и раздаёт данные всем подписчикам через broadcast stream.
-/// Автоматически запускает/останавливает платформенный GPS при появлении/исчезновении подписчиков.
+///
+/// ВНИМАНИЕ: класс — синглтон. Таких в проекте несколько
+/// (GpsManager, SensorService, CompassService, GpsCompassService,
+/// TrackRecorder, MapScreenController). Это осознанное решение.
+/// Синглтоны затрудняют интеграционные тесты, но:
+///   - все юнит-тесты (калибровка, трансформации, утилиты) работают
+///     без них и не испытывают проблем;
+///   - для проверки функционала, требующего подмены зависимостей,
+///     используется отдельное mock-приложение;
+///   - рефакторинг на DI затрагивает все сервисы и их вызовы,
+///     риск сломать работающее выше пользы.
+/// Не переделывать без явной необходимости.
+
+/// Подписывается на SensorService ровно один раз и раздаёт данные всем
+/// потребителям через broadcast stream.
+/// Запускается вручную через [start], останавливается через [stop].
 class GpsManager {
-  bool _isDisposed = false;
   static final GpsManager _instance = GpsManager._();
   factory GpsManager() => _instance;
   GpsManager._();
@@ -7327,69 +7266,37 @@ class GpsManager {
   final StreamController<GpsData> _controller =
       StreamController<GpsData>.broadcast();
   StreamSubscription<GpsData>? _platformSubscription;
-  int _subscriberCount = 0;
+  bool _isRunning = false;
+  bool _isDisposed = false;
 
   /// Поток GPS-данных для подписки.
   Stream<GpsData> get gpsStream => _controller.stream;
 
-  /// Подписаться на GPS-данные.
-  /// При первом подписчике автоматически запускается платформенный GPS.
-  /// При отписке последнего подписчика GPS останавливается.
-  StreamSubscription<GpsData> subscribe({
-    required int intervalSeconds,
-    required void Function(GpsData) onData,
-    void Function(Object)? onError,
-    void Function()? onDone,
-  }) {
-    _subscriberCount++;
-    if (_subscriberCount == 1) {
-      _startPlatformListening(intervalSeconds);
-    }
-
-    final subscription = gpsStream.listen(
-      onData,
-      onError: onError,
-      onDone: onDone,
-    );
-
-    // Оборачиваем подписку, чтобы при отписке уменьшать счётчик
-    final wrapped = subscription
-      ..onDone(() {
-        _subscriberCount--;
-        if (_subscriberCount == 0) {
-          _stopPlatformListening();
-        }
-      });
-
-    return wrapped;
-  }
-
-  void _startPlatformListening(int intervalSeconds) {
+  /// Запустить GPS. Повторный вызов без предшествующего [stop] игнорируется.
+  void start(int intervalSeconds) {
+    if (_isRunning) return;
     _platformSubscription = _sensorService.subscribeToGps(
       intervalSeconds: intervalSeconds,
       onData: (data) => _controller.add(data),
     );
+    _isRunning = true;
   }
 
-  void _stopPlatformListening() {
+  /// Остановить GPS.
+  void stop() {
+    if (!_isRunning) return;
     _platformSubscription?.cancel();
     _platformSubscription = null;
-  }
-
-  /// Принудительно остановить GPS (например, при выходе из приложения).
-  void forceStop() {
-    _stopPlatformListening();
-    _subscriberCount = 0;
+    _isRunning = false;
   }
 
   void dispose() {
     if (_isDisposed) return;
     _isDisposed = true;
-    forceStop();
+    stop();
     _controller.close();
   }
 }
-
 ============= lib/services/gpx_export_service.dart ===
 import 'dart:io';
 import '../log_entry.dart';
@@ -7505,6 +7412,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../log_entry.dart';
 import '../utils/geo_utils.dart';
+import '../utils/app_constants.dart';
 
 class LogService {
   // Мьютекс для синхронизации операций чтения/записи логов
@@ -7556,7 +7464,7 @@ class LogService {
 
   Future<List<LogItem>> loadLogEntries() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? logJson = prefs.getString('log_items');
+    final String? logJson = prefs.getString(AppConstants.prefLogItems);
 
     if (logJson != null) {
       try {
@@ -7571,10 +7479,9 @@ class LogService {
   }
 
 Future<void> saveLogEntries(List<LogItem> logItems) async {
-  final prefs = await SharedPreferences.getInstance(); // добавить эту строку
+  final prefs = await SharedPreferences.getInstance();
   final jsonString = jsonEncode(logItems.map((e) => e.toJson()).toList());
-  print('saveLogEntries: JSON = $jsonString');
-  await prefs.setString('log_items', jsonString);
+  await prefs.setString(AppConstants.prefLogItems, jsonString);
 }
 
   Future<SetWaypointResult?> setWaypoint({
@@ -7735,12 +7642,10 @@ import '../models/map_anchor.dart';
 import '../models/geo_point.dart';
 import '../utils/geo_utils.dart';
 import 'affine_transform.dart';
-import '../models/bearing_and_distance.dart';
 import 'point_selector.dart';
 import '../models/map_working_pair.dart';
 import '../transforms/similarity_transform.dart';
 import '../transforms/photo_sever_transform.dart';
-export '../models/bearing_and_distance.dart';
 export '../models/geo_point.dart';
 export '../transforms/similarity_transform.dart';
 
@@ -7815,7 +7720,6 @@ class MapCalibrationService {
   CalibrationMode _mode = CalibrationMode.affine;
   final Set<String> _pinnedAnchorIds = {};
   bool _manualMode = false; // true, если пользователь хоть раз коснулся якоря
-  VoidCallback? onTransformChanged;
 
   // ✅ Данные ФотоСевера для режима P
   double _psLineMeters = 0.0;
@@ -7873,23 +7777,6 @@ class MapCalibrationService {
     }
 
     return null;
-  }
-
-  String? get activeAnchorIndices {
-    final t = _currentTransform;
-    if (t is! _AffineTransformerAdapter) return null;
-
-    final ids = t._selectedPoints.map((a) => a.id).toSet();
-    if (ids.isEmpty) return null;
-
-    final indices = <int>[];
-    for (int i = 0; i < _anchors.length; i++) {
-      if (ids.contains(_anchors[i].id)) {
-        indices.add(i + 1);
-      }
-    }
-    indices.sort();
-    return indices.join(' ');
   }
 
   List<MapAnchor> get pinnedAnchors =>
@@ -8019,8 +7906,14 @@ class MapCalibrationService {
     } else {
       _pinnedAnchorIds.add(anchorId);
       _manualMode = true;
-      // НЕ вызываем _buildTransformFromAnchors() здесь — подождём проверки коллинеарности
-      // Запускаем таймер для проверки и последующего перестроения
+      // НЕ вызываем _buildTransformFromAnchors() здесь — подождём проверки коллинеарности.
+      // Запускаем таймер для проверки и последующего перестроения.
+      //
+      // Таймер не отменяется. Осознанно оставлено как есть.
+      // Обоснование: событие редкое (быстрые множественные клики маловероятны),
+      // при закрытии экрана карты вызов отработает на объекте, который уже
+      // не в UI, и безвредно завершится. Возвращаться к этому — только если
+      // появятся реальные проблемы.
       Future.delayed(const Duration(seconds: 1), () {
         _checkAndApplyManualSet(anchorId);
       });
@@ -8043,6 +7936,19 @@ class MapCalibrationService {
     }
     // Применяем результат
     _buildTransformFromAnchors();
+  }
+
+  /// Возвращает список якорей, где последний добавленный (по порядку
+  /// в _anchors) стоит первым. Остальные сохраняют относительный порядок.
+  List<MapAnchor> _orderWithLatestFirst(List<MapAnchor> points) {
+    if (points.isEmpty || _anchors.isEmpty) return points;
+    final latestAnchor = _anchors.last;
+    final latestInPoints = points.firstWhere(
+      (a) => a.id == latestAnchor.id,
+      orElse: () => points.first,
+    );
+    final rest = points.where((a) => a.id != latestInPoints.id).toList();
+    return [latestInPoints, ...rest];
   }
 
   bool _isCollinear(List<MapAnchor> points) {
@@ -8148,16 +8054,21 @@ class MapCalibrationService {
       final pinnedList = pinnedAnchors;
       if (pinnedList.length >= 3) {
         try {
+          // Переупорядочиваем: последний добавленный якорь — первым.
+          // buildWeights даёт вес latestPointWeight элементу [0],
+          // а смысл веса — больше доверия свежей точке.
+          final orderedList = _orderWithLatestFirst(pinnedList);
           final affine = AffineTransform.fromPoints(
-            pinnedList.map((a) => Offset(a.imageX, a.imageY)).toList(),
-            pinnedList.map((a) => Offset(a.longitude, a.latitude)).toList(),
-            weights: PointSelector.buildWeights(pinnedList.length),
+            orderedList.map((a) => Offset(a.imageX, a.imageY)).toList(),
+            orderedList.map((a) => Offset(a.longitude, a.latitude)).toList(),
+            weights: PointSelector.buildWeights(orderedList.length),
           );
-          final rmse = PointSelector.computeRmse(pinnedList, affine);
-          final selfError = PointSelector.computeSelfError(pinnedList, affine);
+          final rmse = PointSelector.computeRmse(orderedList, affine);
+          final selfError =
+              PointSelector.computeSelfError(orderedList, affine);
           _currentTransform = _AffineTransformerAdapter._(
             affine: affine,
-            selectedPoints: pinnedList,
+            selectedPoints: orderedList,
             rmse: rmse,
             selfError: selfError,
           );
@@ -8220,7 +8131,6 @@ class MapCalibrationService {
 
     // Если режим не распознан — сброс
     _currentTransform = null;
-    onTransformChanged?.call();
   }
 
   GeoPoint? imagePointToGeoFromCurrent(Offset imagePoint) {
@@ -8299,22 +8209,6 @@ class MapCalibrationService {
     return geoAngle - imageAngle;
   }
 
-  BearingAndDistance bearingAndDistance({
-    required double fromLat,
-    required double fromLon,
-    required double toLat,
-    required double toLon,
-    required double magneticDeclination,
-  }) {
-    final dist = calculateDistance(fromLat, fromLon, toLat, toLon);
-    final trueBearing = calculateTrueBearing(fromLat, fromLon, toLat, toLon);
-    final magneticBearing = (trueBearing - magneticDeclination + 360) % 360;
-    return BearingAndDistance(
-      distanceMeters: dist,
-      trueBearing: trueBearing,
-      magneticBearing: magneticBearing,
-    );
-  }
 }
 
 ============= lib/services/map_storage_service.dart ===
@@ -8325,15 +8219,17 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/map_project.dart';
 import '../models/map_transform_state.dart';
+import '../utils/app_constants.dart';
 
 class MapStorageService {
-  static const String _projectsKey = 'map_projects';
-  static const String _currentProjectIdKey = 'current_map_project_id';
-  static const String _transformPrefix = 'map_transform_';
+  static const String _projectsKey = AppConstants.prefMapProjects;
+  static const String _currentProjectIdKey =
+      AppConstants.prefCurrentMapProjectId;
+  static const String _transformPrefix = AppConstants.prefMapTransformPrefix;
 
   Future<Directory> _getMapsDirectory() async {
     final appDir = await getApplicationDocumentsDirectory();
-    final mapsDir = Directory('${appDir.path}/compass40_maps');
+    final mapsDir = Directory('${appDir.path}/${AppConstants.mapsFolderName}');
     if (!await mapsDir.exists()) {
       await mapsDir.create(recursive: true);
     }
@@ -8547,7 +8443,6 @@ class PointSelector {
 
 import 'dart:async';
 import 'package:gps_info/gps_info.dart';
-import 'package:sensors_plus/sensors_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/home_state.dart';
@@ -8560,50 +8455,53 @@ class SensorService {
 
   final GpsInfo _gpsInfo = GpsInfo();
 
-  // Expose sensor streams by calling the new recommended methods
-  Stream<MagnetometerEvent> get magnetometerEvents => magnetometerEventStream();
-  Stream<UserAccelerometerEvent> get userAccelerometerEvents =>
-      userAccelerometerEventStream();
-  Stream<GyroscopeEvent> get gyroscopeEvents => gyroscopeEventStream();
-
   Future<SensorSettings> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final useManualDeclination = prefs.getBool('useManualDeclination') ?? false;
+    final useManualDeclination =
+        prefs.getBool(AppConstants.prefUseManualDeclination) ?? false;
     final magneticDeclination = useManualDeclination
-        ? (prefs.getDouble('manualDeclination') ?? 0.0)
+        ? (prefs.getDouble(AppConstants.prefManualDeclination) ?? 0.0)
         : 0.0;
 
-    final compassModeIndex = prefs.getInt('compassMode') ?? 0;
-    final compassMode = CompassMode.values[compassModeIndex];
+    final compassModeIndex =
+        prefs.getInt(AppConstants.prefCompassMode) ?? 0;
+    final compassMode =
+        (compassModeIndex >= 0 && compassModeIndex < CompassMode.values.length)
+            ? CompassMode.values[compassModeIndex]
+            : CompassMode.magnetic;
     final autoSwitchSpeedKmh =
-        prefs.getDouble('autoSwitchSpeedKmh') ??
+        prefs.getDouble(AppConstants.prefAutoSwitchSpeedKmh) ??
         AppConstants.autoSwitchSpeedDefaultKmh;
 
     return SensorSettings(
       useManualDeclination: useManualDeclination,
       magneticDeclination: magneticDeclination,
       compassSmoothness:
-          prefs.getInt('compassSmoothness') ??
+          prefs.getInt(AppConstants.prefCompassSmoothness) ??
           AppConstants.compassSmoothnessDefault,
       uiUpdatePeriod:
-          prefs.getInt('uiUpdatePeriod') ??
+          prefs.getInt(AppConstants.prefUiUpdatePeriod) ??
           AppConstants.uiUpdatePeriodDefaultMs,
-      gpsInterval: prefs.getInt('gpsUpdateInterval') ?? AppConstants.gpsUpdateIntervalDefaultSec,
+      gpsInterval:
+          prefs.getInt(AppConstants.prefGpsUpdateInterval) ??
+          AppConstants.gpsUpdateIntervalDefaultSec,
       compassMode: compassMode,
       autoSwitchSpeedKmh: autoSwitchSpeedKmh,
-      gpsAveragingSamples: prefs.getInt('gpsAveragingSamples') ?? AppConstants.gpsAveragingSamplesDefault,
+      gpsAveragingSamples:
+          prefs.getInt(AppConstants.prefGpsAveragingSamples) ??
+          AppConstants.gpsAveragingSamplesDefault,
     );
   }
 
   Future<void> saveCompassMode(CompassMode mode) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('compassMode', mode.index);
+    await prefs.setInt(AppConstants.prefCompassMode, mode.index);
   }
 
   Future<void> saveAutoSwitchSpeed(double speedKmh) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('autoSwitchSpeedKmh', speedKmh);
+    await prefs.setDouble(AppConstants.prefAutoSwitchSpeedKmh, speedKmh);
   }
 
   Future<bool> requestLocationPermission() async {
@@ -8650,15 +8548,19 @@ class SensorSettings {
 ============= lib/services/track_recorder.dart ===
 // ignore_for_file: avoid_print
 
-import '../controllers/home_state.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:gps_info/gps_info.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/gps_manager.dart';
-import '../services/sensor_service.dart';
 import '../utils/app_constants.dart';
 
+/// Запись точек трека в CSV-файл.
+///
+/// Юнит-тесты не покрываются осознанно: класс завязан на жёсткие пути
+/// Android (`/storage/emulated/0/Download`), синглтон GpsManager и
+/// SharedPreferences. Стоимость рефакторинга под тесты выше пользы —
+/// функционал некритичный, проверяется вручную.
 class TrackRecorder {
   static final TrackRecorder _instance = TrackRecorder._();
   factory TrackRecorder() => _instance;
@@ -8687,41 +8589,21 @@ class TrackRecorder {
 
     _pendingLines.clear();
 
-    final existingCsv = File('${dir.path}/track_points.csv');
+    final existingCsv = File('${dir.path}/${AppConstants.trackFileName}');
     if (await existingCsv.exists()) {
       _csvPath = existingCsv.path;
     } else {
-      _csvPath = '${dir.path}/track_points.csv';
+      _csvPath = '${dir.path}/${AppConstants.trackFileName}';
       await existingCsv.create(recursive: true);
       await existingCsv.writeAsString('');
     }
 
     _isRecording = true;
-    await prefs.setBool('isRecordingTrack', true);
+    await prefs.setBool(AppConstants.prefIsRecordingTrack, true);
 
-    final settings = await _loadSettings();
-    _subscription = _gpsManager.subscribe(
-      intervalSeconds: settings.gpsInterval,
-      onData: _onGpsData,
-    );
+    _subscription = _gpsManager.gpsStream.listen(_onGpsData);
   }
-
-  Future<SensorSettings> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    return SensorSettings(
-      useManualDeclination: prefs.getBool('useManualDeclination') ?? false,
-      magneticDeclination: prefs.getDouble('manualDeclination') ?? 0.0,
-      compassSmoothness:
-          prefs.getInt('compassSmoothness') ??
-          AppConstants.compassSmoothnessDefault,
-      uiUpdatePeriod: prefs.getInt('uiUpdatePeriod') ?? 250,
-      gpsInterval: prefs.getInt('gpsUpdateInterval') ?? 1,
-      compassMode: CompassMode.values[prefs.getInt('compassMode') ?? 0],
-      autoSwitchSpeedKmh: prefs.getDouble('autoSwitchSpeedKmh') ?? 3.0,
-      gpsAveragingSamples: prefs.getInt('gpsAveragingSamples') ?? 3,
-    );
-  }
-
+  
   void _onGpsData(GpsData data) {
       
     // ВАЖНО: 
@@ -8740,19 +8622,17 @@ class TrackRecorder {
     final lon = data.longitude!;
 
     _pendingLines.add('$time,$lat,$lon\n');
-    print('[TrackRecorder] buffered point, buffer=${_pendingLines.length}');
 
     if (_pendingLines.length >= _saveThreshold) {
-      _flushBuffer();
+      unawaited(_flushBuffer());
     }
   }
 
-  void _flushBuffer() {
+  Future<void> _flushBuffer() async {
     if (_pendingLines.isEmpty || _csvPath == null) return;
-    final file = File(_csvPath!);
-    file.writeAsStringSync(_pendingLines.join(), mode: FileMode.append);
-    print('[TrackRecorder] flushed ${_pendingLines.length} points');
+    final lines = _pendingLines.join();
     _pendingLines.clear();
+    await File(_csvPath!).writeAsString(lines, mode: FileMode.append);
   }
 
   Future<void> stop() async {
@@ -8760,21 +8640,22 @@ class TrackRecorder {
     _isRecording = false;
     await _subscription?.cancel();
     _subscription = null;
-    _flushBuffer();
+    await _flushBuffer();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isRecordingTrack', false);
+    await prefs.setBool(AppConstants.prefIsRecordingTrack, false);
   }
 
   static Future<bool> recoverIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
-    final wasRecording = prefs.getBool('isRecordingTrack') ?? false;
+    final wasRecording =
+        prefs.getBool(AppConstants.prefIsRecordingTrack) ?? false;
 
     final dir = Directory(
       '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
     );
     if (!await dir.exists()) return false;
 
-    final csvFile = File('${dir.path}/track_points.csv');
+    final csvFile = File('${dir.path}/${AppConstants.trackFileName}');
     if (await csvFile.exists()) {
       return wasRecording;
     }
@@ -8810,21 +8691,25 @@ class TrackRecorder {
     _csvPath = null;
     _pendingLines.clear();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isRecordingTrack', false);
+    await prefs.setBool(AppConstants.prefIsRecordingTrack, false);
   }
 
   /// Инициализирует состояние для восстановления записи после сбоя.
-  /// Устанавливает путь к существующему CSV-файлу, чтобы последующий экспорт работал.
+  /// Устанавливает путь к существующему CSV-файлу, возобновляет запись
+  /// и подписку на GPS. Новые точки дописываются в тот же файл.
   Future<void> initializeForRecovery() async {
     final dir = Directory(
       '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}',
     );
     if (!await dir.exists()) return;
 
-    final csvFile = File('${dir.path}/track_points.csv');
+    final csvFile = File('${dir.path}/${AppConstants.trackFileName}');
     if (await csvFile.exists()) {
       _csvPath = csvFile.path;
     }
+
+    _isRecording = true;
+    _subscription = _gpsManager.gpsStream.listen(_onGpsData);
   }
 
   Future<void> dispose() async {
@@ -8835,10 +8720,11 @@ class TrackRecorder {
 ============= lib/theme_provider.dart ===
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'utils/app_constants.dart';
 
 class ThemeProvider with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
-  final String _key = "themeMode";
+  final String _key = AppConstants.prefThemeMode;
 
   ThemeMode get themeMode => _themeMode;
 
@@ -9090,8 +8976,6 @@ class SimilarityTransform implements MapTransformer {
   Set<String>? get activeAnchorIds => {latestId, referenceId};
 }
 ============= lib/utils/angle_utils.dart ===
-import 'package:flutter/foundation.dart';
-
 /// Приводит азимут к диапазону [0, 360), где 360 становится 0.
 /// Обрабатывает как положительные, так и отрицательные входные значения.
 double normalizeBearing(double bearing) {
@@ -9107,77 +8991,49 @@ double trueToMagneticBearing(double trueBearing, double declination) {
 }
 
 
-Future<double> calculateCircularMedian(List<double> angles) async {
-  // Выносим в изолят, если вдруг список будет большим
-  return await compute(_calculateCircularMedian, angles);
-}
+double calculateCircularMedianSync(List<double> angles) {
+  if (angles.isEmpty) return 0.0;
+  if (angles.length == 1) return angles.first;
 
+  final sorted = List<double>.from(angles)..sort();
+  final n = sorted.length;
 
-double _calculateCircularMedian(List<double> angles) {
-  if (angles.isEmpty) {
-    return 0.0;
-  }
-  
-  final n = angles.length;
-  if (n == 1) {
-    return angles.first;
-  }
-
-  // Сортируем углы, чтобы найти разрывы
-  angles.sort();
-
-  // Ищем самый большой разрыв между соседними углами.
-  // Этот разрыв, скорее всего, является точкой перехода 359° -> 0°
   double maxGap = 0;
   int maxGapIndex = -1;
-
   for (int i = 0; i < n - 1; i++) {
-    final gap = angles[i + 1] - angles[i];
+    final gap = sorted[i + 1] - sorted[i];
     if (gap > maxGap) {
       maxGap = gap;
       maxGapIndex = i;
     }
   }
-  // Также проверяем разрыв между последним и первым элементом (переход через 360)
-  final wrapAroundGap = (angles.first + 360) - angles.last;
-  if (wrapAroundGap > maxGap) {
-    maxGap = wrapAroundGap;
-    maxGapIndex = n - 1; // Разрыв между последним и первым
+  final wrapGap = (sorted.first + 360) - sorted.last;
+  if (wrapGap > maxGap) {
+    maxGap = wrapGap;
+    maxGapIndex = n - 1;
   }
 
-  // "Поворачиваем" массив, чтобы он стал непрерывной последовательностью
-  List<double> sortedCircular = List.from(angles);
+  List<double> ordered = sorted;
   if (maxGap > 180 && maxGapIndex != -1) {
     final startIndex = (maxGapIndex + 1) % n;
-    sortedCircular = [];
-    for (int i = 0; i < n; i++) {
-      sortedCircular.add(angles[(startIndex + i) % n]);
-    }
+    ordered = List<double>.generate(
+      n,
+      (i) => sorted[(startIndex + i) % n],
+    );
   }
 
-  // Теперь, когда массив отсортирован по-круговому, находим медиану
   if (n % 2 == 1) {
-    // Для нечетного количества, это просто средний элемент
-    return sortedCircular[n ~/ 2];
+    return ordered[n ~/ 2];
   } else {
-    // Для четного, это средняя точка между двумя центральными элементами
-    final m1 = sortedCircular[n ~/ 2 - 1];
-    double m2 = sortedCircular[n ~/ 2];
-
-    // Вычисляем среднюю точку по кратчайшей дуге
-    double median;
-    final diff = (m2 - m1).abs();
-    if (diff > 180) {
-      // Если дуга > 180, идем через 0/360
+    final m1 = ordered[n ~/ 2 - 1];
+    final m2 = ordered[n ~/ 2];
+    if ((m2 - m1).abs() > 180) {
       final avg = (m1 + m2 + 360) / 2;
-      median = avg >= 360 ? avg - 360 : avg;
-    } else {
-      median = (m1 + m2) / 2;
+      return avg >= 360 ? avg - 360 : avg;
     }
-    return median;
+    return (m1 + m2) / 2;
   }
 }
-
 
 /// Форматирует азимут для отображения. Округляет до целого
 /// и преобразурует 360 в 0, добавляя знак градуса.
@@ -9188,9 +9044,45 @@ String formatBearing(double bearing) {
 }
 ============= lib/utils/app_constants.dart ===
 class AppConstants {
+  // У программы единственный пользователь — сам разработчик.
+  // В текущих условиях жёсткие пути Android работают и менять их
+  // на path_provider не нужно. Когда появятся проблемы на других
+  // устройствах — вернуться к этому вопросу.
   static const String externalDownloadDir = '/storage/emulated/0/Download';
   static const String externalDownloadFallback = '/sdcard/Download';
   static const String compassFolderName = 'Compass40';
+
+  static const String logFileName = 'compass_log.txt';
+  static const String trackFileName = 'track_points.csv';
+  static const String mapsFolderName = 'compass40_maps';
+  static const String notificationChannelId = 'compass40_tracking_channel';
+
+  /// Ключи SharedPreferences.
+  static const String prefUseManualDeclination = 'useManualDeclination';
+  static const String prefManualDeclination = 'manualDeclination';
+  static const String prefGpsUpdateInterval = 'gpsUpdateInterval';
+  static const String prefGpsAveragingSamples = 'gpsAveragingSamples';
+  static const String prefAutoSwitchSpeedKmh = 'autoSwitchSpeedKmh';
+  static const String prefUiUpdatePeriod = 'uiUpdatePeriod';
+  static const String prefCompassSmoothness = 'compassSmoothness';
+  static const String prefCompassMode = 'compassMode';
+  static const String prefThemeMode = 'themeMode';
+  static const String prefRotateModeTimeoutMs = 'rotateModeTimeoutMs';
+  static const String prefAnchorCompensationMs = 'anchor_compensation_ms';
+  static const String prefPhotoSeverDistance = 'photoSeverDistance';
+  static const String prefIsRecordingTrack = 'isRecordingTrack';
+  static const String prefLogItems = 'log_items';
+  static const String prefMapProjects = 'map_projects';
+  static const String prefCurrentMapProjectId = 'current_map_project_id';
+  static const String prefMapTransformPrefix = 'map_transform_';
+  static const String prefCompassCalibX = 'compass_calib_x';
+  static const String prefCompassCalibY = 'compass_calib_y';
+  static const String prefCompassCalibZ = 'compass_calib_z';
+  static const String prefCompassCalibRangeX = 'compass_calib_range_x';
+  static const String prefCompassCalibRangeY = 'compass_calib_range_y';
+  static const String prefCompassCalibRangeZ = 'compass_calib_range_z';
+  static const String prefCompassCalibrated = 'compass_calibrated';
+  static const String prefCompassCalibMagnitude = 'compass_calib_magnitude';
 
   static const double minTriangleAngleDegrees = 15.0;
   static const double maxTriangleAngleDegrees = 165.0; // 180 - 15
@@ -9242,6 +9134,46 @@ Future<double> getTotalAppStorageMB() async {
   final docSize = await getDirectorySize(docDir);
   final cacheSize = await getDirectorySize(cacheDir);
   return (docSize + cacheSize) / (1024 * 1024);
+}
+============= lib/utils/calibration_utils.dart ===
+/// Определяет, устарела ли калибровка магнитного компаса.
+///
+/// Калибровка считается устаревшей, если средняя магнитуда поля
+/// после вычитания офсетов сильно отличается от магнитуды,
+/// зафиксированной при последней успешной калибровке.
+///
+/// [isCalibrated] — есть ли активная калибровка.
+/// [calibMagnitude] — магнитуда поля (μT) на момент калибровки.
+/// [avgMagnitude] — текущее усреднённое значение магнитуды.
+/// [bufferLength] — сколько значений накоплено в буфере.
+/// [bufferSize] — размер буфера (должен быть заполнен полностью).
+/// [relativeThreshold] — относительный порог отклонения (по умолчанию 0.30).
+/// [minMagnitude] — нижняя граница нормы (μT).
+/// [maxMagnitude] — верхняя граница нормы (μT).
+bool isCalibrationStale({
+  required bool isCalibrated,
+  required double calibMagnitude,
+  required double avgMagnitude,
+  required int bufferLength,
+  required int bufferSize,
+  double relativeThreshold = 0.30,
+  double minMagnitude = 20.0,
+  double maxMagnitude = 80.0,
+}) {
+  if (!isCalibrated) return false;
+  if (calibMagnitude <= 0) return false;
+  if (bufferLength < bufferSize) return false;
+
+  final relDiff = (avgMagnitude - calibMagnitude).abs() / calibMagnitude;
+  if (relDiff > relativeThreshold) return true;
+  if (avgMagnitude < minMagnitude) return true;
+  if (avgMagnitude > maxMagnitude) return true;
+  return false;
+}
+============= lib/utils/compensation_utils.dart ===
+double updateCompensationEma(double current, double delta) {
+  final next = current * 0.9 + delta * 0.1;
+  return next.clamp(500.0, 3000.0);
 }
 ============= lib/utils/geo_utils.dart ===
 import 'dart:math';
@@ -9349,6 +9281,50 @@ GeoPoint? parseCoordinates(String text) {
   if (lat == null || lon == null) return null;
   return GeoPoint(latitude: lat, longitude: lon);
 }
+============= lib/utils/user_path_utils.dart ===
+import 'dart:ui';
+
+/// Прореживает путь пользователя, если его длина превышает [maxPoints].
+///
+/// Схема: первая половина точек разрежается (берётся каждая вторая),
+/// вторая половина сохраняется полностью. Это ограничивает длину пути
+/// без потери формы маршрута: старые участки теряют детализацию,
+/// новые остаются плотными.
+///
+/// Индексы скачков ([jumpIndices]) пересчитываются под новый список.
+({List<Offset> path, List<int> jumpIndices}) pruneUserPath({
+  required List<Offset> path,
+  required List<int> jumpIndices,
+  int maxPoints = 5000,
+}) {
+  if (path.length <= maxPoints) {
+    return (path: path, jumpIndices: jumpIndices);
+  }
+
+  final half = path.length ~/ 2;
+  final jumpSet = jumpIndices.toSet();
+
+  final newPath = <Offset>[];
+  final newJumpIndices = <int>[];
+
+  // Первая половина: каждая вторая точка.
+  for (int i = 0; i < half; i += 2) {
+    if (jumpSet.contains(i)) {
+      newJumpIndices.add(newPath.length);
+    }
+    newPath.add(path[i]);
+  }
+
+  // Вторая половина: все точки.
+  for (int i = half; i < path.length; i++) {
+    if (jumpSet.contains(i)) {
+      newJumpIndices.add(newPath.length);
+    }
+    newPath.add(path[i]);
+  }
+
+  return (path: newPath, jumpIndices: newJumpIndices);
+}
 ============= lib/widgets/compass_painters.dart ===
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -9381,9 +9357,8 @@ class ArrowPainter extends CustomPainter {
 }
 
 class WindRosePainter extends CustomPainter {
-  final bool isDarkMode;
   final double heading;
-  WindRosePainter({required this.isDarkMode, required this.heading});
+  WindRosePainter({required this.heading});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -9483,7 +9458,7 @@ class WindRosePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant WindRosePainter old) =>
-      old.isDarkMode != isDarkMode || old.heading != heading;
+      old.heading != heading;
 }
 
 class UprightTrianglePainter extends CustomPainter {
@@ -9539,6 +9514,7 @@ class CompassSection extends StatelessWidget {
   final ValueNotifier<int> calibrationProgressNotifier;
   final ValueNotifier<bool> headingValidNotifier;
   final ValueNotifier<bool> isGpsCompassActiveNotifier;
+  final ValueNotifier<bool> calibrationStaleNotifier;
   final ValueNotifier<double?> bearingToTarget;
   final ValueNotifier<double?> bearingToWaypoint;
   final List<LogItem> logItems;
@@ -9557,6 +9533,7 @@ class CompassSection extends StatelessWidget {
     required this.calibrationProgressNotifier,
     required this.headingValidNotifier,
     required this.isGpsCompassActiveNotifier,
+    required this.calibrationStaleNotifier,
     required this.bearingToTarget,
     required this.bearingToWaypoint,
     required this.logItems,
@@ -9629,12 +9606,7 @@ class CompassSection extends StatelessWidget {
                             width: 275,
                             height: 275,
                             child: CustomPaint(
-                              painter: WindRosePainter(
-                                isDarkMode:
-                                    Theme.of(context).brightness ==
-                                    Brightness.dark,
-                                heading: heading,
-                              ),
+                              painter: WindRosePainter(heading: heading),
                             ),
                           ),
                           _buildTargetArrow(),
@@ -9662,7 +9634,7 @@ class CompassSection extends StatelessWidget {
                           return ValueListenableBuilder<double>(
                             valueListenable: accuracyNotifier,
                             builder: (context, acc, _) {
-                              final color = isGpsActive
+                              final shieldColor = isGpsActive
                                   ? Colors.grey
                                   : getAccuracyStatusColor(acc);
 
@@ -9670,44 +9642,54 @@ class CompassSection extends StatelessWidget {
                                   ? 'GPS компас'
                                   : getAccuracyText(acc);
 
-                              return ValueListenableBuilder<int>(
-                                valueListenable:
-                                    calibrationProgressNotifier,
-                                builder: (context, progress, _) {
-                                  final showHint =
-                                      !isGpsActive && acc < 3;
-                                  final hintText = showHint
-                                      ? '8-ку ($progress/8)'
-                                      : '';
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.shield_outlined,
-                                        color: color,
-                                        size: 28,
-                                      ),
-                                      Text(
-                                        text,
-                                        style: TextStyle(
-                                          color: color,
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                      if (showHint)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 2,
+                              return ValueListenableBuilder<bool>(
+                                valueListenable: calibrationStaleNotifier,
+                                builder: (context, isStale, _) {
+                                  final textColor = (!isGpsActive &&
+                                          acc == 3 &&
+                                          isStale)
+                                      ? Colors.redAccent
+                                      : shieldColor;
+                                  return ValueListenableBuilder<int>(
+                                    valueListenable:
+                                        calibrationProgressNotifier,
+                                    builder: (context, progress, _) {
+                                      final showHint =
+                                          !isGpsActive && acc < 3;
+                                      final hintText = showHint
+                                          ? '8-ку ($progress/8)'
+                                          : '';
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.shield_outlined,
+                                            color: shieldColor,
+                                            size: 28,
                                           ),
-                                          child: Text(
-                                            hintText,
+                                          Text(
+                                            text,
                                             style: TextStyle(
-                                              color: color,
-                                              fontSize: 9,
+                                              color: textColor,
+                                              fontSize: 10,
                                             ),
                                           ),
-                                        ),
-                                    ],
+                                          if (showHint)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 2,
+                                              ),
+                                              child: Text(
+                                                hintText,
+                                                style: TextStyle(
+                                                  color: shieldColor,
+                                                  fontSize: 9,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
+                                    },
                                   );
                                 },
                               );
@@ -9978,6 +9960,10 @@ class _GpsSectionState extends State<GpsSection> {
     );
   }
 
+  // Dismissible с прозрачным фоном: пользователь не видит подсказки
+  // о том, что строку можно смахнуть. Осознанно оставлено как есть —
+  // жест работает, лишний визуальный шум не нужен. Возвращаться
+  // к вопросу — только если появятся жалобы на неочевидность.
   Widget _buildTargetInfo() {
     const minH = 48.0;
     if (widget.target == null) {
@@ -10477,6 +10463,7 @@ class _ImagePainter extends CustomPainter {
 
 ============= lib/widgets/map_overlay_painter.dart ===
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/map_anchor.dart';
 import '../models/map_target.dart';
@@ -10490,6 +10477,7 @@ class MapOverlayPainter extends CustomPainter {
 
   final List<MapAnchor> anchors;
   final List<MapTarget> targets;
+  final MapAnchor? pendingAnchor;
   final Set<String> activeAnchorIds;
   final List<Offset> userPath;
   final List<int> pathJumpIndices;
@@ -10510,6 +10498,7 @@ class MapOverlayPainter extends CustomPainter {
     required this.viewportSize,
     required this.anchors,
     required this.targets,
+    this.pendingAnchor,
     this.activeAnchorIds = const {},
     this.userPath = const [],
     this.pathJumpIndices = const [],
@@ -10530,6 +10519,13 @@ class MapOverlayPainter extends CustomPainter {
     for (final anchor in anchors) {
       final screen = imageToScreen(Offset(anchor.imageX, anchor.imageY));
       _drawAnchor(canvas, screen, anchor);
+    }
+
+    if (pendingAnchor != null) {
+      final screen = imageToScreen(
+        Offset(pendingAnchor!.imageX, pendingAnchor!.imageY),
+      );
+      _drawPendingAnchor(canvas, screen);
     }
 
     for (final target in targets) {
@@ -10645,6 +10641,37 @@ class MapOverlayPainter extends CustomPainter {
       ..lineTo(screen.dx, screen.dy + 10)
       ..lineTo(screen.dx + 5, screen.dy + 5);
     canvas.drawPath(path, linePaint);
+  }
+
+  void _drawPendingAnchor(Canvas canvas, Offset screen) {
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    final circlePaint = Paint()
+      ..color = Colors.yellow
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    canvas.drawCircle(screen, 10, borderPaint);
+    canvas.drawCircle(screen, 10, circlePaint);
+
+    final linePaint = Paint()
+      ..color = Colors.yellow
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawLine(
+      screen + const Offset(-5, 0),
+      screen + const Offset(5, 0),
+      linePaint,
+    );
+    canvas.drawLine(
+      screen + const Offset(0, -8),
+      screen + const Offset(0, 5),
+      linePaint,
+    );
   }
 
   void _drawCurrentPosition(Canvas canvas, Offset screen) {
@@ -10872,35 +10899,17 @@ class MapOverlayPainter extends CustomPainter {
       return true;
     }
 
-    // Списки: проверка длины
-    if (oldDelegate.anchors.length != anchors.length ||
-        oldDelegate.targets.length != targets.length ||
-        oldDelegate.userPath.length != userPath.length ||
-        oldDelegate.pathJumpIndices.length != pathJumpIndices.length) {
+    // Pending-якорь: проверка наличия
+    if ((oldDelegate.pendingAnchor == null) != (pendingAnchor == null)) {
       return true;
     }
 
-    // Пользовательский путь: проверка последней точки
-    if (userPath.isNotEmpty && oldDelegate.userPath.isNotEmpty) {
-      if (userPath.last != oldDelegate.userPath.last) return true;
-    } else if (userPath.isNotEmpty != oldDelegate.userPath.isNotEmpty) {
-      return true;
-    }
-
-    // Якоря: проверка последнего ID
-    if (anchors.isNotEmpty && oldDelegate.anchors.isNotEmpty) {
-      if (anchors.last.id != oldDelegate.anchors.last.id) return true;
-    } else if (anchors.isNotEmpty != oldDelegate.anchors.isNotEmpty) {
-      return true;
-    }
-
-    // Цели: проверка последнего ID и статуса
-    if (targets.isNotEmpty && oldDelegate.targets.isNotEmpty) {
-      if (targets.last.id != oldDelegate.targets.last.id ||
-          targets.last.status != oldDelegate.targets.last.status) {
-        return true;
-      }
-    } else if (targets.isNotEmpty != oldDelegate.targets.isNotEmpty) {
+    // Поэлементное сравнение списков. Модели наследуют Equatable,
+    // поэтому listEquals даёт точный результат без эвристик.
+    if (!listEquals(oldDelegate.anchors, anchors)) return true;
+    if (!listEquals(oldDelegate.targets, targets)) return true;
+    if (!listEquals(oldDelegate.userPath, userPath)) return true;
+    if (!listEquals(oldDelegate.pathJumpIndices, pathJumpIndices)) {
       return true;
     }
 
@@ -10917,6 +10926,147 @@ class MapOverlayPainter extends CustomPainter {
   }
 }
 
+============= lib/widgets/map_scale_badge.dart ===
+import 'package:flutter/material.dart';
+
+/// Индикатор масштаба и расстояния до прицела в правом верхнем углу карты.
+class MapScaleBadge extends StatelessWidget {
+  final int totalCount;
+  final int usedCount;
+  final double? metersPerPx;
+  final double? distanceMeters;
+
+  const MapScaleBadge({
+    super.key,
+    required this.totalCount,
+    required this.usedCount,
+    required this.metersPerPx,
+    required this.distanceMeters,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (totalCount == 0) return const SizedBox.shrink();
+
+    final Color textColor;
+    if (totalCount >= 3) {
+      textColor = Colors.green;
+    } else if (totalCount == 2 && usedCount == 2) {
+      textColor = Colors.orange;
+    } else {
+      textColor = Colors.red;
+    }
+
+    double segmentWidth = 0;
+    String scaleLabel = '';
+    if (metersPerPx != null && metersPerPx! > 0) {
+      final screenWidth = MediaQuery.of(context).size.width;
+      final maxWidth = screenWidth * 0.4;
+      const niceNumbers = [
+        1, 2, 5, 10, 20, 50, 100, 150, 200, 250, 500, 1000, 2000, 5000,
+      ];
+      for (final num in niceNumbers) {
+        final w = num / metersPerPx!;
+        if (w <= maxWidth) {
+          segmentWidth = w;
+          scaleLabel = '$num м';
+        } else {
+          break;
+        }
+      }
+      if (segmentWidth == 0) {
+        segmentWidth = niceNumbers.last / metersPerPx!;
+        scaleLabel = '${niceNumbers.last} м';
+      }
+    }
+
+    final String topLeftDisplay = '📏';
+    final String topRightDisplay = distanceMeters != null
+        ? (distanceMeters! >= 1000
+              ? '${(distanceMeters! / 1000).toStringAsFixed(1)} км'
+              : '${distanceMeters!.round()} м')
+        : '---';
+
+    Widget topRowFullWidth = const SizedBox.shrink();
+    if (metersPerPx != null && segmentWidth > 0) {
+      topRowFullWidth = SizedBox(
+        width: segmentWidth,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _shadowedText(topLeftDisplay, textColor),
+            _shadowedText(topRightDisplay, textColor),
+          ],
+        ),
+      );
+    }
+
+    Widget scaleWidget;
+    if (metersPerPx != null && segmentWidth > 0) {
+      scaleWidget = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: topRowFullWidth,
+          ),
+          Container(
+            width: segmentWidth,
+            height: 2,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.white,
+                  blurRadius: 4,
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            width: segmentWidth,
+            child: Text(
+              scaleLabel,
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                shadows: [
+                  Shadow(color: Colors.white, blurRadius: 2),
+                  Shadow(color: Colors.white, blurRadius: 4),
+                  Shadow(color: Colors.white, blurRadius: 6),
+                ],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      );
+    } else {
+      scaleWidget = _shadowedText(topLeftDisplay, textColor);
+    }
+
+    return Tooltip(message: 'Масштабная линейка', child: scaleWidget);
+  }
+
+  Widget _shadowedText(String text, Color color) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: color,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        shadows: [
+          Shadow(color: Colors.white, blurRadius: 2),
+          Shadow(color: Colors.white, blurRadius: 4),
+          Shadow(color: Colors.white, blurRadius: 6),
+        ],
+      ),
+    );
+  }
+}
 ============= lib/widgets/map_zoom_buttons.dart ===
 import 'package:flutter/material.dart';
 
@@ -10969,6 +11119,7 @@ class MapZoomButtons extends StatelessWidget {
             onTap: onTargetPressed,
             onLongPress: onTargetLongPressed,
             enabled: targetEnabled,
+            size: 75,
           ),
           const SizedBox(height: 12),
           // Кнопка "Я ЗДЕСЬ"
@@ -10979,6 +11130,7 @@ class MapZoomButtons extends StatelessWidget {
             onTap: onHereNowPressed,
             onLongPress: onHereFromClipboard,
             enabled: hereEnabled,
+            size: 75,
           ),
           const SizedBox(height: 36), // Добавлено пространство
           // Стандартные кнопки масштаба и поворота
@@ -11016,22 +11168,25 @@ class MapZoomButtons extends StatelessWidget {
   }
 
   // Новая квадратная кнопка для действий "Я ЗДЕСЬ" и "ЦЕЛЬ"
-  Widget _buildSquareButton({
+   Widget _buildSquareButton({
     required String label,
     required IconData icon,
     required Color color,
     VoidCallback? onTap,
     VoidCallback? onLongPress,
     bool enabled = true,
+    double size = 60,
   }) {
+    final iconSize = size * 0.4;
+    final fontSize = size * 0.16;
     return Opacity(
       opacity: enabled ? 1.0 : 0.45,
       child: GestureDetector(
         onTap: enabled ? onTap : null,
         onLongPress: enabled ? onLongPress : null,
         child: Container(
-          width: 60,
-          height: 60,
+          width: size,
+          height: size,
           decoration: BoxDecoration(
             color: color.withAlpha(80),
             borderRadius: BorderRadius.circular(12),
@@ -11048,13 +11203,13 @@ class MapZoomButtons extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: Colors.white, size: 24),
+              Icon(icon, color: Colors.white, size: iconSize),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 10,
+                  fontSize: fontSize,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -11109,9 +11264,6 @@ import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.PluginRegistry
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     PluginRegistry.RequestPermissionsResultListener {
@@ -11139,7 +11291,6 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     override fun onAttachedToEngine(
         flutterPluginBinding: FlutterPlugin.FlutterPluginBinding
     ) {
-        println("GpsInfoPlugin: onAttachedToEngine")
         val eventChannel = EventChannel(
             flutterPluginBinding.binaryMessenger,
             GPS_DATA_CHANNEL_NAME
@@ -11149,17 +11300,14 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
 
         eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                println("GpsInfoPlugin: onListen called")
                 eventSink = events
                 if (arguments is Int) {
                     updateInterval = arguments.toLong() * 1000L
-                    println("GpsInfoPlugin: updateInterval set to $updateInterval ms")
                 }
                 startGpsListener()
             }
 
             override fun onCancel(arguments: Any?) {
-                println("GpsInfoPlugin: onCancel called")
                 stopGpsListener()
                 eventSink = null
             }
@@ -11167,25 +11315,21 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-        println("GpsInfoPlugin: onAttachedToActivity")
         activity = binding.activity
         binding.addRequestPermissionsResultListener(this)
     }
 
     override fun onDetachedFromActivity() {
-        println("GpsInfoPlugin: onDetachedFromActivity")
         activity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(
         binding: ActivityPluginBinding
     ) {
-        println("GpsInfoPlugin: onReattachedToActivityForConfigChanges")
         onAttachedToActivity(binding)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
-        println("GpsInfoPlugin: onDetachedFromActivityForConfigChanges")
         onDetachedFromActivity()
     }
 
@@ -11199,7 +11343,6 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     }
 
     private fun requestLocationPermission() {
-        println("GpsInfoPlugin: requestLocationPermission")
         activity?.let {
             ActivityCompat.requestPermissions(
                 it,
@@ -11214,16 +11357,13 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
         permissions: Array<out String>,
         grantResults: IntArray
     ): Boolean {
-        println("GpsInfoPlugin: onRequestPermissionsResult requestCode=$requestCode")
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
             if (grantResults.isNotEmpty() &&
                 grantResults[0] == PackageManager.PERMISSION_GRANTED
             ) {
-                println("GpsInfoPlugin: Location permission granted")
                 startGpsListener()
                 return true
             } else {
-                println("GpsInfoPlugin ERROR: Location permission denied")
                 eventSink?.error(
                     "PERMISSION_DENIED",
                     "Location permission not granted.",
@@ -11264,12 +11404,6 @@ private fun sendDataUpdate() {
     data["satellitesInView"] = satellitesInView
     // Добавляем временную метку
     data["time"] = now
-    var gpsLatency: Long? = null
-
-    // Создаем форматер для времени, чтобы выводить его в лог в читаемом виде.
-    val sdf = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.getDefault())
-    val formattedAppTime = sdf.format(Date(now))
-    var formattedGpsTime = "N/A" // Значение по умолчанию, если данных GPS еще нет
 
     // ШАГ 2: Использование сохраненных данных.
     // `lastLocation` — это переменная, в которую мы сохранили данные от GPS на ШАГЕ 1.
@@ -11290,13 +11424,6 @@ private fun sendDataUpdate() {
         } else {
             null
         }
-
-        // Вычисляем задержку GPS.
-        // Здесь мы используем `loc.time` — это и есть то самое время от GPS,
-        // которое система передала нам на ШАГЕ 1.
-        gpsLatency = now - loc.time
-        // Также форматируем время GPS для лога.
-        formattedGpsTime = sdf.format(Date(loc.time))
 
         // Вычисляем магнитное склонение.
         // Это разница между истинным севером и магнитным севером в данной точке.
@@ -11322,9 +11449,9 @@ private fun sendDataUpdate() {
 GPS-время принципиально отличается от UTC. GPS использует свою собственную временную шкалу, которая не синхронизирована с UTC. Официальная разница составляет около 15–17 секунд.
 Время GPS не обновляется с учётом високосных секунд. С 1980 года накопилось около 18 секунд разницы между GPS-временем и UTC. Это фундаментальное свойство системы GPS, а не ошибка устройства.
 Системное время телефона синхронизируется с сетевыми серверами (NTP) и может отличаться от GPS-времени на ещё несколько секунд. В сумме это даёт те самые 20–25 секунд.
-*/
-    println("GpsInfoPlugin: Update -> AppTime: $formattedAppTime | GPSTime: $formattedGpsTime | Latency: ${gpsLatency ?: "N/A"}ms | Coords: ${data["latitude"] ?: "N/A"}, ${data["longitude"] ?: "N/A"}")
 
+    println ("GpsInfoPlugin: Update -> AppTime: $formattedAppTime | GPSTime: $formattedGpsTime | Latency: ${gpsLatency ?: "N/A"}ms | Coords: ${data["latitude"] ?: "N/A"}, ${data["longitude"] ?: "N/A"}")
+*/
     // Отправляем данные во Flutter.
     // `activity?.runOnUiThread` гарантирует, что отправка будет выполнена
     // в основном (UI) потоке приложения, что является требованием для
@@ -11384,14 +11511,11 @@ GPS-время принципиально отличается от UTC. GPS и�
 
     @Suppress("deprecation")
     private fun startGpsListener() {
-        println("GpsInfoPlugin: startGpsListener isListening=$isListening")
         if (isListening) {
-            println("GpsInfoPlugin: Already listening, skipping")
             return
         }
 
         if (activity == null) {
-            println("GpsInfoPlugin ERROR: Activity is null")
             eventSink?.error(
                 "NO_ACTIVITY",
                 "Plugin is not attached to an activity.",
@@ -11401,7 +11525,6 @@ GPS-время принципиально отличается от UTC. GPS и�
         }
 
         if (!hasLocationPermission()) {
-            println("GpsInfoPlugin: No permission, requesting...")
             requestLocationPermission()
             return
         }
@@ -11422,9 +11545,7 @@ GPS-время принципиально отличается от UTC. GPS и�
                 locationListener
             )
             isListening = true
-            println("GpsInfoPlugin: GPS listener started successfully")
         } catch (e: SecurityException) {
-            println("GpsInfoPlugin ERROR: SecurityException ${e.message}")
             eventSink?.error(
                 "SECURITY_EXCEPTION",
                 "Failed to register GPS listener.",
@@ -11435,15 +11556,12 @@ GPS-время принципиально отличается от UTC. GPS и�
 
     @Suppress("deprecation")
     private fun stopGpsListener() {
-        println("GpsInfoPlugin: stopGpsListener isListening=$isListening")
         if (!isListening) {
-            println("GpsInfoPlugin: Not listening, skipping")
             return
         }
 
         try {
             locationManager.removeUpdates(locationListener)
-            println("GpsInfoPlugin: removeUpdates called")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 gnssStatusCallback?.let {
                     locationManager.unregisterGnssStatusCallback(it)
@@ -11453,16 +11571,13 @@ GPS-время принципиально отличается от UTC. GPS и�
                 }
             }
             isListening = false
-            println("GpsInfoPlugin: GPS listener stopped successfully")
         } catch (e: Exception) {
-            println("GpsInfoPlugin ERROR: Error stopping GPS listener ${e.message}")
         }
     }
 
     override fun onDetachedFromEngine(
         binding: FlutterPlugin.FlutterPluginBinding
     ) {
-        println("GpsInfoPlugin: onDetachedFromEngine")
         stopGpsListener()
         eventSink = null
     }
@@ -11532,196 +11647,6 @@ class GpsInfo {
           (dynamic data) => GpsData.fromMap(data as Map<dynamic, dynamic>),
         );
   }
-}
-
-============= packages/my_compass/android/src/main/kotlin/com/example/my_compass/MyCompassPlugin.kt ===
-package com.example.my_compass
-
-import android.content.Context
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
-import android.view.Surface
-import android.view.WindowManager
-import io.flutter.embedding.engine.plugins.FlutterPlugin
-import io.flutter.plugin.common.EventChannel
-import kotlin.math.roundToInt
-
-class MyCompassPlugin : FlutterPlugin, EventChannel.StreamHandler, SensorEventListener {
-    private lateinit var sensorManager: SensorManager
-    private var windowManager: WindowManager? = null
-    private var eventSink: EventChannel.EventSink? = null
-
-    // Sensors
-    private var rotationVectorSensor: Sensor? = null
-    private var accelerometerSensor: Sensor? = null
-    private var magneticFieldSensor: Sensor? = null
-
-    // Fallback sensor data
-    private val accelerometerReading = FloatArray(3)
-    private val magnetometerReading = FloatArray(3)
-
-    // Matrices / orientation
-    private val rotationMatrix = FloatArray(9)
-    private val remappedRotationMatrix = FloatArray(9)
-    private val orientationAngles = FloatArray(3)
-
-    private var accuracy: Int = SensorManager.SENSOR_STATUS_UNRELIABLE
-    private var useRotationVector = false
-
-    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        val context = binding.applicationContext
-        sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-
-        rotationVectorSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        accelerometerSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-        magneticFieldSensor = sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
-
-        val eventChannel = EventChannel(binding.binaryMessenger, "my_compass/events")
-        eventChannel.setStreamHandler(this)
-    }
-
-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        stopListening()
-    }
-
-    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        eventSink = events
-        startListening()
-    }
-
-    override fun onCancel(arguments: Any?) {
-        stopListening()
-        eventSink = null
-    }
-
-    private fun startListening() {
-        stopListening()
-
-        useRotationVector = rotationVectorSensor != null
-
-        if (useRotationVector) {
-            rotationVectorSensor?.also { sensor ->
-                sensorManager.registerListener(
-                    this,
-                    sensor,
-                    SensorManager.SENSOR_DELAY_UI
-                )
-            }
-        } else {
-            accelerometerSensor?.also { sensor ->
-                sensorManager.registerListener(
-                    this,
-                    sensor,
-                    SensorManager.SENSOR_DELAY_UI
-                )
-            }
-            magneticFieldSensor?.also { sensor ->
-                sensorManager.registerListener(
-                    this,
-                    sensor,
-                    SensorManager.SENSOR_DELAY_UI
-                )
-            }
-        }
-    }
-
-    private fun stopListening() {
-        sensorManager.unregisterListener(this)
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-        when (sensor?.type) {
-            Sensor.TYPE_MAGNETIC_FIELD,
-            Sensor.TYPE_ROTATION_VECTOR -> {
-                this.accuracy = accuracy
-            }
-        }
-    }
-
-    override fun onSensorChanged(event: SensorEvent) {
-        when (event.sensor.type) {
-            Sensor.TYPE_ROTATION_VECTOR -> {
-                if (useRotationVector) {
-                    SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
-                    updateOrientationAnglesFromMatrix(rotationMatrix)
-                }
-            }
-
-            Sensor.TYPE_ACCELEROMETER -> {
-                if (!useRotationVector) {
-                    System.arraycopy(
-                        event.values,
-                        0,
-                        accelerometerReading,
-                        0,
-                        accelerometerReading.size
-                    )
-                    updateOrientationAnglesFallback()
-                }
-            }
-
-            Sensor.TYPE_MAGNETIC_FIELD -> {
-                if (!useRotationVector) {
-                    System.arraycopy(
-                        event.values,
-                        0,
-                        magnetometerReading,
-                        0,
-                        magnetometerReading.size
-                    )
-                    updateOrientationAnglesFallback()
-                }
-            }
-        }
-    }
-
-    private fun updateOrientationAnglesFallback() {
-        val success = SensorManager.getRotationMatrix(
-            rotationMatrix,
-            null,
-            accelerometerReading,
-            magnetometerReading
-        )
-
-        if (success) {
-            updateOrientationAnglesFromMatrix(rotationMatrix)
-        }
-    }
-
-    private fun updateOrientationAnglesFromMatrix(sourceMatrix: FloatArray) {
-        val rotation = getDisplayRotation()
-
-        val (axisX, axisY) = when (rotation) {
-            Surface.ROTATION_90 -> Pair(SensorManager.AXIS_Y, SensorManager.AXIS_MINUS_X)
-            Surface.ROTATION_180 -> Pair(SensorManager.AXIS_MINUS_X, SensorManager.AXIS_MINUS_Y)
-            Surface.ROTATION_270 -> Pair(SensorManager.AXIS_MINUS_Y, SensorManager.AXIS_X)
-            else -> Pair(SensorManager.AXIS_X, SensorManager.AXIS_Y)
-        }
-
-        SensorManager.remapCoordinateSystem(
-            sourceMatrix,
-            axisX,
-            axisY,
-            remappedRotationMatrix
-        )
-
-        SensorManager.getOrientation(remappedRotationMatrix, orientationAngles)
-
-        val azimuthRad = orientationAngles[0].toDouble()
-        val azimuthDeg = Math.toDegrees(azimuthRad)
-
-        val heading = ((azimuthDeg + 360.0) % 360.0)
-
-        eventSink?.success(listOf(heading, accuracy.toDouble()))
-    }
-
-    @Suppress("DEPRECATION")
-    private fun getDisplayRotation(): Int {
-        return windowManager?.defaultDisplay?.rotation ?: Surface.ROTATION_0
-    }
 }
 
 ============= test/calibration/map_calibration_service_test.dart ===
@@ -11855,13 +11780,11 @@ import 'package:compass40/controllers/map_screen_logic.dart';
 
 void main() {
   group('computeResetRotation', () {
-    const declinationRad = 10 * math.pi / 180;
     test('режим P с истинным northAngle', () {
       final result = MapScreenLogic.computeResetRotation(
         mapRotation: 0,
         photoSeverNorthAngle: 0.5, // некоторый истинный угол поворота
         photoSeverLinePixels: 100,
-        declinationRad: declinationRad,
       );
     expect(result, closeTo(-math.pi / 2 - 0.5, 1e-9));
     });
@@ -11870,7 +11793,6 @@ void main() {
         mapRotation: 0.8,
         photoSeverNorthAngle: 0,
         photoSeverLinePixels: 0,
-        declinationRad: declinationRad,
       );
       expect(result, closeTo(0.8, 1e-9));
     });
@@ -11879,7 +11801,6 @@ void main() {
         mapRotation: 0,
         photoSeverNorthAngle: 0,
         photoSeverLinePixels: 0,
-        declinationRad: declinationRad,
       );
       expect(result, 0.0);
     });
@@ -11892,14 +11813,11 @@ import 'package:compass40/controllers/map_screen_logic.dart';
 
 void main() {
   group('computeResetRotation', () {
-    const declinationRad = 9 * math.pi / 180; // 9°
-
     test('режим P: север вверху', () {
       final result = MapScreenLogic.computeResetRotation(
         mapRotation: 0,
         photoSeverNorthAngle: -math.pi / 2, // магнитный север вверх
         photoSeverLinePixels: 100,
-        declinationRad: declinationRad,
       );
       // Ожидаем: -π/2 - (-π/2) = 0
       expect(result, closeTo(0.0, 1e-9));
@@ -11910,7 +11828,6 @@ void main() {
         mapRotation: 0,
         photoSeverNorthAngle: math.pi / 2,
         photoSeverLinePixels: 100,
-        declinationRad: declinationRad,
       );
       // Ожидаем: -π/2 - π/2 = -π
       expect(result, closeTo(-math.pi, 1e-9));
@@ -11921,7 +11838,6 @@ void main() {
         mapRotation: 0,
         photoSeverNorthAngle: math.pi,
         photoSeverLinePixels: 100,
-        declinationRad: declinationRad,
       );
       // Ожидаем: -π/2 - π = -3π/2, что эквивалентно π/2
       final normalized = result % (2 * math.pi);
@@ -11933,7 +11849,6 @@ void main() {
         mapRotation: 0,
         photoSeverNorthAngle: 0.0,
         photoSeverLinePixels: 100,
-        declinationRad: declinationRad,
       );
       // Ожидаем: -π/2 - 0 = -π/2
       expect(result, closeTo(-math.pi / 2, 1e-9));
@@ -11944,7 +11859,6 @@ void main() {
         mapRotation: 0.8,
         photoSeverNorthAngle: 0,
         photoSeverLinePixels: 0,
-        declinationRad: declinationRad,
       );
       expect(result, closeTo(0.8, 1e-9));
     });
@@ -12374,28 +12288,11 @@ void main() {
     });
   });
 
-  group('MapScreenState.recalculateUserScreenPoint', () {
-    test('ничего не делает, если currentUserImagePoint == null', () {
-      final s = MapScreenState();
-      s.recalculateUserScreenPoint((p) => p);
-      expect(s.currentUserScreenPoint, isNull);
-    });
-
-    test('пересчитывает точку через переданную функцию', () {
-      final s = MapScreenState();
-      s.currentUserImagePoint = const Offset(10, 20);
-      s.recalculateUserScreenPoint(
-        (p) => Offset(p.dx + 1, p.dy + 2),
-      );
-      expect(s.currentUserScreenPoint, const Offset(11, 22));
-    });
-  });
 }
 ============= test/navigation_logic_test.dart ===
 import 'package:flutter_test/flutter_test.dart';
 import 'package:compass40/utils/geo_utils.dart';
 import 'package:compass40/utils/angle_utils.dart';
-import 'package:compass40/services/map_calibration_service.dart';
 
 void main() {
   group('Чистая геометрия (geo_utils)', () {
@@ -12416,9 +12313,9 @@ void main() {
       expect(bearing, closeTo(90.0, 0.1));
     });
 
-    test('круговая медиана корректно обрабатывает переход через 360°', () async {
+    test('круговая медиана корректно обрабатывает переход через 360°', () {
       final angles = [350.0, 5.0, 10.0];
-      final median = await calculateCircularMedian(angles);
+      final median = calculateCircularMedianSync(angles);
       expect(median, closeTo(5.0, 2.0));
     });
 
@@ -12445,15 +12342,13 @@ void main() {
 
   group('Бизнес-логика навигации (MapCalibrationService)', () {
     test('расчет азимута и расстояния с учетом магнитного склонения (Минск)', () {
-      final service = MapCalibrationService();
-
       const fromLat = 53.91414;
       const fromLon = 27.55329;
       const toLat = 53.92301;
       const toLon = 27.55567;
       const magneticDeclination = 9.0;
 
-      final result = service.bearingAndDistance(
+      final result = calculateNavigationData(
         fromLat: fromLat,
         fromLon: fromLon,
         toLat: toLat,
@@ -12548,5 +12443,450 @@ void main() {
         expect(diff, closeTo(180.0, 1.0));
       },
     );
+  });
+}
+============= test/utils/angle_utils_test.dart ===
+import 'package:flutter_test/flutter_test.dart';
+import 'package:compass40/utils/angle_utils.dart';
+
+void main() {
+  group('calculateCircularMedianSync', () {
+    test('пустой список → 0', () {
+      expect(calculateCircularMedianSync([]), 0.0);
+    });
+
+    test('один элемент → он же', () {
+      expect(calculateCircularMedianSync([42.0]), 42.0);
+    });
+
+    test('обычный диапазон, нечётное количество → средний', () {
+      expect(calculateCircularMedianSync([10.0, 20.0, 30.0]), 20.0);
+    });
+
+    test('обычный диапазон, чётное количество → среднее двух', () {
+      expect(calculateCircularMedianSync([10.0, 20.0, 30.0, 40.0]), 25.0);
+    });
+
+    test('переход через 360, нечётное количество → около 5', () {
+      expect(calculateCircularMedianSync([350.0, 5.0, 10.0]), closeTo(5.0, 1.0));
+    });
+
+    test('переход через 360, чётное количество → около 0', () {
+      expect(
+        calculateCircularMedianSync([355.0, 0.0, 5.0, 10.0]),
+        closeTo(2.5, 2.0),
+      );
+    });
+
+    test('все около 0 → не сбивается на 180', () {
+      final m = calculateCircularMedianSync([359.0, 1.0, 0.0]);
+      expect(m, closeTo(0.0, 2.0));
+    });
+
+    test('регрессия: [350, 5, 10] не должно дать 10', () {
+      final m = calculateCircularMedianSync([350.0, 5.0, 10.0]);
+      expect(m, lessThan(10.0));
+    });
+  });
+}
+============= test/utils/calibration_utils_test.dart ===
+import 'package:flutter_test/flutter_test.dart';
+import 'package:compass40/utils/calibration_utils.dart';
+
+void main() {
+  group('isCalibrationStale', () {
+    const size = 60;
+
+    test('не откалиброван → false', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: false,
+          calibMagnitude: 50,
+          avgMagnitude: 100,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isFalse,
+      );
+    });
+
+    test('calibMagnitude == 0 → false', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 0,
+          avgMagnitude: 100,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isFalse,
+      );
+    });
+
+    test('буфер не заполнен → false', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 50,
+          avgMagnitude: 100,
+          bufferLength: 10,
+          bufferSize: size,
+        ),
+        isFalse,
+      );
+    });
+
+    test('магнитуда в пределах 30% → false', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 50,
+          avgMagnitude: 60,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isFalse,
+      );
+    });
+
+    test('граница ровно 30% → false', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 50,
+          avgMagnitude: 65,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isFalse,
+      );
+    });
+
+    test('превышение вверх более 30% → true', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 50,
+          avgMagnitude: 66,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isTrue,
+      );
+    });
+
+    test('превышение вниз более 30% → true', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 50,
+          avgMagnitude: 34,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isTrue,
+      );
+    });
+
+    test('avg < 20 μT → true', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 21,
+          avgMagnitude: 19,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isTrue,
+      );
+    });
+
+    test('avg > 80 μT → true', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 82,
+          avgMagnitude: 81,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isTrue,
+      );
+    });
+
+    test('сценарий из лога: 126 → 40 → true', () {
+      expect(
+        isCalibrationStale(
+          isCalibrated: true,
+          calibMagnitude: 126,
+          avgMagnitude: 40,
+          bufferLength: size,
+          bufferSize: size,
+        ),
+        isTrue,
+      );
+    });
+  });
+}
+============= test/utils/compensation_utils_test.dart ===
+import 'package:flutter_test/flutter_test.dart';
+import 'package:compass40/utils/compensation_utils.dart';
+
+void main() {
+  group('updateCompensationEma', () {
+    test('один шаг: 0.9*current + 0.1*delta', () {
+      expect(updateCompensationEma(1500, 2500), closeTo(1600, 1e-9));
+    });
+
+    test('сходится к delta при стабильном входе', () {
+      double x = 1500;
+      for (int i = 0; i < 200; i++) {
+        x = updateCompensationEma(x, 2000);
+      }
+      expect(x, closeTo(2000, 1.0));
+    });
+
+    test('регрессия: не застревает на половине delta', () {
+      double x = 1500;
+      for (int i = 0; i < 200; i++) {
+        x = updateCompensationEma(x, 2000);
+      }
+      expect(x, greaterThan(1900));
+    });
+
+    test('нижний предел 500', () {
+      double x = 1500;
+      for (int i = 0; i < 200; i++) {
+        x = updateCompensationEma(x, 100);
+      }
+      expect(x, closeTo(500, 1e-9));
+    });
+
+    test('верхний предел 3000', () {
+      double x = 1500;
+      for (int i = 0; i < 200; i++) {
+        x = updateCompensationEma(x, 5000);
+      }
+      expect(x, closeTo(3000, 1e-9));
+    });
+  });
+}
+============= test/utils/user_path_utils_test.dart ===
+import 'package:flutter_test/flutter_test.dart';
+import 'package:compass40/utils/user_path_utils.dart';
+
+void main() {
+  group('pruneUserPath', () {
+    test('короткий путь возвращается без изменений', () {
+      final path = List.generate(100, (i) => Offset(i.toDouble(), 0));
+      final jumps = [10, 50];
+      final result = pruneUserPath(
+        path: path,
+        jumpIndices: jumps,
+        maxPoints: 5000,
+      );
+      expect(result.path, same(path));
+      expect(result.jumpIndices, same(jumps));
+    });
+
+    test('путь ровно maxPoints не прореживается', () {
+      final path = List.generate(5000, (i) => Offset(i.toDouble(), 0));
+      final result = pruneUserPath(
+        path: path,
+        jumpIndices: const [],
+        maxPoints: 5000,
+      );
+      expect(result.path.length, 5000);
+    });
+
+    test('путь maxPoints+1 прореживается, длина падает', () {
+      final path = List.generate(5001, (i) => Offset(i.toDouble(), 0));
+      final result = pruneUserPath(
+        path: path,
+        jumpIndices: const [],
+        maxPoints: 5000,
+      );
+      expect(result.path.length, lessThan(5001));
+    });
+
+    test('последняя точка сохраняется', () {
+      final path = List.generate(6000, (i) => Offset(i.toDouble(), 0));
+      final result = pruneUserPath(
+        path: path,
+        jumpIndices: const [],
+        maxPoints: 5000,
+      );
+      expect(result.path.last, path.last);
+    });
+
+    test('первая точка сохраняется', () {
+      final path = List.generate(6000, (i) => Offset(i.toDouble(), 0));
+      final result = pruneUserPath(
+        path: path,
+        jumpIndices: const [],
+        maxPoints: 5000,
+      );
+      expect(result.path.first, path.first);
+    });
+
+    test('индексы прыжков пересчитаны корректно', () {
+      final path = List.generate(6000, (i) => Offset(i.toDouble(), 0));
+      // Прыжок на старой позиции 0 и 3000.
+      final result = pruneUserPath(
+        path: path,
+        jumpIndices: const [0, 3000],
+        maxPoints: 5000,
+      );
+      // Старый индекс 0 сохраняется (первая точка) → новый индекс 0.
+      // Старый индекс 3000 во второй половине (half=3000) → первый элемент второй половины.
+      expect(result.jumpIndices, contains(0));
+      // Первая половина: 1500 элементов. Значит 3000 станет 1500.
+      expect(result.jumpIndices, contains(1500));
+    });
+
+    test('прыжок на прореженной точке исчезает', () {
+      final path = List.generate(6000, (i) => Offset(i.toDouble(), 0));
+      // Индекс 1 (нечётный в первой половине) — прореживается.
+      final result = pruneUserPath(
+        path: path,
+        jumpIndices: const [1],
+        maxPoints: 5000,
+      );
+      expect(result.jumpIndices, isEmpty);
+    });
+  });
+}
+============= test/widgets/map_overlay_painter_test.dart ===
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:compass40/models/map_anchor.dart';
+import 'package:compass40/models/map_target.dart';
+import 'package:compass40/models/map_transform_state.dart';
+import 'package:compass40/widgets/map_overlay_painter.dart';
+
+MapAnchor _anchor(String id, {double x = 0, double y = 0}) => MapAnchor(
+      id: id,
+      imageX: x,
+      imageY: y,
+      latitude: 55.0,
+      longitude: 37.0,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+    );
+
+MapTarget _target(String id, {MapTargetStatus status = MapTargetStatus.planned}) =>
+    MapTarget(
+      id: id,
+      imageX: 0,
+      imageY: 0,
+      latitude: 55.0,
+      longitude: 37.0,
+      status: status,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(0),
+    );
+
+MapOverlayPainter _painter({
+  List<MapAnchor> anchors = const [],
+  List<MapTarget> targets = const [],
+  MapAnchor? pendingAnchor,
+  List<Offset> userPath = const [],
+  List<int> pathJumpIndices = const [],
+}) {
+  return MapOverlayPainter(
+    imageSize: const Size(1000, 1000),
+    transformState: const MapTransformState(),
+    viewportSize: const Size(400, 800),
+    anchors: anchors,
+    targets: targets,
+    pendingAnchor: pendingAnchor,
+    userPath: userPath,
+    pathJumpIndices: pathJumpIndices,
+  );
+}
+
+void main() {
+  group('MapOverlayPainter.shouldRepaint', () {
+    test('пустые списки → false', () {
+      final a = _painter();
+      final b = _painter();
+      expect(b.shouldRepaint(a), isFalse);
+    });
+
+    test('равные списки → false', () {
+      final a = _painter(
+        anchors: [_anchor('1'), _anchor('2')],
+        targets: [_target('t1')],
+      );
+      final b = _painter(
+        anchors: [_anchor('1'), _anchor('2')],
+        targets: [_target('t1')],
+      );
+      expect(b.shouldRepaint(a), isFalse);
+    });
+
+    test('добавление якоря → true', () {
+      final a = _painter(anchors: [_anchor('1')]);
+      final b = _painter(anchors: [_anchor('1'), _anchor('2')]);
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('изменение среднего якоря → true', () {
+      final a = _painter(
+        anchors: [_anchor('1', x: 0), _anchor('2', x: 0), _anchor('3', x: 0)],
+      );
+      final b = _painter(
+        anchors: [_anchor('1', x: 0), _anchor('2', x: 99), _anchor('3', x: 0)],
+      );
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('изменение статуса цели в середине → true', () {
+      final a = _painter(
+        targets: [
+          _target('t1', status: MapTargetStatus.planned),
+          _target('t2', status: MapTargetStatus.active),
+          _target('t3', status: MapTargetStatus.passed),
+        ],
+      );
+      final b = _painter(
+        targets: [
+          _target('t1', status: MapTargetStatus.planned),
+          _target('t2', status: MapTargetStatus.passed),
+          _target('t3', status: MapTargetStatus.passed),
+        ],
+      );
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('изменение последнего якоря → true', () {
+      final a = _painter(anchors: [_anchor('1'), _anchor('2', x: 0)]);
+      final b = _painter(anchors: [_anchor('1'), _anchor('2', x: 50)]);
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('изменение userPath → true', () {
+      final a = _painter(userPath: const [Offset(0, 0), Offset(1, 1)]);
+      final b = _painter(
+        userPath: const [Offset(0, 0), Offset(1, 1), Offset(2, 2)],
+      );
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('изменение pathJumpIndices → true', () {
+      final a = _painter(pathJumpIndices: const [1]);
+      final b = _painter(pathJumpIndices: const [1, 5]);
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('появление pendingAnchor → true', () {
+      final a = _painter();
+      final b = _painter(pendingAnchor: _anchor('pending'));
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('исчезновение pendingAnchor → true', () {
+      final a = _painter(pendingAnchor: _anchor('pending'));
+      final b = _painter();
+      expect(b.shouldRepaint(a), isTrue);
+    });
   });
 }

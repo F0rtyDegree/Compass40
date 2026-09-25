@@ -182,7 +182,8 @@ class MapAnchorManager {
       }
 
       if (!context.mounted) return;
-      _saveGpxCacheToProject(points);
+      await _saveGpxCacheToProject(points);
+      if (!context.mounted) return;
       _showGpxPointsList(context, points);
       cachedGpxPoints = points;
     } catch (e) {
@@ -369,7 +370,7 @@ class MapAnchorManager {
     );
   }
 
-  void deleteAnchorAndUpdate(String anchorId) async {
+  Future<void> deleteAnchorAndUpdate(String anchorId) async {
     final project = state.project;
     if (project == null) return;
 
@@ -390,6 +391,7 @@ class MapAnchorManager {
 
     calibrationService.removeAnchor(anchorId);
     onAnchorsChanged();
+    await onRecalculateTargets();
   }
 
   Future<void> showModePicker(BuildContext context) async {

@@ -222,7 +222,8 @@ class _LogScreenState extends State<LogScreen> {
       final distanceText = entry.distanceFromPrevious != null
           ? ' ${entry.distanceFromPrevious!.round()}m'
           : ' ---';
-      final timeStr = entry.timestamp.toIso8601String().substring(11, 26);
+      final timeStr =
+          DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp);
       final text =
           'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText $timeStr';
 
