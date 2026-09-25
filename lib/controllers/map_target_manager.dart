@@ -80,6 +80,14 @@ class MapTargetManager {
       state.activeTarget = null;
     });
     // Синхронизируем с главным экраном: убираем строку цели.
+    // Цепочка: HomeLogic.clearTarget → MapScreenController.cancelActiveTarget
+    // → markActiveTargetAsPassed. На этом шаге state.activeTarget уже null,
+    // markActiveTargetAsPassed выйдет сразу. Реентрантность безвредна.
+    // Тесты на closeMap и _reloadTrackImagePoints не пишем осознанно:
+    // оба метода завязаны на синглтоны MapCalibrationService и TrackRecorder,
+    // файловую систему и SharedPreferences. Юнит-тестирование потребует
+    // полноценного DI-рефакторинга, стоимость выше пользы. Логика проверяется
+    // вручную на устройстве. Возвращаться — только при реальных регрессиях.
     onCancelNavigation?.call();
   }
 

@@ -26,7 +26,7 @@ class _LogScreenState extends State<LogScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(AppConstants.prefLogItems);
     if (mounted) {
-      Navigator.of(context).pop({'logCleared': true});
+      Navigator.of(context).pop();
     }
   }
 

@@ -270,10 +270,6 @@ class MapAnchorManager {
         ),
       );
     }
-    /* Внутренний метод добавления якоря. [creationTime] – 
-системное время нажатия кнопки «ЯЗдесь» (с микросекундами) для GPS-точек; 
-для импортированных точек передаётся null. Время создания якоря: 
-если передано – creationTime, иначе – DateTime.fromMillisecondsSinceEpoch(0). */
     final creationTimestamp =
         creationTime ?? DateTime.fromMillisecondsSinceEpoch(0);
 

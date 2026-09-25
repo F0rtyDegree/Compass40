@@ -47,8 +47,4 @@ void onStart(ServiceInstance service) {
   service.on('stopService').listen((_) {
     service.stopSelf();
   });
-
-  service.on('startRecording').listen((_) {});
-
-  service.on('stopRecording').listen((_) {});
 }

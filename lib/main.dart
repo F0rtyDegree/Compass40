@@ -34,6 +34,12 @@ Future<void> _handleIntent(MethodCall call) async {
   }
 }
 
+// Создаём канал уведомлений через flutter_local_notifications.
+// Обновление содержимого идёт отдельно, через MethodChannel
+// 'by.fortydegree.compass40/notification' в background_tracker.dart.
+// Обработчик канала — на нативной стороне. Пути не пересекаются,
+// но используют один и тот же канал по id. Если уведомления
+// перестанут обновляться — проверить согласованность на нативной стороне.
 Future<void> _createNotificationChannel() async {
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     AppConstants.notificationChannelId,
@@ -73,6 +79,11 @@ void main() async {
   );
   intentChannel.setMethodCallHandler(_handleIntent);
 
+  // Storage permission. На Android 13+ WRITE_EXTERNAL_STORAGE игнорируется,
+  // а manageExternalStorage требует ручного разрешения через настройки.
+  // Осознанно оставлено как есть: приложение работает у одного пользователя
+  // (разработчика), разрешение уже выдано. Для других устройств логика
+  // может ложно срабатывать — переделать при появлении реальных пользователей.
   var status = await Permission.storage.status;
   if (!status.isGranted) {
     status = await Permission.storage.request();

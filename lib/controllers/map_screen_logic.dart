@@ -29,6 +29,7 @@ import '../utils/geo_utils.dart';
 import '../utils/track_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:collection/collection.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -202,8 +203,10 @@ class MapScreenLogic {
       storageService.saveProject(state.project!);
     }
     state.rotateModeTimer?.cancel();
-    state.crosshairFeedback.dispose();
+    // Флаг выставляем до dispose, чтобы таймеры и отложенные
+    // вызовы видели корректное состояние.
     state.isDisposed = true;
+    state.crosshairFeedback.dispose();
   }
 
   // --------------------------------------------------------
@@ -226,13 +229,9 @@ class MapScreenLogic {
       if (savedTransform != null) {
         state.transformState = savedTransform;
       }
-      try {
-        state.activeTarget = project.targets.firstWhere(
-          (t) => t.status == MapTargetStatus.active,
-        );
-      } catch (e) {
-        state.activeTarget = null;
-      }
+      state.activeTarget = project.targets.firstWhereOrNull(
+        (t) => t.status == MapTargetStatus.active,
+      );
     });
 
     _calibrationService.updateAnchors(project.anchors);
@@ -263,14 +262,20 @@ class MapScreenLogic {
   }
 
   /// Читает CSV-файл трека и заполняет trackImagePoints.
-  /// Вызывается один раз при открытии карты. Дальше точки добавляются
-  /// из GPS-потока (см. _appendTrackPointIfRecording).
+  /// Вызывается при открытии карты и при каждом изменении якорей
+  /// (через _reloadTrackImagePoints), чтобы пересчитать пиксели под
+  /// новую привязку.
   ///
   /// На большом треке (20k+ точек) цикл с geoToImagePointFromCurrent
-  /// занимает сотни миллисекунд. Не оптимизировано осознанно: один раз
-  /// при открытии карты, на фоне загрузки изображения незаметно.
-  /// Возвращаться — только при реальных жалобах на задержку.
+  /// занимает сотни миллисекунд. Не оптимизировано осознанно: добавление
+  /// якорей — редкая операция, задержка незаметна на фоне перерисовки.
+  /// Возвращаться — только при реальных жалобах.
   Future<void> _loadTrackFromCsv() async {
+  // Нет привязки — геопривязка пикселей невозможна. Оставляем
+  // trackImagePoints как есть: пользователь видит старый трек
+  // в произвольном месте экрана. Осознанно: очистка добавила бы
+  // мерцание при временных ситуациях (удалил/добавил якорь).
+  // Возвращаться — если появится жалоба на «висящий» трек.
     if (_calibrationService.usedAnchorCount == 0) return;
     final points = await TrackRecorder().getTrackPoints();
     if (points.isEmpty) return;
@@ -304,8 +309,13 @@ class MapScreenLogic {
     await _loadTrackFromCsv();
   }
 
-  /// Пересчитывает пиксели трека под текущую привязку.
-  /// Вызывается после изменения якорей и при первой привязке карты.
+/// Пересчитывает пиксели трека под текущую привязку.
+///
+/// Вызывается при любом изменении якорей. Если пользователь остановил
+/// запись (onRecordingStopped), а потом добавил якорь — трек снова
+/// прочитается из CSV. Это осознанно: CSV — источник правды, а «стоп»
+/// лишь очищает экранную копию. Возвращаться — только если такое
+/// поведение начнёт мешать.
   Future<void> _reloadTrackImagePoints() async {
     // Сбрасываем буфер CSV, чтобы последние точки (уже видимые на карте,
     // но ещё не записанные) не потерялись при перечитывании.
@@ -492,6 +502,10 @@ class MapScreenLogic {
     anchorManager.cachedGpxPoints = null;
 
     if (hadActiveTargetOnMap) {
+  // HomeLogic.clearTarget → MapScreenController.cancelActiveTarget →
+  // markActiveTargetAsPassed. На этом шаге state.activeTarget уже null,
+  // поэтому markActiveTargetAsPassed сделает ранний return. Цепочка
+  // выглядит реентрантной, но безвредна: цель уже погашена выше.
       onCancelNavigation?.call();
     }
   }
@@ -778,6 +792,15 @@ class MapScreenLogic {
 
     for (int i = 0; i < maxIterations; i++) {
       await Future.delayed(step);
+
+      // Экран закрыт — прекращаем ожидание, сбрасываем pending.
+      if (state.isDisposed) {
+        setState(() {
+          state.pendingAnchor = null;
+        });
+        return;
+      }
+
       final GpsData gps2temp = gpsDataNotifier.value;
 
       final int? time1 = gps1.time;
@@ -961,7 +984,7 @@ class MapScreenLogic {
     await targetManager.setTargetAndStartNavigation();
   }
 
-  void markActiveTargetAsPassed() async {
+  Future<void> markActiveTargetAsPassed() async {
     await targetManager.markActiveTargetAsPassed();
   }
 
@@ -1091,14 +1114,9 @@ void _recalculateUserImagePoint() {
     final updatedProject = project.copyWith(targets: updatedTargets);
     await storageService.saveProject(updatedProject);
 
-    MapTarget? newActiveTarget;
-    try {
-      newActiveTarget = updatedTargets.firstWhere(
-        (t) => t.status == MapTargetStatus.active,
-      );
-    } catch (e) {
-      newActiveTarget = null;
-    }
+    final newActiveTarget = updatedTargets.firstWhereOrNull(
+      (t) => t.status == MapTargetStatus.active,
+    );
 
     setState(() {
       state.project = updatedProject;
@@ -1173,6 +1191,10 @@ void _recalculateUserImagePoint() {
     });
   }
 
+  /// Обработка GPS-пакета. Три setState за один кадр (позиция, трек,
+  /// центрирование карты). Flutter объединяет их в одну перерисовку,
+  /// поэтому оптимизация не делается: реального выигрыша нет,
+  /// а переработка методов в «возвращающие значение» усложнит код.
   void _onGpsDataChanged() {
     final gpsData = gpsDataNotifier.value;
     if (gpsData.latitude == null || gpsData.longitude == null) return;
