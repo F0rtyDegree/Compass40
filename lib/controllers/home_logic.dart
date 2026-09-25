@@ -17,6 +17,7 @@ import '../services/file_logger.dart';
 import '../services/background_tracker.dart';
 import '../services/compass_service.dart';
 import '../utils/app_constants.dart';
+import 'map_screen_controller.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -256,6 +257,9 @@ class HomeLogic {
       state.distanceToTarget.value = null;
       state.bearingToTarget.value = null;
     });
+    // Синхронизируем с картой: если карта открыта и цель там активна,
+    // помечаем её как пройденную.
+    MapScreenController().cancelActiveTarget();
   }
 
   Future<void> addTargetCreationLogEntry({

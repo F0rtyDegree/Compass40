@@ -28,7 +28,7 @@ class MapAnchorManager {
 
   List<Map<String, String>>? cachedGpxPoints;
 
-  final VoidCallback onAnchorsChanged;
+  final void Function({bool enableFollow}) onAnchorsChanged;
   final Future<void> Function({bool restartNavigation}) onRecalculateTargets;
   final Offset Function(Offset screenPoint) screenToImage;
 
@@ -312,7 +312,7 @@ class MapAnchorManager {
     });
 
     calibrationService.updateAnchors(state.project!.anchors);
-    onAnchorsChanged();
+    onAnchorsChanged(enableFollow: true);
     await onRecalculateTargets(restartNavigation: true);
 
     onAnchorAdded?.call(

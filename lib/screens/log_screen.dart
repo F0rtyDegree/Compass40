@@ -222,8 +222,11 @@ class _LogScreenState extends State<LogScreen> {
       final distanceText = entry.distanceFromPrevious != null
           ? ' ${entry.distanceFromPrevious!.round()}m'
           : ' ---';
-      final timeStr =
-          DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp);
+      // Для импортированных якорей (из буфера, GPX) timestamp = 1970-01-01.
+      // Показывать «03:00:00.000000» бессмысленно — выводим ---.
+      final timeStr = entry.timestamp.millisecondsSinceEpoch == 0
+          ? '---'
+          : DateFormat('HH:mm:ss.SSSSSS').format(entry.timestamp);
       final text =
           'ТП: ${entry.latitude.toStringAsFixed(6)},${entry.longitude.toStringAsFixed(6)}$distanceText $timeStr';
 

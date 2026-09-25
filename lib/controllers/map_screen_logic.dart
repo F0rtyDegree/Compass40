@@ -157,7 +157,7 @@ class MapScreenLogic {
       updateTransform: updateTransform,
       storageService: storageService,
       imageToScreen: imageToScreen,
-      magneticDeclination: magneticDeclination,
+      onEnableFollowMode: followController.enableFollowMode,
       onFinish: () {
         _calibrationService.setCalibrationMode(CalibrationMode.photoSever);
         _calibrationService.updatePhotoSeverData(
@@ -255,7 +255,7 @@ class MapScreenLogic {
     }
 
     await _loadImageSize();
-    _recalculateWorkingPairAndRotation();
+    _recalculateWorkingPairAndRotation(enableFollow: true);
     _recalculateCanPlaceTarget();
   }
 
@@ -418,6 +418,26 @@ class MapScreenLogic {
     _calibrationService.updateAnchors([]);
     _calibrationService.setPinnedAnchorIds([]);
     await recalculateTargetsAfterNewAnchor();
+
+    // Без привязки цель бесполезна, пусть уходит в историю.
+    final active = state.activeTarget;
+    if (active != null) {
+      final currentProject = state.project;
+      if (currentProject != null) {
+        final updatedTargets = currentProject.targets.map((t) {
+          if (t.id == active.id) {
+            return t.copyWith(status: MapTargetStatus.passed);
+          }
+          return t;
+        }).toList();
+        final updated = currentProject.copyWith(targets: updatedTargets);
+        await storageService.saveProject(updated);
+        setState(() {
+          state.project = updated;
+          state.activeTarget = null;
+        });
+      }
+    }
 //    showSnackBar('Все якоря удалены');
   }
 
@@ -846,7 +866,7 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   void placePlannedTargetAtCrosshair() {
-    targetManager.placePlannedTargetAtCrosshair();
+    unawaited(targetManager.placePlannedTargetAtCrosshair());
   }
 
   void cancelPlannedTarget() {
@@ -865,11 +885,17 @@ class MapScreenLogic {
     await targetManager.markActiveTargetAsPassed();
   }
 
+  /// Публичный метод для внешней отмены активной цели.
+  /// Используется, когда строку цели смахивают на главном экране.
+  Future<void> cancelActiveTarget() async {
+    await targetManager.markActiveTargetAsPassed();
+  }
+
   // --------------------------------------------------------
   // Пересчёты
   // --------------------------------------------------------
 
-  void _recalculateWorkingPairAndRotation() {
+  void _recalculateWorkingPairAndRotation({bool enableFollow = false}) {
     final anchors = state.project?.anchors ?? [];
     _calibrationService.updateAnchors(anchors);
     final newPair = _calibrationService.selectWorkingPair(anchors);
@@ -880,8 +906,6 @@ class MapScreenLogic {
       if (newPair != null) {
         final trueRotation = _calibrationService.getMapRotation(newPair) ?? 0.0;
         state.mapRotation = trueRotation - declinationRad;
-        /* showSnackBar('привязка завершена'); */
-        enableFollowMode();
       } else {
         final project = state.project;
         if (project != null && project.photoSeverLinePixels > 0) {
@@ -891,6 +915,13 @@ class MapScreenLogic {
         }
       }
     });
+
+    // Follow включаем только по явному запросу. Иначе при каждом обновлении
+    // склонения (раз в секунду) пользователю принудительно включался бы
+    // режим сопровождения, даже если он его выключил.
+    if (enableFollow && newPair != null) {
+      enableFollowMode();
+    }
 
     onAnchorsChangedForStatus?.call();
     _recalculateCanPlaceTarget();
@@ -1063,7 +1094,6 @@ void _recalculateUserImagePoint() {
 
   void _onMagneticDeclinationChanged() {
     _calibrationService.setMagneticDeclination(magneticDeclination);
-    photoSeverController.magneticDeclination = magneticDeclination;
     _recalculateWorkingPairAndRotation();
     _recalculatePreview();
   }

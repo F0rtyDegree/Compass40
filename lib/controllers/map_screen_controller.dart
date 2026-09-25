@@ -30,4 +30,8 @@ class MapScreenController {
   void nextCalibrationMode() {
     _logic?.nextCalibrationMode();
   }
+
+  void cancelActiveTarget() {
+    _logic?.cancelActiveTarget();
+  }
 }

@@ -24,7 +24,13 @@ class MapTargetManager {
     required this.onRecalculatePreview,
   });
 
-  void placePlannedTargetAtCrosshair() {
+  // Молча выходим, если нет привязки. Цель без координат бесполезна.
+  // Сообщение не показываем: обилие сообщений раздражает, а причина
+  // и так очевидна — если карта не привязана, координаты не вычислить.
+  /// Создаёт запланированную цель в позиции прицела.
+  /// Старая активная цель при этом переводится в passed: ведение
+  /// на неё прекращается сразу при первом тапе на кнопку ЦЕЛЬ.
+  Future<void> placePlannedTargetAtCrosshair() async {
     if (!state.canPlaceTarget) return;
     if (state.crosshairImagePoint == null) return;
 
@@ -33,19 +39,43 @@ class MapTargetManager {
     );
 
     final target = MapTarget(
-      // Время создания используется как уникальный идентификатор для новой цели.
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       imageX: state.crosshairImagePoint!.dx,
       imageY: state.crosshairImagePoint!.dy,
       latitude: geo?.latitude,
       longitude: geo?.longitude,
       status: MapTargetStatus.planned,
-      // Фиксируем время создания цели.
       createdAt: DateTime.now(),
     );
 
+    await _passOldActiveTargets();
+
     setState(() {
       state.plannedTarget = target;
+    });
+  }
+
+  /// Помечает текущую активную цель как пройденную и сохраняет проект.
+  /// Ведение на неё прекращается.
+  Future<void> _passOldActiveTargets() async {
+    final project = state.project;
+    if (project == null) return;
+    final hasActive =
+        project.targets.any((t) => t.status == MapTargetStatus.active);
+    if (!hasActive) return;
+
+    final updatedTargets = project.targets.map((t) {
+      if (t.status == MapTargetStatus.active) {
+        return t.copyWith(status: MapTargetStatus.passed);
+      }
+      return t;
+    }).toList();
+
+    final updated = project.copyWith(targets: updatedTargets);
+    await storageService.saveProject(updated);
+    setState(() {
+      state.project = updated;
+      state.activeTarget = null;
     });
   }
 
@@ -89,16 +119,16 @@ class MapTargetManager {
     }
 
     final target = MapTarget(
-      // Время создания используется как уникальный идентификатор для новой цели.
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       imageX: imagePoint.dx,
       imageY: imagePoint.dy,
       latitude: lat,
       longitude: lon,
       status: MapTargetStatus.planned,
-      // Фиксируем время создания цели.
       createdAt: DateTime.now(),
     );
+
+    await _passOldActiveTargets();
 
     setState(() {
       state.plannedTarget = target;
@@ -106,6 +136,8 @@ class MapTargetManager {
 //    showSnackBar('Цель установлена из буфера обмена');
   }
 
+  // Молча выходим, если у цели нет координат. Сообщение не показываем.
+  // См. комментарий в placePlannedTargetAtCrosshair.
   Future<void> setTargetAndStartNavigation() async {
     final planned = state.plannedTarget;
     if (planned == null || planned.latitude == null || planned.longitude == null) {

@@ -13,14 +13,17 @@ class PhotoSeverController {
   final MapStorageService storageService;
   final Offset Function(Offset imagePoint) imageToScreen;
   final VoidCallback? onFinish;
+  final VoidCallback? onEnableFollowMode;
 
   bool isActive = false;
   final List<Offset> points = [];
-  double magneticDeclination;
 
   /// Трансформация карты до поворота в _applyNorthRotation.
   /// Восстанавливается, если пользователь отменяет ввод расстояния.
   MapTransformState? _savedTransformBeforeRotation;
+
+  /// Был ли follow mode включён до старта PhotoSever.
+  bool _followWasEnabled = false;
 
   PhotoSeverController({
     required this.state,
@@ -30,12 +33,15 @@ class PhotoSeverController {
     required this.updateTransform,
     required this.storageService,
     required this.imageToScreen,
-    required this.magneticDeclination,
     this.onFinish,
+    this.onEnableFollowMode,
   });
 
   void start() {
     setState(() {
+      // Запоминаем, был ли follow mode включён, чтобы восстановить его
+      // при отмене.
+      _followWasEnabled = state.followMode;
       // Выключаем follow mode: в нём прицел смещён в 3/4 высоты,
       // точки ФотоСевера ставятся в неудобной позиции.
       if (state.followMode) {
@@ -107,14 +113,20 @@ class PhotoSeverController {
     final dist = await askDistanceDialog();
     if (dist == null) {
       final saved = _savedTransformBeforeRotation;
+      final restoreFollow = _followWasEnabled;
       setState(() {
         isActive = false;
         points.clear();
         _savedTransformBeforeRotation = null;
+        _followWasEnabled = false;
       });
       // Откатываем поворот карты, сделанный на третьей точке.
       if (saved != null) {
         updateTransform(saved);
+      }
+      // Восстанавливаем follow mode, если он был включён до старта.
+      if (restoreFollow) {
+        onEnableFollowMode?.call();
       }
 //      showSnackBar('ФотоСевер отменён');
       return;
@@ -155,6 +167,7 @@ class PhotoSeverController {
       isActive = false;
       points.clear();
       _savedTransformBeforeRotation = null;
+      _followWasEnabled = false;
       // Устанавливаем mapRotation, чтобы курсор направления учитывал ориентацию снимка
       state.mapRotation = -math.pi / 2 - northAngle;
     });

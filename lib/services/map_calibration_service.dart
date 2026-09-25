@@ -304,6 +304,11 @@ class MapCalibrationService {
 
   /// Возвращает список якорей, где последний добавленный (по порядку
   /// в _anchors) стоит первым. Остальные сохраняют относительный порядок.
+  ///
+  /// Если последнего добавленного нет среди pinned-набор (например, он
+  /// не входит в ручной выбор), первым ставится первый элемент из points.
+  /// Это осознанное упрощение: в ручном режиме пользователь сам выбирает,
+  /// какие точки важны, и порядок для веса не критичен.
   List<MapAnchor> _orderWithLatestFirst(List<MapAnchor> points) {
     if (points.isEmpty || _anchors.isEmpty) return points;
     final latestAnchor = _anchors.last;
