@@ -27,6 +27,13 @@ class MapOverlayPainter extends CustomPainter {
   final double mapRotation;
   final double magneticDeclination;
 
+  /// Метров на один экранный пиксель. Нужно для кругов расстояния.
+  /// Если null — круги не рисуются.
+  final double? metersPerScreenPixel;
+
+  /// Экранная позиция прицела. Центр кругов расстояния.
+  final Offset? crosshairScreenPoint;
+
   const MapOverlayPainter({
     required this.imageSize,
     required this.transformState,
@@ -44,10 +51,13 @@ class MapOverlayPainter extends CustomPainter {
     this.isGpsActive = false,
     this.mapRotation = 0.0,
     this.magneticDeclination = 0.0,
+    this.metersPerScreenPixel,
+    this.crosshairScreenPoint,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    _drawDistanceCircles(canvas);
     _drawTrack(canvas);
 
     for (final anchor in anchors) {
@@ -152,6 +162,85 @@ class MapOverlayPainter extends CustomPainter {
   /// На больших треках (10k+ точек) это тратит немного CPU, но не
   /// оптимизировано осознанно: 3600 линий за кадр — норма для Flutter.
   /// Возвращаться — при реальных просадках.
+  /// Рисует пунктирные круги расстояния вокруг прицела.
+  /// Набор радиусов фиксированный, отображаются те, что влезают в вид.
+  void _drawDistanceCircles(Canvas canvas) {
+    final mpp = metersPerScreenPixel;
+    final center = crosshairScreenPoint;
+    if (mpp == null || mpp <= 0 || center == null) return;
+
+    const radiiMeters = [100.0, 200.0, 500.0, 1000.0, 2000.0, 5000.0, 10000.0];
+    final maxVisible =
+        math.max(viewportSize.width, viewportSize.height) * 0.7;
+
+    final circlePaint = Paint()
+      ..color = Colors.black.withAlpha(180)
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke;
+
+    for (final radiusM in radiiMeters) {
+      final radiusPx = radiusM / mpp;
+      if (radiusPx < 30) continue;
+      if (radiusPx > maxVisible) continue;
+      _drawDashedCircle(canvas, center, radiusPx, circlePaint);
+      _drawRadiusLabel(canvas, center, radiusPx, radiusM);
+    }
+  }
+
+  void _drawDashedCircle(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    Paint paint,
+  ) {
+    const dashLength = 20.0;
+    final circumference = 2 * math.pi * radius;
+    final segments = (circumference / (2 * dashLength)).round();
+    if (segments < 8) return;
+    final segmentAngle = 2 * math.pi / segments;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    for (int i = 0; i < segments; i++) {
+      canvas.drawArc(
+        rect,
+        i * segmentAngle,
+        segmentAngle * 0.5,
+        false,
+        paint,
+      );
+    }
+  }
+
+  void _drawRadiusLabel(
+    Canvas canvas,
+    Offset center,
+    double radiusPx,
+    double radiusM,
+  ) {
+    final label = radiusM >= 1000
+        ? '${(radiusM / 1000).toStringAsFixed(0)} км'
+        : '${radiusM.toStringAsFixed(0)} м';
+
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          shadows: [
+            Shadow(color: Colors.white, blurRadius: 6),
+            Shadow(color: Colors.white, blurRadius: 4),
+            Shadow(color: Colors.white, blurRadius: 2),
+          ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final pos = center + Offset(0, -radiusPx);
+    tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
+  }
+
   void _drawTrack(Canvas canvas) {
     if (trackImagePoints.length < 2) return;
 
@@ -411,6 +500,11 @@ class MapOverlayPainter extends CustomPainter {
     if (oldDelegate.previewDistanceMeters != previewDistanceMeters ||
         oldDelegate.previewBearingDegrees != previewBearingDegrees ||
         oldDelegate.isGpsActive != isGpsActive) {
+      return true;
+    }
+
+    if (oldDelegate.metersPerScreenPixel != metersPerScreenPixel ||
+        oldDelegate.crosshairScreenPoint != crosshairScreenPoint) {
       return true;
     }
 

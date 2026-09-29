@@ -243,6 +243,8 @@ class _MapScreenState extends State<MapScreen> {
                   isGpsActive: _state.isGpsActive,
                   mapRotation: _state.mapRotation,
                   magneticDeclination: widget.magneticDeclinationNotifier.value,
+                  metersPerScreenPixel: _logic.metersPerScreenPixel,
+                  crosshairScreenPoint: _logic.getCrosshairScreenPoint(),
                 ),
               ),
               Builder(
@@ -288,7 +290,6 @@ class _MapScreenState extends State<MapScreen> {
                   child: MapScaleBadge(
                     totalCount: _logic.totalAnchorCount,
                     usedCount: _logic.usedAnchorCount,
-                    metersPerPx: _logic.metersPerScreenPixel,
                     distanceMeters: _logic.distanceToCrosshairMeters,
                   ),
                 ),
