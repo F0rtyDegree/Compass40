@@ -116,9 +116,16 @@ class MainActivity : FlutterActivity() {
 
     private fun handleIntent(intent: Intent) {
         val action = intent.action ?: return
+        // Передаём extras во Flutter как Map<String, Any>.
+        // Если extras нет — arguments = null, обрабатывается на стороне Dart.
+        val args: Map<String, Any>? = intent.extras?.let { bundle ->
+            bundle.keySet().associateWith { key ->
+                bundle.get(key) as Any
+            }
+        }
         flutterEngine?.let { engine ->
             MethodChannel(engine.dartExecutor.binaryMessenger, INTENT_CHANNEL)
-                .invokeMethod(action, null)
+                .invokeMethod(action, args)
         }
     }
 }

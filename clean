@@ -20,8 +20,8 @@ find /home/user/.gradle/caches -maxdepth 3 -type d -name transforms | while read
         echo -e "\033[0;31m$message\033[0m";
         echo -e "\033[0;31m  -> удаляю /home/user/.gradle/caches/8.12/transforms\033[0m"
         rm -rf "$t"
-    else
-        echo -e "\033[0;32m$message\033[0m";
+#    else
+#        echo -e "\033[0;32m$message\033[0m";
     fi
 done
 

@@ -25,6 +25,8 @@ class MapScreen extends StatefulWidget {
   final ValueNotifier<GpsData> gpsDataNotifier;
   final ValueNotifier<double> magneticDeclinationNotifier;
   final ValueNotifier<double> headingNotifier;
+  final ValueNotifier<bool> isRecordingTrackNotifier;
+  final VoidCallback? onToggleRecording;
   final Function(double lat, double lon, double? distance, DateTime createdAt)?
       onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
@@ -35,6 +37,8 @@ class MapScreen extends StatefulWidget {
     required this.gpsDataNotifier,
     required this.magneticDeclinationNotifier,
     required this.headingNotifier,
+    required this.isRecordingTrackNotifier,
+    this.onToggleRecording,
     this.onAnchorAdded,
     this.onStartNavigation,
     this.onCancelNavigation,
@@ -124,9 +128,23 @@ class _MapScreenState extends State<MapScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Карта'),
           centerTitle: true,
           actions: [
+            ValueListenableBuilder<bool>(
+              valueListenable: widget.isRecordingTrackNotifier,
+              builder: (context, isRecording, _) {
+                return IconButton(
+                  icon: Icon(
+                    isRecording ? Icons.stop : Icons.play_arrow,
+                    color: isRecording ? Colors.red : Colors.grey,
+                  ),
+                  onPressed: widget.onToggleRecording,
+                  tooltip: isRecording
+                      ? 'Остановить запись трека'
+                      : 'Начать запись трека',
+                );
+              },
+            ),
             IconButton(
               icon: const Icon(Icons.help_outline),
               onPressed: () {

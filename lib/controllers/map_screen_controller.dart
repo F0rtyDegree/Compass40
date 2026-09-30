@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:compass40/controllers/map_screen_logic.dart';
 
 class MapScreenController {
@@ -41,5 +42,9 @@ class MapScreenController {
 
   void onRecordingStopped() {
     _logic?.onRecordingStopped();
+  }
+ 
+  void panBy(Offset delta) {
+    _logic?.panBy(delta);
   }
 }

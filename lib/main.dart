@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:compass40/controllers/map_screen_controller.dart';
 import '../utils/app_constants.dart';
 
+
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final FlutterLocalNotificationsPlugin _notificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -30,6 +31,20 @@ Future<void> _handleIntent(MethodCall call) async {
       break;
     case 'by.fortydegree.compass40.ACTION_NEXT_CALIBRATION_MODE':
       MapScreenController().nextCalibrationMode();
+      break;
+    case 'by.fortydegree.compass40.ACTION_PAN':
+      final args = call.arguments;
+      if (args is Map) {
+        final dx = args['dx'];
+        final dy = args['dy'];
+        if (dx == null && dy == null) break;
+        MapScreenController().panBy(
+          Offset(
+            (dx is int) ? dx.toDouble() : 0.0,
+            (dy is int) ? dy.toDouble() : 0.0,
+          ),
+        );
+      }
       break;
   }
 }

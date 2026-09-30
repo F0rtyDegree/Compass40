@@ -202,6 +202,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                       magneticDeclinationNotifier:
                           _state.magneticDeclinationNotifier,
                       headingNotifier: _state.headingNotifier,
+                      isRecordingTrackNotifier:
+                          _state.isRecordingTrackNotifier,
+                      onToggleRecording: _logic.toggleTrackRecording,
                       onAnchorAdded: (lat, lon, distance, createdAt) async {
                         final items = await _logService.addMapAnchorLogEntry(
                           currentLogItems: _state.logItems,

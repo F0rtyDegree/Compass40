@@ -271,18 +271,21 @@ class MapScreenLogic {
   /// якорей — редкая операция, задержка незаметна на фоне перерисовки.
   /// Возвращаться — только при реальных жалобах.
   Future<void> _loadTrackFromCsv() async {
-  // Нет привязки — геопривязка пикселей невозможна. Оставляем
-  // trackImagePoints как есть: пользователь видит старый трек
-  // в произвольном месте экрана. Осознанно: очистка добавила бы
-  // мерцание при временных ситуациях (удалил/добавил якорь).
-  // Возвращаться — если появится жалоба на «висящий» трек.
+    // Нет привязки — геопривязка пикселей невозможна. Оставляем
+    // trackImagePoints как есть: пользователь видит старый трек
+    // в произвольном месте экрана. Осознанно: очистка добавила бы
+    // мерцание при временных ситуациях (удалил/добавил якорь).
+    // Возвращаться — если появится жалоба на «висящий» трек.
     if (_calibrationService.usedAnchorCount == 0) return;
     final points = await TrackRecorder().getTrackPoints();
     if (points.isEmpty) return;
 
     final imagePoints = <Offset>[];
     for (final (_, lat, lon) in points) {
-      final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
+      final imagePoint = _calibrationService.geoToImagePointFromCurrent(
+        lat,
+        lon,
+      );
       if (imagePoint != null) {
         imagePoints.add(imagePoint);
       }
@@ -309,13 +312,13 @@ class MapScreenLogic {
     await _loadTrackFromCsv();
   }
 
-/// Пересчитывает пиксели трека под текущую привязку.
-///
-/// Вызывается при любом изменении якорей. Если пользователь остановил
-/// запись (onRecordingStopped), а потом добавил якорь — трек снова
-/// прочитается из CSV. Это осознанно: CSV — источник правды, а «стоп»
-/// лишь очищает экранную копию. Возвращаться — только если такое
-/// поведение начнёт мешать.
+  /// Пересчитывает пиксели трека под текущую привязку.
+  ///
+  /// Вызывается при любом изменении якорей. Если пользователь остановил
+  /// запись (onRecordingStopped), а потом добавил якорь — трек снова
+  /// прочитается из CSV. Это осознанно: CSV — источник правды, а «стоп»
+  /// лишь очищает экранную копию. Возвращаться — только если такое
+  /// поведение начнёт мешать.
   Future<void> _reloadTrackImagePoints() async {
     // Сбрасываем буфер CSV, чтобы последние точки (уже видимые на карте,
     // но ещё не записанные) не потерялись при перечитывании.
@@ -502,10 +505,10 @@ class MapScreenLogic {
     anchorManager.cachedGpxPoints = null;
 
     if (hadActiveTargetOnMap) {
-  // HomeLogic.clearTarget → MapScreenController.cancelActiveTarget →
-  // markActiveTargetAsPassed. На этом шаге state.activeTarget уже null,
-  // поэтому markActiveTargetAsPassed сделает ранний return. Цепочка
-  // выглядит реентрантной, но безвредна: цель уже погашена выше.
+      // HomeLogic.clearTarget → MapScreenController.cancelActiveTarget →
+      // markActiveTargetAsPassed. На этом шаге state.activeTarget уже null,
+      // поэтому markActiveTargetAsPassed сделает ранний return. Цепочка
+      // выглядит реентрантной, но безвредна: цель уже погашена выше.
       onCancelNavigation?.call();
     }
   }
@@ -543,7 +546,7 @@ class MapScreenLogic {
         });
       }
     }
-//    showSnackBar('Все якоря удалены');
+    //    showSnackBar('Все якоря удалены');
   }
 
   // --------------------------------------------------------
@@ -723,35 +726,35 @@ class MapScreenLogic {
     // Фиксируем СИСТЕМНОЕ время нажатия (БЕЗ компенсации)
     final DateTime rawRequestTime = DateTime.now();
 
-/// ============================================================
-/// КОМПЕНСАЦИЯ ЗАДЕРЖКИ GPS (важно!)
-/// ============================================================
-/// При нажатии кнопки «Я здесь» мы фиксируем системное время (rawRequestTime).
-/// Однако GPS-координаты, которые мы получим в ближайшие секунды, соответствуют
-/// не этому моменту, а моменту на 1–2 секунды позже. Это связано с тем, что:
-///
-/// 1. GPS-чип и драйвер буферизируют и фильтруют данные, создавая задержку.
-/// 2. Обновления приходят дискретно (раз в секунду), и момент нажатия
-///    почти никогда не совпадает с моментом получения пакета.
-///
-/// Без компенсации точка привязки ложится ДО реального положения (например,
-/// до поворота), потому что интерполяция использует пакеты, которые были
-/// получены до и после нажатия, но эти пакеты соответствуют более раннему
-/// времени (из-за задержки обработки).
-///
-/// Решение: мы сдвигаем время интерполяции на величину _compensationMs
-/// (по умолчанию 1500 мс, но динамически уточняется на основе измерений).
-/// Это позволяет «заглянуть» в будущее и получить координаты, которые
-/// соответствуют реальному положению в момент нажатия.
-///
-/// Величина 1500 мс была подобрана эмпирически и подтверждена множеством
-/// тестов: в движении с компенсацией точки попадают точно в середину поворота,
-/// без компенсации — до поворота.
-///
-/// Динамическая компенсация (см. _updateCompensation) автоматически
-/// подстраивается под текущие условия, используя измеренную задержку
-/// между нажатием и получением следующего GPS-пакета.
-/// ============================================================
+    /// ============================================================
+    /// КОМПЕНСАЦИЯ ЗАДЕРЖКИ GPS (важно!)
+    /// ============================================================
+    /// При нажатии кнопки «Я здесь» мы фиксируем системное время (rawRequestTime).
+    /// Однако GPS-координаты, которые мы получим в ближайшие секунды, соответствуют
+    /// не этому моменту, а моменту на 1–2 секунды позже. Это связано с тем, что:
+    ///
+    /// 1. GPS-чип и драйвер буферизируют и фильтруют данные, создавая задержку.
+    /// 2. Обновления приходят дискретно (раз в секунду), и момент нажатия
+    ///    почти никогда не совпадает с моментом получения пакета.
+    ///
+    /// Без компенсации точка привязки ложится ДО реального положения (например,
+    /// до поворота), потому что интерполяция использует пакеты, которые были
+    /// получены до и после нажатия, но эти пакеты соответствуют более раннему
+    /// времени (из-за задержки обработки).
+    ///
+    /// Решение: мы сдвигаем время интерполяции на величину _compensationMs
+    /// (по умолчанию 1500 мс, но динамически уточняется на основе измерений).
+    /// Это позволяет «заглянуть» в будущее и получить координаты, которые
+    /// соответствуют реальному положению в момент нажатия.
+    ///
+    /// Величина 1500 мс была подобрана эмпирически и подтверждена множеством
+    /// тестов: в движении с компенсацией точки попадают точно в середину поворота,
+    /// без компенсации — до поворота.
+    ///
+    /// Динамическая компенсация (см. _updateCompensation) автоматически
+    /// подстраивается под текущие условия, используя измеренную задержку
+    /// между нажатием и получением следующего GPS-пакета.
+    /// ============================================================
     // Если уже идёт ожидание GPS — игнорируем повторное нажатие.
     if (state.pendingAnchor != null) return;
 
@@ -1042,31 +1045,31 @@ class MapScreenLogic {
     });
   }
 
-void _recalculateUserImagePoint() {
-  if (_calibrationService.usedAnchorCount == 0) {
-    if (state.currentUserImagePoint != null) {
-      setState(() {
-        state.currentUserImagePoint = null;
-      });
+  void _recalculateUserImagePoint() {
+    if (_calibrationService.usedAnchorCount == 0) {
+      if (state.currentUserImagePoint != null) {
+        setState(() {
+          state.currentUserImagePoint = null;
+        });
+      }
+      return;
     }
-    return;
+
+    final gps = _lastGpsData;
+    if (gps == null) return;
+    final lat = gps.latitude;
+    final lon = gps.longitude;
+    if (lat == null || lon == null || state.project == null) return;
+
+    final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
+    if (imagePoint == null) return;
+
+    setState(() {
+      state.currentUserImagePoint = imagePoint;
+    });
+
+    _recalculatePreview();
   }
-
-  final gps = _lastGpsData;
-  if (gps == null) return;
-  final lat = gps.latitude;
-  final lon = gps.longitude;
-  if (lat == null || lon == null || state.project == null) return;
-
-  final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
-  if (imagePoint == null) return;
-
-  setState(() {
-    state.currentUserImagePoint = imagePoint;
-  });
-
-  _recalculatePreview();
-}
 
   void _recalculatePreview() {
     final gps = _lastGpsData;
@@ -1133,7 +1136,7 @@ void _recalculateUserImagePoint() {
         newActiveTarget!.latitude!,
         newActiveTarget.longitude!,
       );
-//      showSnackBar('Навигация перезапущена с новыми координатами цели');
+      //      showSnackBar('Навигация перезапущена с новыми координатами цели');
     }
   }
 
@@ -1163,6 +1166,16 @@ void _recalculateUserImagePoint() {
 
   void resetRotateModeTimer() {
     followController.resetRotateModeTimer();
+  }
+
+  /// Сдвигает карту на [delta] пикселей экрана. Оси экранные,
+  /// не зависят от поворота карты. В follow mode игнорируется.
+  void panBy(Offset delta) {
+    if (state.followMode) return;
+    if (state.viewportSize == null || state.imageSize == null) return;
+
+    final current = state.transformState;
+    updateTransform(current.copyWith(translation: current.translation + delta));
   }
 
   void _onMagneticDeclinationChanged() {

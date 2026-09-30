@@ -56,7 +56,7 @@ class AppConstants {
 
   static const double minMapScale = 0.05;
   static const double maxMapScale = 20.0;
-  
+
   static const double imageFitPaddingFactor = 0.92;
   static const int feedbackDurationMs = 200;
   

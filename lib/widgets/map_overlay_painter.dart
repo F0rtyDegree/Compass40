@@ -175,39 +175,46 @@ class MapOverlayPainter extends CustomPainter {
 
     final circlePaint = Paint()
       ..color = Colors.black.withAlpha(180)
-      ..strokeWidth = 3.0
+      ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
     for (final radiusM in radiiMeters) {
       final radiusPx = radiusM / mpp;
       if (radiusPx < 30) continue;
       if (radiusPx > maxVisible) continue;
-      _drawDashedCircle(canvas, center, radiusPx, circlePaint);
-      _drawRadiusLabel(canvas, center, radiusPx, radiusM);
+      if (_drawDashedCircle(canvas, center, radiusPx, circlePaint)) {
+        _drawRadiusLabel(canvas, center, radiusPx, radiusM);
+      }
     }
   }
 
-  void _drawDashedCircle(
+  /// Рисует пунктирную окружность. Возвращает false, если окружность
+  /// слишком мала и не может быть показана как пунктир (сегментов < 8).
+  bool _drawDashedCircle(
     Canvas canvas,
     Offset center,
     double radius,
     Paint paint,
   ) {
     const dashLength = 20.0;
+    const gapLength = 40.0;
     final circumference = 2 * math.pi * radius;
-    final segments = (circumference / (2 * dashLength)).round();
-    if (segments < 8) return;
+    final period = dashLength + gapLength;
+    final segments = (circumference / period).round();
+    if (segments < 8) return false;
     final segmentAngle = 2 * math.pi / segments;
+    final dashAngle = segmentAngle * dashLength / period;
     final rect = Rect.fromCircle(center: center, radius: radius);
     for (int i = 0; i < segments; i++) {
       canvas.drawArc(
         rect,
         i * segmentAngle,
-        segmentAngle * 0.5,
+        dashAngle,
         false,
         paint,
       );
     }
+    return true;
   }
 
   void _drawRadiusLabel(
@@ -237,8 +244,8 @@ class MapOverlayPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
 
-    final pos = center + Offset(0, -radiusPx);
-    tp.paint(canvas, pos - Offset(tp.width / 2, tp.height / 2));
+    final pos = center + Offset(0, -radiusPx - tp.height / 2 - 6);
+    tp.paint(canvas, pos - Offset(tp.width / 2, 0));
   }
 
   void _drawTrack(Canvas canvas) {
