@@ -244,7 +244,7 @@ class MapOverlayPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout();
 
-    final pos = center + Offset(0, -radiusPx - tp.height / 2 - 6);
+    final pos = center + Offset(0, -radiusPx - tp.height / 2 - 8);
     tp.paint(canvas, pos - Offset(tp.width / 2, 0));
   }
 

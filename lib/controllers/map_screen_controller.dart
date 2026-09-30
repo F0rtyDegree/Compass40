@@ -47,4 +47,8 @@ class MapScreenController {
   void panBy(Offset delta) {
     _logic?.panBy(delta);
   }
+
+  void addAnchorAtCrosshair() {
+    _logic?.addAnchorFromCurrentGps();
+  }
 }
