@@ -723,6 +723,34 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
+    final crosshair = state.crosshairImagePoint;
+    if (crosshair == null) {
+      showSnackBar('Прицел не определён');
+      return;
+    }
+    await _addAnchorAtScreenPointInternal(
+      getCrosshairScreenPoint(),
+      isAutoCorrection: false,
+    );
+  }
+
+  /// Публичный метод: ставит якорь в позиции [screenPoint] с текущим GPS.
+  /// [isAutoCorrection] = true — якорь создан через интент в follow mode.
+  /// Перед постановкой удаляется предыдущий авто-якорь (если был).
+  Future<void> addAnchorAtScreenPoint(
+    Offset screenPoint, {
+    bool isAutoCorrection = false,
+  }) async {
+    await _addAnchorAtScreenPointInternal(
+      screenPoint,
+      isAutoCorrection: isAutoCorrection,
+    );
+  }
+
+  Future<void> _addAnchorAtScreenPointInternal(
+    Offset screenPoint, {
+    required bool isAutoCorrection,
+  }) async {
     // Фиксируем СИСТЕМНОЕ время нажатия (БЕЗ компенсации)
     final DateTime rawRequestTime = DateTime.now();
 
@@ -762,11 +790,7 @@ class MapScreenLogic {
       Duration(milliseconds: _compensationMs.round()),
     );
 
-    final crosshair = state.crosshairImagePoint;
-    if (crosshair == null) {
-      showSnackBar('Прицел не определён');
-      return;
-    }
+    final crosshair = screenToImage(screenPoint);
 
     // Показываем серый якорь сразу, по текущему (грубому) GPS.
     final roughGps = gpsDataNotifier.value;
@@ -882,11 +906,38 @@ class MapScreenLogic {
       state.pendingAnchor = null;
     });
 
+    // В авто-режиме удаляем предыдущий авто-якорь перед постановкой нового.
+    if (isAutoCorrection) {
+      final oldId = state.lastAutoAnchorId;
+      if (oldId != null) {
+        await anchorManager.deleteAnchorAndUpdate(oldId);
+      }
+    }
+
     await anchorManager.addAnchorFromGps(
       finalGps,
       crosshair,
-      anchorRequestTime, // время с компенсацией
+      anchorRequestTime,
     );
+
+    if (isAutoCorrection) {
+      final anchors = state.project?.anchors;
+      final latest =
+          (anchors != null && anchors.isNotEmpty) ? anchors.last : null;
+      setState(() {
+        state.lastAutoAnchorId = latest?.id;
+      });
+    } else {
+      // Обычный якорь (кнопка «Я ЗДЕСЬ», интент ADD_ANCHOR).
+      // Если до этого стоял авто-якорь от ACTION_PAN — снимаем с него
+      // метку «временный», чтобы следующий PAN его не удалил.
+      if (state.lastAutoAnchorId != null) {
+        setState(() {
+          state.lastAutoAnchorId = null;
+        });
+        showSnackBar('Якорь закреплён');
+      }
+    }
   }
 
   Future<void> addAnchorFromClipboard() async {
@@ -1168,14 +1219,24 @@ class MapScreenLogic {
     followController.resetRotateModeTimer();
   }
 
-  /// Сдвигает карту на [delta] пикселей экрана. Оси экранные,
-  /// не зависят от поворота карты. В follow mode игнорируется.
+  /// В обычном режиме — сдвигает карту на [delta] пикселей экрана.
+  /// В follow mode — ставит якорь в позиции прицела, смещённой на [delta],
+  /// с текущими GPS-координатами. Карта не двигается.
   void panBy(Offset delta) {
-    if (state.followMode) return;
+    if (state.followMode) {
+      final crosshair = getCrosshairScreenPoint();
+      // Знак инвертирован: в обычном режиме delta двигает карту,
+      // в follow — задаёт точку якоря. Чтобы эффект на экране совпадал,
+      // сдвиг применяется со знаком минус.
+      addAnchorAtScreenPoint(crosshair - delta, isAutoCorrection: true);
+      return;
+    }
     if (state.viewportSize == null || state.imageSize == null) return;
 
     final current = state.transformState;
-    updateTransform(current.copyWith(translation: current.translation + delta));
+    updateTransform(
+      current.copyWith(translation: current.translation + delta),
+    );
   }
 
   void _onMagneticDeclinationChanged() {

@@ -121,8 +121,10 @@ class _CrosshairPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final lineLen = 16.0;
-    final gap = 6.0;
+    // Луч от 10 до 20 пикселей от центра. Конец луча (20 px) —
+    // визуальный ориентир, куда попадёт якорь при постановке.
+    final lineLen = 10.0;
+    final gap = 10.0;
 
     final paint = Paint()
       ..color = Colors.red
