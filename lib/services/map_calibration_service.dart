@@ -85,6 +85,10 @@ class MapCalibrationService {
   final Set<String> _pinnedAnchorIds = {};
   bool _manualMode = false; // true, если пользователь хоть раз коснулся якоря
 
+  /// Колбэк: ручной набор применён (якорь добавлен или удалён).
+  /// Вызывается после перестроения трансформации.
+  VoidCallback? onManualSetApplied;
+
   // ✅ Данные ФотоСевера для режима P
   double _psLineMeters = 0.0;
   double _psLinePixels = 0.0;
@@ -267,6 +271,7 @@ class MapCalibrationService {
       _pinnedAnchorIds.remove(anchorId);
       _manualMode = _pinnedAnchorIds.isNotEmpty;
       _buildTransformFromAnchors();
+      onManualSetApplied?.call();
     } else {
       _pinnedAnchorIds.add(anchorId);
       _manualMode = true;
@@ -288,6 +293,7 @@ class MapCalibrationService {
     // Если точка уже была удалена пользователем до срабатывания таймера — ничего не делаем
     if (!_pinnedAnchorIds.contains(addedAnchorId)) {
       _buildTransformFromAnchors();
+      onManualSetApplied?.call();
       return;
     }
 
@@ -300,6 +306,7 @@ class MapCalibrationService {
     }
     // Применяем результат
     _buildTransformFromAnchors();
+    onManualSetApplied?.call();
   }
 
   /// Возвращает список якорей, где последний добавленный (по порядку

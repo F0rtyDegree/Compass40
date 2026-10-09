@@ -171,6 +171,10 @@ class MapScreenLogic {
         setState(() {});
       },
     );
+    _calibrationService.onManualSetApplied = () {
+      _recalculateWorkingPairAndRotation();
+      recalculateTargetsAfterNewAnchor();
+    };
     await followController.loadRotateModeTimeout();
     _calibrationService.setMagneticDeclination(magneticDeclination);
     magneticDeclinationNotifier.addListener(_onMagneticDeclinationChanged);
@@ -723,6 +727,15 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> addAnchorFromCurrentGps() async {
+    // В follow mode якорь не ставится. Снимается метка «временный»
+    // с текущего авто-якоря: следующий ACTION_PAN его не удалит.
+    if (state.followMode) {
+      setState(() {
+        state.lastAutoAnchorId = null;
+      });
+      showSnackBar('Якорь закреплён');
+      return;
+    }
     final crosshair = state.crosshairImagePoint;
     if (crosshair == null) {
       showSnackBar('Прицел не определён');
@@ -1187,8 +1200,11 @@ class MapScreenLogic {
         newActiveTarget!.latitude!,
         newActiveTarget.longitude!,
       );
-      //      showSnackBar('Навигация перезапущена с новыми координатами цели');
+//      showSnackBar('Навигация перезапущена с новыми координатами цели');
     }
+
+    // Пересчитываем пиксели трека под обновлённую привязку.
+    await _reloadTrackImagePoints();
   }
 
   // --------------------------------------------------------
