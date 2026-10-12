@@ -468,6 +468,9 @@ class MapScreenLogic {
   // --------------------------------------------------------
 
   Future<void> closeMap() async {
+    // Снимаем режим ожидания координат, если был активен.
+    state.pendingAnchorCoordId = null;
+
     // Синхронизируем с главным экраном: убираем строку цели, но только
     // если активная цель была на карте. Иначе цель, заданная через
     // TargetScreen, пропала бы при удалении карты.
@@ -979,6 +982,14 @@ class MapScreenLogic {
 
   Future<void> deleteAnchorAndUpdate(String anchorId) async {
     await anchorManager.deleteAnchorAndUpdate(anchorId);
+  }
+
+  Future<void> applyAnchorCoordFromCrosshair() async {
+    await anchorManager.applyAnchorCoordFromCrosshair();
+  }
+
+  void cancelAnchorCoordPick() {
+    anchorManager.cancelAnchorCoordPick();
   }
 
   // --------------------------------------------------------

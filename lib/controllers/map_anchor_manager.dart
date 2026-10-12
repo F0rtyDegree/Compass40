@@ -340,24 +340,139 @@ class MapAnchorManager {
   void _confirmDeleteAnchor(BuildContext context, MapAnchor anchor) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Удалить якорь?'),
-        content: Text('Точка привязки будет безвозвратно удалена.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Отмена'),
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Якорь'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _replaceAnchorCoordinatesFromClipboard(anchor.id);
+            },
+            child: const Text('Координаты из буфера'),
           ),
-          TextButton(
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              startAnchorCoordPick(anchor.id);
+            },
+            child: const Text('Координаты под прицелом'),
+          ),
+          SimpleDialogOption(
             onPressed: () {
               Navigator.pop(ctx);
               deleteAnchorAndUpdate(anchor.id);
             },
-            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Удалить якорь',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  /// Заменяет координаты якоря из буфера обмена.
+  /// Пиксель якоря на карте не меняется. Пересчёт привязки, целей, трека.
+  Future<void> _replaceAnchorCoordinatesFromClipboard(
+    String anchorId,
+  ) async {
+    ClipboardData? clipboardData;
+    try {
+      clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    } catch (_) {
+      showSnackBar('Ошибка чтения буфера обмена');
+      return;
+    }
+    if (clipboardData?.text == null) {
+      showSnackBar('Буфер обмена пуст');
+      return;
+    }
+    final geo = parseCoordinates(clipboardData!.text!);
+    if (geo == null) {
+      showSnackBar('Неверный формат. Ожидается: широта,долгота');
+      return;
+    }
+    await _updateAnchorCoordinates(anchorId, geo.latitude, geo.longitude);
+  }
+
+  /// Включает режим выбора координат под прицелом для указанного якоря.
+  /// Пользователь двигает карту, наводит прицел, тапает по нему.
+  void startAnchorCoordPick(String anchorId) {
+    setState(() {
+      state.pendingAnchorCoordId = anchorId;
+    });
+  }
+
+  /// Применяет координаты под прицелом к ожидающему якорю.
+  /// Вызывается тапом по области прицела.
+  Future<void> applyAnchorCoordFromCrosshair() async {
+    final anchorId = state.pendingAnchorCoordId;
+    if (anchorId == null) return;
+    final crosshair = state.crosshairImagePoint;
+    if (crosshair == null) {
+      showSnackBar('Прицел не определён');
+      return;
+    }
+    final geo = calibrationService.imagePointToGeoFromCurrent(crosshair);
+    if (geo == null) {
+      showSnackBar('Привязка не готова');
+      return;
+    }
+    setState(() {
+      state.pendingAnchorCoordId = null;
+    });
+    await _updateAnchorCoordinates(anchorId, geo.latitude, geo.longitude);
+  }
+
+  /// Отменяет режим выбора координат.
+  void cancelAnchorCoordPick() {
+    setState(() {
+      state.pendingAnchorCoordId = null;
+    });
+  }
+
+  /// Общая логика обновления координат якоря.
+  /// Сохраняет проект, перестраивает привязку, пересчитывает цели и трек.
+  Future<void> _updateAnchorCoordinates(
+    String anchorId,
+    double lat,
+    double lon,
+  ) async {
+    final project = state.project;
+    if (project == null) return;
+
+    final updatedAnchors = project.anchors.map((a) {
+      if (a.id == anchorId) {
+        return MapAnchor(
+          id: a.id,
+          imageX: a.imageX,
+          imageY: a.imageY,
+          latitude: lat,
+          longitude: lon,
+          createdAt: a.createdAt,
+        );
+      }
+      return a;
+    }).toList();
+
+    final updatedProject = project.copyWith(
+      anchors: updatedAnchors,
+      manualMode: calibrationService.isManualMode,
+      calibrationMode: calibrationService.currentMode.name,
+      pinnedAnchorIds: calibrationService.pinnedAnchorIdsList,
+    );
+    await storageService.saveProject(updatedProject);
+
+    setState(() {
+      state.project = updatedProject;
+    });
+
+    calibrationService.updateAnchors(updatedAnchors);
+    onAnchorsChanged();
+    await onRecalculateTargets(restartNavigation: true);
+
+    showSnackBar('Координаты якоря обновлены');
   }
 
   Future<void> deleteAnchorAndUpdate(String anchorId) async {

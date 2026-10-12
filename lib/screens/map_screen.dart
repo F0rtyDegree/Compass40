@@ -279,8 +279,9 @@ class _MapScreenState extends State<MapScreen> {
                         height: 80,
                         child: GestureDetector(
                           onTap: () {
-                            // ✅ ИСПРАВЛЕНО: обращаемся к флагу и методу контроллера
-                            if (_logic.photoSeverController.isActive) {
+                            if (_state.pendingAnchorCoordId != null) {
+                              _logic.applyAnchorCoordFromCrosshair();
+                            } else if (_logic.photoSeverController.isActive) {
                               _logic.photoSeverController.handleTap(
                                 _state.crosshairImagePoint!,
                               );
@@ -312,6 +313,43 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
               Positioned(top: 12, left: 12, child: _buildModeIndicator()),
+
+              if (_state.pendingAnchorCoordId != null)
+                Positioned(
+                  top: 12,
+                  left: 60,
+                  right: 60,
+                  child: Material(
+                    color: Colors.black.withAlpha(180),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Наведите прицел и тапните по нему',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _logic.cancelAnchorCoordPick,
+                            child: const Text(
+                              'Отмена',
+                              style: TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
 
               MapZoomButtons(
                 visible: _state.imagePath != null && _state.imageSize != null,
