@@ -16,6 +16,7 @@ import '../controllers/home_navigation_actions.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import 'dart:async';
+import '../services/background_tracker.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -117,6 +118,9 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       }
 
       _logic.dispose();
+
+      // Дожидаемся остановки фонового сервиса перед закрытием.
+      await stopBackgroundService();
 
       // Закрываем приложение безопасным способом
       SystemNavigator.pop();

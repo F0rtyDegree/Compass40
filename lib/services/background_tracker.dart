@@ -38,8 +38,18 @@ void startBackgroundService() {
   _service.startService();
 }
 
-void stopBackgroundService() {
+/// Останавливает фоновый сервис и ждёт, пока Android его обработает.
+/// Прямого API «дождаться остановки» у плагина нет. Проверяем isRunning
+/// в цикле: обычно сервис останавливается за 100-200 мс. Максимум 10
+/// итераций по 100 мс — 1 секунда. Если не остановился, закрываемся
+/// всё равно, чтобы приложение не висело.
+Future<void> stopBackgroundService() async {
   _service.invoke('stopService');
+  for (int i = 0; i < 10; i++) {
+    await Future.delayed(const Duration(milliseconds: 100));
+    final running = await _service.isRunning();
+    if (!running) return;
+  }
 }
 
 @pragma('vm:entry-point')

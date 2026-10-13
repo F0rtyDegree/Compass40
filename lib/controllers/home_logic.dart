@@ -85,8 +85,6 @@ class HomeLogic {
 
     FileLogger.writeLog('Compass40 stop');
 
-    stopBackgroundService();
-
     _gpsSubscription?.cancel();
     _gpsSubscription = null;
     _headingSubscription?.cancel();

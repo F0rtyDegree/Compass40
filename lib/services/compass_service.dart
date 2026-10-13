@@ -201,6 +201,12 @@ class CompassService {
     _isCalibrated = true;
     _calibrationStale = false;
 
+    // Обнуляем min/max. Иначе размахи продолжат накапливаться и рано
+    // или поздно превысят _calibratedRange + 30, вызвав ложный сброс
+    // калибровки в движении. Range теперь считается с нуля.
+    _minX = _minY = _minZ = double.infinity;
+    _maxX = _maxY = _maxZ = -double.infinity;
+
     // Эталон магнитуды ещё не зафиксирован: он будет вычислен
     // после накопления буфера уже с новыми офсетами.
     _calibMagnitude = 0.0;
@@ -245,6 +251,7 @@ class CompassService {
     await p.remove(_prefKeyRangeY);
     await p.remove(_prefKeyRangeZ);
     await p.remove(_prefKeyCalibrated);
+    await p.remove(_prefKeyMagnitude);
   }
 
   /// Полный сброс калибровки: обнуляет офсеты, размахи, счётчики секторов,
