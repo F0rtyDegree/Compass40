@@ -16,8 +16,13 @@ import 'home_state.dart';
 import '../services/file_logger.dart';
 import '../services/background_tracker.dart';
 import '../services/compass_service.dart';
+import '../services/screen_state_service.dart';
+import '../services/tts_service.dart';
+import '../utils/announce_utils.dart';
 import '../utils/app_constants.dart';
+import 'announcer_controller.dart';
 import 'map_screen_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeLogic {
   final HomeState state;
@@ -34,6 +39,9 @@ class HomeLogic {
   bool _wasTrackRecovered = false;
   bool get wasTrackRecovered => _wasTrackRecovered;
   bool _disposed = false;
+
+  Timer? _announceTimer;
+  int _announcePeriod = 0;
 
   HomeLogic({
     required this.state,
@@ -56,6 +64,9 @@ class HomeLogic {
     await _checkAndRecoverTrack();
     await _initServicesAndPermissions();
 
+    ScreenStateService().start();
+    await TtsService().init();
+    AnnouncerController().register(_handleAnnounceIntent);
     await _compassService.start();
     _headingSubscription = _compassService.dataStream.listen((data) {
       final useGps = _useGpsCompass();
@@ -80,8 +91,12 @@ class HomeLogic {
     _gpsSubscription = null;
     _headingSubscription?.cancel();
 
+    _announceTimer?.cancel();
+    _announceTimer = null;
+    AnnouncerController().unregister();
     _gpsManager.stop();
     _compassService.stop();
+    ScreenStateService().stop();
     state.uiUpdateTimer?.cancel();
     GpsCompassService.instance.bearingNotifier.removeListener(
       _onGpsBearingChanged,
@@ -93,6 +108,10 @@ class HomeLogic {
   }
 
   Future<void> _loadAllSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _announcePeriod = prefs.getInt(AppConstants.prefAnnouncePeriod) ?? 0;
+    _restartAnnounceTimer();
+
     final settings = await sensorService.loadSettings();
     setState(() {
       state.useManualDeclination = settings.useManualDeclination;
@@ -262,6 +281,101 @@ class HomeLogic {
     MapScreenController().cancelActiveTarget();
   }
 
+  void cancelExternalNavigation() {
+    clearTarget();
+  }
+
+  /// Обработчик интента ACTION_ANNOUNCE_TARGET.
+  Future<void> _handleAnnounceIntent({int? period}) async {
+    if (period != null) {
+      _announcePeriod += period;
+      if (_announcePeriod < 0) _announcePeriod = 0;
+      _restartAnnounceTimer();
+      await _saveAnnouncePeriod();
+      await _announcePeriodStatus();
+      return;
+    }
+    // Ручной вызов сбрасывает таймер автоозвучки:
+    // следующий автоматический тик — через T секунд от текущего момента.
+    _restartAnnounceTimer();
+    await _announceOnce(manual: true);
+  }
+
+  Future<void> _saveAnnouncePeriod() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(AppConstants.prefAnnouncePeriod, _announcePeriod);
+  }
+
+  void _restartAnnounceTimer() {
+    _announceTimer?.cancel();
+    _announceTimer = null;
+    if (_announcePeriod <= 0) return;
+    _announceTimer = Timer.periodic(
+      Duration(seconds: _announcePeriod),
+      (_) => _announceOnce(),
+    );
+  }
+
+  /// Озвучивает текущее состояние автоозвучки.
+  /// Работает только при выключенном экране и активном GPS-компасе.
+  Future<void> _announcePeriodStatus() async {
+    if (ScreenStateService().isScreenOn.value) return;
+    if (!GpsCompassService.instance.isActiveNotifier.value) return;
+    final text = _announcePeriod > 0
+        ? 'Автоозвучка $_announcePeriod секунд'
+        : 'Автоозвучка выключена';
+    await TtsService().speak(text);
+  }
+
+  /// Разовая озвучка состояния цели.
+  /// Дистанция и азимут считаются в момент озвучки из свежих данных GPS,
+  /// а не берутся из notifier'ов (они не обновляются при выключенном экране).
+  /// [manual] = true — вызов по интенту без параметра.
+  Future<void> _announceOnce({bool manual = false}) async {
+    if (ScreenStateService().isScreenOn.value) return;
+
+    final target = state.target;
+    if (target == null) {
+      // Автоозвучка при отсутствии цели молчит. Ручной вызов сообщает
+      // «Нет цели»: пользователь спросил — получил ответ.
+      if (manual) {
+        await TtsService().speak('Нет цели');
+      }
+      return;
+    }
+
+    final gps = state.gpsDataNotifier.value;
+    if (gps.latitude == null || gps.longitude == null) return;
+
+    // Скорость ниже порога — направление движения не определено.
+    // Авто молчит, ручной вызов подсказывает начать движение.
+    final speedKmh = (gps.speed ?? 0) * 3.6;
+    if (speedKmh < state.autoSwitchSpeedKmh) {
+      if (manual) {
+        await TtsService().speak('Начните движение');
+      }
+      return;
+    }
+
+    final heading = GpsCompassService.instance.bearingNotifier.value;
+    if (heading == null) return;
+
+    final nav = calculateNavigationData(
+      fromLat: gps.latitude!,
+      fromLon: gps.longitude!,
+      toLat: target['latitude']!,
+      toLon: target['longitude']!,
+      magneticDeclination: state.magneticDeclination,
+    );
+
+    final phrase = buildAnnouncePhrase(
+      distanceMeters: nav.distanceMeters,
+      bearingToTarget: nav.magneticBearing,
+      currentHeading: heading,
+    );
+    await TtsService().speak(phrase);
+  }
+
   Future<void> addTargetCreationLogEntry({
     required double baseLatitude,
     required double baseLongitude,
@@ -315,9 +429,6 @@ class HomeLogic {
     );
   }
 
-  void cancelExternalNavigation() {
-    clearTarget();
-  }
 
   Future<void> _checkAndRecoverTrack() async {
     final wasRecording = await TrackRecorder.recoverIfNeeded();

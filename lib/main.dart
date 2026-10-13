@@ -10,6 +10,7 @@ import 'theme_provider.dart';
 import 'services/background_tracker.dart';
 
 import 'package:flutter/services.dart';
+import 'package:compass40/controllers/announcer_controller.dart';
 import 'package:compass40/controllers/map_screen_controller.dart';
 import '../utils/app_constants.dart';
 
@@ -48,6 +49,15 @@ Future<void> _handleIntent(MethodCall call) async {
       break;
     case 'by.fortydegree.compass40.ACTION_ADD_ANCHOR':
       MapScreenController().addAnchorAtCrosshair();
+      break;
+    case 'by.fortydegree.compass40.ACTION_ANNOUNCE_TARGET':
+      final args = call.arguments;
+      int? period;
+      if (args is Map) {
+        final p = args['period'];
+        if (p is int) period = p;
+      }
+      AnnouncerController().announce(period: period);
       break;
   }
 }

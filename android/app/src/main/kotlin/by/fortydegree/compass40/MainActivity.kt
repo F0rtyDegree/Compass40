@@ -16,7 +16,10 @@ class MainActivity : FlutterActivity() {
     private val INTENT_CHANNEL = "by.fortydegree.compass40/intent"
     private val CONTROL_CHANNEL = "by.fortydegree.compass40/control"
     private val NOTIFICATION_CHANNEL = "by.fortydegree.compass40/notification"
+    private val SCREEN_CHANNEL = "by.fortydegree.compass40/screen"
     private val NOTIFICATION_ID = 888
+
+    private var screenReceiver: android.content.BroadcastReceiver? = null
 
     companion object {
         @JvmStatic
@@ -28,6 +31,40 @@ class MainActivity : FlutterActivity() {
         handleIntent(intent)
         setupControlChannel()
         setupNotificationChannel()
+        setupScreenReceiver()
+    }
+
+    private fun setupScreenReceiver() {
+        screenReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(
+                context: android.content.Context?,
+                intent: android.content.Intent?
+            ) {
+                val action = intent?.action ?: return
+                val state = when (action) {
+                    android.content.Intent.ACTION_SCREEN_ON -> "on"
+                    android.content.Intent.ACTION_SCREEN_OFF -> "off"
+                    else -> return
+                }
+                flutterEngine?.let { engine ->
+                    MethodChannel(
+                        engine.dartExecutor.binaryMessenger,
+                        SCREEN_CHANNEL
+                    ).invokeMethod(state, null)
+                }
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_SCREEN_ON)
+            addAction(android.content.Intent.ACTION_SCREEN_OFF)
+        }
+        registerReceiver(screenReceiver, filter)
+    }
+
+    override fun onDestroy() {
+        screenReceiver?.let { unregisterReceiver(it) }
+        screenReceiver = null
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {

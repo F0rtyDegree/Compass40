@@ -24,6 +24,7 @@
     final _autoSwitchSpeedController = TextEditingController();
     final _gpsAveragingSamplesController = TextEditingController();
     final _rotateModeTimeoutController = TextEditingController();
+    final _announcePeriodController = TextEditingController();
     double _compassSmoothness = AppConstants.compassSmoothnessDefault.toDouble();
     CompassMode _compassMode = CompassMode.magnetic;
 
@@ -61,6 +62,8 @@
           (prefs.getInt(AppConstants.prefRotateModeTimeoutMs) ??
                   AppConstants.rotateModeTimeoutDefaultMs)
               .toString();
+      _announcePeriodController.text =
+          (prefs.getInt(AppConstants.prefAnnouncePeriod) ?? 0).toString();
 
       _compassSmoothness =
           (prefs.getInt(AppConstants.prefCompassSmoothness) ??
@@ -110,6 +113,10 @@
       final rotateTimeout = int.tryParse(_rotateModeTimeoutController.text);
       await prefs.setInt(AppConstants.prefRotateModeTimeoutMs,
           rotateTimeout ?? AppConstants.rotateModeTimeoutDefaultMs);
+
+      final announcePeriod = int.tryParse(_announcePeriodController.text) ?? 0;
+      await prefs.setInt(
+          AppConstants.prefAnnouncePeriod, announcePeriod < 0 ? 0 : announcePeriod);
     }
 
     Widget _buildTextFieldRow(
@@ -153,6 +160,7 @@
       _autoSwitchSpeedController.dispose();
       _gpsAveragingSamplesController.dispose();
       _rotateModeTimeoutController.dispose();
+      _announcePeriodController.dispose();
       super.dispose();
     }
 
@@ -454,6 +462,29 @@
                         _rotateModeTimeoutController,
                         '${AppConstants.rotateModeTimeoutDefaultMs}',
                         suffix: 'мс',
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(),
+
+                      // === Озвучка ===
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: Text('Озвучка',
+                            style: Theme.of(context).textTheme.titleLarge),
+                      ),
+                      const SizedBox(height: 10),
+                      _buildTextFieldRow(
+                        'Период:',
+                        _announcePeriodController,
+                        '0',
+                        suffix: 'сек',
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Голосовые подсказки о дистанции и направлении на цель. '
+                        'Работают при выключенном экране и активном GPS-компасе. '
+                        '0 — выключено.',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),

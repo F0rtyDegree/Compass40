@@ -26,6 +26,7 @@ class AppConstants {
   static const String prefAnchorCompensationMs = 'anchor_compensation_ms';
   static const String prefPhotoSeverDistance = 'photoSeverDistance';
   static const String prefIsRecordingTrack = 'isRecordingTrack';
+  static const String prefAnnouncePeriod = 'announcePeriod';
   static const String prefLogItems = 'log_items';
   static const String prefMapProjects = 'map_projects';
   static const String prefCurrentMapProjectId = 'current_map_project_id';

@@ -227,36 +227,56 @@ class MapScreenLogic {
 
     final savedTransform = await storageService.loadTransform(projectId);
 
+    // Активная цель при старте переводится в planned: сессия прервана,
+    // ведение не восстанавливается. Пользователь активирует цель
+    // повторно кнопкой ГОУ.
+    final hasActive = project.targets.any(
+      (t) => t.status == MapTargetStatus.active,
+    );
+    MapProject projectToUse = project;
+    if (hasActive) {
+      final updatedTargets = project.targets.map((t) {
+        if (t.status == MapTargetStatus.active) {
+          return t.copyWith(status: MapTargetStatus.planned);
+        }
+        return t;
+      }).toList();
+      projectToUse = project.copyWith(targets: updatedTargets);
+      await storageService.saveProject(projectToUse);
+    }
+
     setState(() {
-      state.project = project;
-      state.imagePath = project.imagePath;
+      state.project = projectToUse;
+      state.imagePath = projectToUse.imagePath;
       if (savedTransform != null) {
         state.transformState = savedTransform;
       }
-      state.activeTarget = project.targets.firstWhereOrNull(
-        (t) => t.status == MapTargetStatus.active,
+      state.activeTarget = null;
+      // Если была active — она уже стала planned. Показываем как planned.
+      state.plannedTarget = projectToUse.targets.firstWhereOrNull(
+        (t) => t.status == MapTargetStatus.planned,
       );
     });
 
-    _calibrationService.updateAnchors(project.anchors);
-    _calibrationService.setPinnedAnchorIds(project.pinnedAnchorIds);
+    _calibrationService.updateAnchors(projectToUse.anchors);
+    _calibrationService.setPinnedAnchorIds(projectToUse.pinnedAnchorIds);
 
     final savedMode = CalibrationMode.values.firstWhere(
-      (m) => m.name == project.calibrationMode,
+      (m) => m.name == projectToUse.calibrationMode,
       orElse: () => CalibrationMode.affine,
     );
 
     _calibrationService.restoreState(
       mode: savedMode,
-      manual: project.manualMode,
-      pinnedIds: project.pinnedAnchorIds,
+      manual: projectToUse.manualMode,
+      pinnedIds: projectToUse.pinnedAnchorIds,
     );
 
-    if (project.photoSeverLinePixels > 0) {
+    if (projectToUse.photoSeverLinePixels > 0) {
       _calibrationService.updatePhotoSeverData(
-        lineMeters: project.photoSeverLineMeters,
-        linePixels: project.photoSeverLinePixels,
-        northAngle: project.photoSeverNorthAngle,
+        lineMeters: projectToUse.photoSeverLineMeters,
+        linePixels: projectToUse.photoSeverLinePixels,
+        northAngle: projectToUse.photoSeverNorthAngle,
       );
     }
 
