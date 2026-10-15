@@ -25,6 +25,7 @@
     final _gpsAveragingSamplesController = TextEditingController();
     final _rotateModeTimeoutController = TextEditingController();
     final _announcePeriodController = TextEditingController();
+    int _loadedTrackColor = AppConstants.loadedTrackColorDefault;
     double _compassSmoothness = AppConstants.compassSmoothnessDefault.toDouble();
     CompassMode _compassMode = CompassMode.magnetic;
 
@@ -64,6 +65,9 @@
               .toString();
       _announcePeriodController.text =
           (prefs.getInt(AppConstants.prefAnnouncePeriod) ?? 0).toString();
+      _loadedTrackColor =
+          prefs.getInt(AppConstants.prefLoadedTrackColor) ??
+              AppConstants.loadedTrackColorDefault;
 
       _compassSmoothness =
           (prefs.getInt(AppConstants.prefCompassSmoothness) ??
@@ -117,6 +121,61 @@
       final announcePeriod = int.tryParse(_announcePeriodController.text) ?? 0;
       await prefs.setInt(
           AppConstants.prefAnnouncePeriod, announcePeriod < 0 ? 0 : announcePeriod);
+
+      await prefs.setInt(AppConstants.prefLoadedTrackColor, _loadedTrackColor);
+    }
+
+    Future<void> _pickLoadedTrackColor(BuildContext context) async {
+      const palette = [
+        0xFF00BCD4, // cyan
+        0xFF2196F3, // blue
+        0xFF4CAF50, // green
+        0xFF8BC34A, // light green
+        0xFFFFEB3B, // yellow
+        0xFFFF9800, // orange
+        0xFFF44336, // red
+        0xFFE91E63, // pink
+        0xFF9C27B0, // purple
+        0xFFFFFFFF, // white
+      ];
+      final selected = await showDialog<int>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('Цвет трека'),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: palette.map((argb) {
+                  final isCurrent = argb == _loadedTrackColor;
+                  return GestureDetector(
+                    onTap: () => Navigator.pop(ctx, argb),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Color(argb),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isCurrent ? Colors.blue : Colors.grey,
+                          width: isCurrent ? 3 : 1,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (selected != null) {
+        setState(() {
+          _loadedTrackColor = selected;
+        });
+      }
     }
 
     Widget _buildTextFieldRow(
@@ -462,6 +521,28 @@
                         _rotateModeTimeoutController,
                         '${AppConstants.rotateModeTimeoutDefaultMs}',
                         suffix: 'мс',
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Цвет загруженного трека:',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          GestureDetector(
+                            onTap: () => _pickLoadedTrackColor(context),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Color(_loadedTrackColor),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
                       const Divider(),

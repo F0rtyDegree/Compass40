@@ -27,6 +27,13 @@ class AppConstants {
   static const String prefPhotoSeverDistance = 'photoSeverDistance';
   static const String prefIsRecordingTrack = 'isRecordingTrack';
   static const String prefAnnouncePeriod = 'announcePeriod';
+  static const String prefLoadedTrackColor = 'loadedTrackColor';
+
+  static const int loadedTrackColorDefault = 0xFF00BCD4;
+  static const double loadedTrackStepPx = 40.0;
+  static const double loadedTrackArrowLenPx = 20.0;
+  static const double loadedTrackArrowHeadLen = 6.0;
+  static const double loadedTrackArrowHeadAngle = 0.6;
   static const String prefLogItems = 'log_items';
   static const String prefMapProjects = 'map_projects';
   static const String prefCurrentMapProjectId = 'current_map_project_id';

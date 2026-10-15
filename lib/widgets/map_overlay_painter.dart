@@ -5,6 +5,7 @@ import '../models/map_anchor.dart';
 import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
 import '../utils/angle_utils.dart';
+import '../utils/app_constants.dart';
 
 class MapOverlayPainter extends CustomPainter {
   final Size imageSize;
@@ -31,6 +32,12 @@ class MapOverlayPainter extends CustomPainter {
   /// Если null — круги не рисуются.
   final double? metersPerScreenPixel;
 
+  /// Пиксели загруженного GPX-трека. Рисуется стрелками.
+  final List<Offset> loadedTrackImagePoints;
+
+  /// Цвет загруженного трека (ARGB int).
+  final int loadedTrackColor;
+
   /// Экранная позиция прицела. Центр кругов расстояния.
   final Offset? crosshairScreenPoint;
 
@@ -53,11 +60,14 @@ class MapOverlayPainter extends CustomPainter {
     this.magneticDeclination = 0.0,
     this.metersPerScreenPixel,
     this.crosshairScreenPoint,
+    this.loadedTrackImagePoints = const [],
+    this.loadedTrackColor = AppConstants.loadedTrackColorDefault,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     _drawDistanceCircles(canvas);
+    _drawLoadedTrack(canvas);
     _drawTrack(canvas);
 
     for (final anchor in anchors) {
@@ -246,6 +256,75 @@ class MapOverlayPainter extends CustomPainter {
 
     final pos = center + Offset(0, -radiusPx - tp.height / 2 - 8);
     tp.paint(canvas, pos - Offset(tp.width / 2, 0));
+  }
+
+  /// Рисует загруженный GPX-трек: бирюзовые стрелки по направлению движения.
+  /// Стрелки ставятся с равным шагом по длине всего трека.
+  void _drawLoadedTrack(Canvas canvas) {
+    if (loadedTrackImagePoints.length < 2) return;
+
+    final paint = Paint()
+      ..color = Color(loadedTrackColor)
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    const stepPx = AppConstants.loadedTrackStepPx;
+    const arrowLenPx = AppConstants.loadedTrackArrowLenPx;
+
+    // Накопленное расстояние с прошлой стрелки.
+    double sinceLastArrow = stepPx;
+
+    for (int i = 1; i < loadedTrackImagePoints.length; i++) {
+      final p1 = imageToScreen(loadedTrackImagePoints[i - 1]);
+      final p2 = imageToScreen(loadedTrackImagePoints[i]);
+      final segLen = (p2 - p1).distance;
+      if (segLen < 0.5) continue;
+
+      final dir = (p2 - p1) / segLen;
+      double cursor = 0.0;
+
+      while (cursor < segLen) {
+        final need = stepPx - sinceLastArrow;
+        if (cursor + need > segLen) {
+          // Стрелка не помещается — переносим на следующий сегмент.
+          sinceLastArrow += segLen - cursor;
+          break;
+        }
+        cursor += need;
+
+        final arrowStart = p1 + dir * cursor;
+        final arrowEnd = arrowStart + dir * arrowLenPx;
+        final realEnd = (arrowEnd - p1).distance > segLen ? p2 : arrowEnd;
+
+        canvas.drawLine(arrowStart, realEnd, paint);
+
+        // Наконечник.
+        const headLen = AppConstants.loadedTrackArrowHeadLen;
+        const headAngle = AppConstants.loadedTrackArrowHeadAngle;
+        final cosA = math.cos(headAngle);
+        final sinA = math.sin(headAngle);
+        final backDx = -dir.dx * headLen;
+        final backDy = -dir.dy * headLen;
+        final leftDx = backDx * cosA - backDy * sinA;
+        final leftDy = backDx * sinA + backDy * cosA;
+        final rightDx = backDx * cosA + backDy * sinA;
+        final rightDy = -backDx * sinA + backDy * cosA;
+        canvas.drawLine(
+          realEnd,
+          realEnd + Offset(leftDx, leftDy),
+          paint,
+        );
+        canvas.drawLine(
+          realEnd,
+          realEnd + Offset(rightDx, rightDy),
+          paint,
+        );
+
+        sinceLastArrow = 0.0;
+      }
+    }
   }
 
   void _drawTrack(Canvas canvas) {
@@ -536,6 +615,13 @@ class MapOverlayPainter extends CustomPainter {
     if (!listEquals(oldDelegate.anchors, anchors)) return true;
     if (!listEquals(oldDelegate.targets, targets)) return true;
     if (!listEquals(oldDelegate.trackImagePoints, trackImagePoints)) {
+      return true;
+    }
+    if (!listEquals(
+        oldDelegate.loadedTrackImagePoints, loadedTrackImagePoints)) {
+      return true;
+    }
+    if (oldDelegate.loadedTrackColor != loadedTrackColor) {
       return true;
     }
 

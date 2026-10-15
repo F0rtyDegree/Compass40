@@ -146,6 +146,16 @@ class _MapScreenState extends State<MapScreen> {
               },
             ),
             IconButton(
+              icon: Icon(
+                Icons.route,
+                color: _state.loadedTrackImagePoints.isNotEmpty
+                    ? Colors.cyan
+                    : null,
+              ),
+              onPressed: () => _showTrackMenu(context),
+              tooltip: 'Загруженный трек',
+            ),
+            IconButton(
               icon: const Icon(Icons.help_outline),
               onPressed: () {
                 Navigator.push(
@@ -243,6 +253,8 @@ class _MapScreenState extends State<MapScreen> {
                   anchors: _state.project?.anchors ?? [],
                   pendingAnchor: _state.pendingAnchor,
                   trackImagePoints: _state.trackImagePoints,
+                  loadedTrackImagePoints: _state.loadedTrackImagePoints,
+                  loadedTrackColor: _state.loadedTrackColor,
                   targets: [
                     ..._state.project?.targets ?? [],
                     if (_state.plannedTarget != null) _state.plannedTarget!,
@@ -591,6 +603,36 @@ class _MapScreenState extends State<MapScreen> {
       );
       return;
     }
+  }
+
+  Future<void> _showTrackMenu(BuildContext context) async {
+    final hasTrack = _state.loadedTrackGpsPoints.isNotEmpty;
+    if (!hasTrack) {
+      await _logic.pickLoadedTrack();
+      return;
+    }
+    await showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Загруженный трек'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _logic.pickLoadedTrack();
+            },
+            child: const Text('Заменить'),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _logic.clearLoadedTrack();
+            },
+            child: const Text('Удалить', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showMapActionsDialog(BuildContext context) async {

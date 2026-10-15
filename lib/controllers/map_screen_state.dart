@@ -5,6 +5,7 @@ import '../models/map_project.dart';
 import '../models/map_target.dart';
 import '../models/map_transform_state.dart';
 import '../models/map_working_pair.dart';
+import '../utils/app_constants.dart';
 
 /// Состояние экрана карты.
 ///
@@ -62,6 +63,16 @@ class MapScreenState {
   /// из CSV-файла и пополняется из GPS-потока, пока идёт запись.
   /// Живёт только в памяти сессии, в проект не сохраняется.
   List<Offset> trackImagePoints = [];
+
+  /// GPS-точки загруженного GPX-трека (dx = долгота, dy = широта).
+  /// Используется для пересчёта пикселей при смене привязки.
+  List<Offset> loadedTrackGpsPoints = [];
+
+  /// Пиксели загруженного GPX-трека. Производное от loadedTrackGpsPoints.
+  List<Offset> loadedTrackImagePoints = [];
+
+  /// Цвет загруженного трека (ARGB int).
+  int loadedTrackColor = AppConstants.loadedTrackColorDefault;
 
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;

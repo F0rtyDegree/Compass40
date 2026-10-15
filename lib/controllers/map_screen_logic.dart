@@ -26,10 +26,12 @@ import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../utils/compensation_utils.dart';
 import '../utils/geo_utils.dart';
+import '../utils/gpx_parser.dart';
 import '../utils/track_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collection/collection.dart';
+import 'package:file_picker/file_picker.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -176,6 +178,7 @@ class MapScreenLogic {
       recalculateTargetsAfterNewAnchor();
     };
     await followController.loadRotateModeTimeout();
+    await _loadLoadedTrackColor();
     _calibrationService.setMagneticDeclination(magneticDeclination);
     magneticDeclinationNotifier.addListener(_onMagneticDeclinationChanged);
     await _loadLastProject();
@@ -283,8 +286,131 @@ class MapScreenLogic {
     await _loadImageSize();
     _recalculateWorkingPairAndRotation(enableFollow: true);
     _recalculateCanPlaceTarget();
+    await _loadLoadedTrackFromProject();
   }
 
+  Future<void> _loadLoadedTrackColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    final color = prefs.getInt(AppConstants.prefLoadedTrackColor);
+    if (color == null) return;
+    setState(() {
+      state.loadedTrackColor = color;
+    });
+  }
+
+  /// Загружает трек из GPX, если путь сохранён в проекте и файл существует.
+  Future<void> _loadLoadedTrackFromProject() async {
+    final path = state.project?.loadedTrackPath;
+    if (path == null) return;
+    final file = File(path);
+    if (!await file.exists()) {
+      // Файл пропал — чистим поле в проекте.
+      final project = state.project;
+      if (project != null) {
+        final updated = project.copyWith(loadedTrackPath: null);
+        await storageService.saveProject(updated);
+        setState(() {
+          state.project = updated;
+        });
+      }
+      return;
+    }
+    try {
+      final content = await file.readAsString();
+      final gpsPoints = parseTrackFromGpx(content);
+      if (gpsPoints.isEmpty) return;
+      setState(() {
+        state.loadedTrackGpsPoints = gpsPoints;
+      });
+      _recalculateLoadedTrackImagePoints();
+    } catch (_) {}
+  }
+  /// Открывает файловый пикер, выбирает GPX, загружает трек.
+  /// Предыдущий загруженный трек заменяется.
+  Future<void> pickLoadedTrack() async {
+    try {
+      final result = await FilePicker.pickFiles(type: FileType.any);
+      if (result == null || result.files.isEmpty) return;
+      final path = result.files.single.path;
+      if (path == null) return;
+
+      final file = File(path);
+      final content = await file.readAsString();
+      final gpsPoints = parseTrackFromGpx(content);
+
+      if (gpsPoints.isEmpty) {
+        showSnackBar('В файле нет трека');
+        return;
+      }
+
+      // Сохраняем путь в проект.
+      final project = state.project;
+      if (project != null) {
+        final updated = project.copyWith(loadedTrackPath: path);
+        await storageService.saveProject(updated);
+        setState(() {
+          state.project = updated;
+        });
+      }
+
+      setState(() {
+        state.loadedTrackGpsPoints = gpsPoints;
+      });
+      _recalculateLoadedTrackImagePoints();
+
+      showSnackBar('Трек загружен: ${gpsPoints.length} точек');
+    } catch (e) {
+      showSnackBar('Ошибка чтения GPX: $e');
+    }
+  }
+
+  /// Удаляет загруженный трек с карты и из проекта.
+  Future<void> clearLoadedTrack() async {
+    final project = state.project;
+    if (project != null) {
+      final updated = project.copyWith(loadedTrackPath: null);
+      await storageService.saveProject(updated);
+      setState(() {
+        state.project = updated;
+      });
+    }
+    setState(() {
+      state.loadedTrackGpsPoints = [];
+      state.loadedTrackImagePoints = [];
+    });
+  }
+
+  /// Пересчитывает пиксели загруженного трека под текущую привязку.
+  void _recalculateLoadedTrackImagePoints() {
+    if (state.loadedTrackGpsPoints.isEmpty) {
+      setState(() {
+        state.loadedTrackImagePoints = [];
+      });
+      return;
+    }
+    if (_calibrationService.usedAnchorCount == 0) {
+      setState(() {
+        state.loadedTrackImagePoints = [];
+      });
+      return;
+    }
+
+    final imagePoints = <Offset>[];
+    for (final gps in state.loadedTrackGpsPoints) {
+      final imagePoint = _calibrationService.geoToImagePointFromCurrent(
+        gps.dy,
+        gps.dx,
+      );
+      if (imagePoint != null) {
+        imagePoints.add(imagePoint);
+      }
+    }
+    setState(() {
+      state.loadedTrackImagePoints = imagePoints;
+    });
+  }
+
+  
   /// Читает CSV-файл трека и заполняет trackImagePoints.
   /// Вызывается при открытии карты и при каждом изменении якорей
   /// (через _reloadTrackImagePoints), чтобы пересчитать пиксели под
@@ -511,6 +637,8 @@ class MapScreenLogic {
       state.currentUserImagePoint = null;
       state.pendingAnchor = null;
       state.trackImagePoints = [];
+      state.loadedTrackGpsPoints = [];
+      state.loadedTrackImagePoints = [];
     });
 
     if (imagePathToDelete != null) {
@@ -1223,6 +1351,7 @@ class MapScreenLogic {
 
     // Пересчитываем пиксели трека под новую привязку.
     await _reloadTrackImagePoints();
+    _recalculateLoadedTrackImagePoints();
 
     if (restartNavigation &&
         onStartNavigation != null &&
