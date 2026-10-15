@@ -258,8 +258,9 @@ class MapOverlayPainter extends CustomPainter {
     tp.paint(canvas, pos - Offset(tp.width / 2, 0));
   }
 
-  /// Рисует загруженный GPX-трек: бирюзовые стрелки по направлению движения.
-  /// Стрелки ставятся с равным шагом по длине всего трека.
+  /// Рисует загруженный GPX-трек: стрелки по направлению движения.
+  /// Стрелка может занимать несколько сегментов трека — длина стрелки
+  /// и шаг между стрелками заданы в экранных пикселях.
   void _drawLoadedTrack(Canvas canvas) {
     if (loadedTrackImagePoints.length < 2) return;
 
@@ -272,9 +273,16 @@ class MapOverlayPainter extends CustomPainter {
 
     const stepPx = AppConstants.loadedTrackStepPx;
     const arrowLenPx = AppConstants.loadedTrackArrowLenPx;
+    const headLen = AppConstants.loadedTrackArrowHeadLen;
+    const headAngle = AppConstants.loadedTrackArrowHeadAngle;
 
-    // Накопленное расстояние с прошлой стрелки.
-    double sinceLastArrow = stepPx;
+    // sinceArrow — пройдено с начала последней стрелки или её конца.
+    // Стартуем сразу со stepPx, чтобы первая стрелка нарисовалась в начале.
+    double sinceArrow = stepPx;
+    // arrowRemaining — сколько ещё осталось рисовать текущую стрелку.
+    double arrowRemaining = 0.0;
+    Offset? prevScreen;
+    Offset? arrowDir;
 
     for (int i = 1; i < loadedTrackImagePoints.length; i++) {
       final p1 = imageToScreen(loadedTrackImagePoints[i - 1]);
@@ -286,47 +294,57 @@ class MapOverlayPainter extends CustomPainter {
       double cursor = 0.0;
 
       while (cursor < segLen) {
-        final need = stepPx - sinceLastArrow;
-        if (cursor + need > segLen) {
-          // Стрелка не помещается — переносим на следующий сегмент.
-          sinceLastArrow += segLen - cursor;
-          break;
+        if (arrowRemaining > 0) {
+          final avail = segLen - cursor;
+          final take = avail < arrowRemaining ? avail : arrowRemaining;
+          final end = p1 + dir * (cursor + take);
+          canvas.drawLine(prevScreen!, end, paint);
+          prevScreen = end;
+          arrowDir = dir;
+          cursor += take;
+          arrowRemaining -= take;
+          if (arrowRemaining <= 0.001) {
+            _drawArrowHead(canvas, end, arrowDir, headLen, headAngle, paint);
+            arrowRemaining = 0.0;
+          }
+        } else {
+          final avail = segLen - cursor;
+          final need = stepPx - sinceArrow;
+          if (avail < need) {
+            sinceArrow += avail;
+            cursor = segLen;
+          } else {
+            cursor += need;
+            sinceArrow = 0.0;
+            arrowRemaining = arrowLenPx;
+            prevScreen = p1 + dir * cursor;
+          }
         }
-        cursor += need;
-
-        final arrowStart = p1 + dir * cursor;
-        final arrowEnd = arrowStart + dir * arrowLenPx;
-        final realEnd = (arrowEnd - p1).distance > segLen ? p2 : arrowEnd;
-
-        canvas.drawLine(arrowStart, realEnd, paint);
-
-        // Наконечник.
-        const headLen = AppConstants.loadedTrackArrowHeadLen;
-        const headAngle = AppConstants.loadedTrackArrowHeadAngle;
-        final cosA = math.cos(headAngle);
-        final sinA = math.sin(headAngle);
-        final backDx = -dir.dx * headLen;
-        final backDy = -dir.dy * headLen;
-        final leftDx = backDx * cosA - backDy * sinA;
-        final leftDy = backDx * sinA + backDy * cosA;
-        final rightDx = backDx * cosA + backDy * sinA;
-        final rightDy = -backDx * sinA + backDy * cosA;
-        canvas.drawLine(
-          realEnd,
-          realEnd + Offset(leftDx, leftDy),
-          paint,
-        );
-        canvas.drawLine(
-          realEnd,
-          realEnd + Offset(rightDx, rightDy),
-          paint,
-        );
-
-        sinceLastArrow = 0.0;
       }
     }
   }
 
+  void _drawArrowHead(
+    Canvas canvas,
+    Offset tip,
+    Offset? dir,
+    double headLen,
+    double headAngle,
+    Paint paint,
+  ) {
+    if (dir == null) return;
+    final cosA = math.cos(headAngle);
+    final sinA = math.sin(headAngle);
+    final backX = -dir.dx * headLen;
+    final backY = -dir.dy * headLen;
+    final leftX = backX * cosA - backY * sinA;
+    final leftY = backX * sinA + backY * cosA;
+    final rightX = backX * cosA + backY * sinA;
+    final rightY = -backX * sinA + backY * cosA;
+    canvas.drawLine(tip, tip + Offset(leftX, leftY), paint);
+    canvas.drawLine(tip, tip + Offset(rightX, rightY), paint);
+  }
+  
   void _drawTrack(Canvas canvas) {
     if (trackImagePoints.length < 2) return;
 
