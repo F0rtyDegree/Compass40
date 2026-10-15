@@ -16,22 +16,19 @@ import '../services/log_service.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import '../services/gps_compass_service.dart';
-import '../services/track_recorder.dart';
 import 'map_screen_state.dart';
 import '../services/sensor_service.dart';
 import 'map_anchor_manager.dart';
 import 'map_target_manager.dart';
 import 'map_follow_controller.dart';
+import 'map_track_manager.dart';
 import 'photo_sever_controller.dart';
 import '../utils/app_constants.dart';
 import '../utils/compensation_utils.dart';
 import '../utils/geo_utils.dart';
-import '../utils/gpx_parser.dart';
-import '../utils/track_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collection/collection.dart';
-import 'package:file_picker/file_picker.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -58,6 +55,7 @@ class MapScreenLogic {
   final Future<double?> Function() askDistanceDialog;
   late final MapTargetManager targetManager;
   late final MapFollowController followController;
+  late final MapTrackManager trackManager;
 
   MapScreenLogic({
     required this.state,
@@ -146,6 +144,14 @@ class MapScreenLogic {
       onCancelNavigation: onCancelNavigation,
       onRecalculatePreview: _recalculatePreview,
     );
+    trackManager = MapTrackManager(
+      state: state,
+      setState: setState,
+      showSnackBar: showSnackBar,
+      storageService: storageService,
+      calibrationService: _calibrationService,
+      gpsDataNotifier: gpsDataNotifier,
+    );
     followController = MapFollowController(
       state: state,
       setState: setState,
@@ -178,11 +184,11 @@ class MapScreenLogic {
       recalculateTargetsAfterNewAnchor();
     };
     await followController.loadRotateModeTimeout();
-    await _loadLoadedTrackColor();
+    await trackManager.loadLoadedTrackColor();
     _calibrationService.setMagneticDeclination(magneticDeclination);
     magneticDeclinationNotifier.addListener(_onMagneticDeclinationChanged);
     await _loadLastProject();
-    await _loadTrackFromCsv();
+    await trackManager.loadActiveTrackFromCsv();
     anchorManager.cachedGpxPoints = state.project?.cachedGpxPoints;
     gpsDataNotifier.addListener(_onGpsDataChanged);
     _lastGpsData = gpsDataNotifier.value;
@@ -286,130 +292,20 @@ class MapScreenLogic {
     await _loadImageSize();
     _recalculateWorkingPairAndRotation(enableFollow: true);
     _recalculateCanPlaceTarget();
-    await _loadLoadedTrackFromProject();
+    await trackManager.loadLoadedTrackFromProject();
   }
 
-  Future<void> _loadLoadedTrackColor() async {
-    final prefs = await SharedPreferences.getInstance();
-    final color = prefs.getInt(AppConstants.prefLoadedTrackColor);
-    if (color == null) return;
-    setState(() {
-      state.loadedTrackColor = color;
-    });
-  }
-
-  /// Загружает трек из GPX, если путь сохранён в проекте и файл существует.
-  Future<void> _loadLoadedTrackFromProject() async {
-    final path = state.project?.loadedTrackPath;
-    if (path == null) return;
-    final file = File(path);
-    if (!await file.exists()) {
-      // Файл пропал — чистим поле в проекте.
-      final project = state.project;
-      if (project != null) {
-        final updated = project.copyWith(loadedTrackPath: null);
-        await storageService.saveProject(updated);
-        setState(() {
-          state.project = updated;
-        });
-      }
-      return;
-    }
-    try {
-      final content = await file.readAsString();
-      final gpsPoints = parseTrackFromGpx(content);
-      if (gpsPoints.isEmpty) return;
-      setState(() {
-        state.loadedTrackGpsPoints = gpsPoints;
-      });
-      _recalculateLoadedTrackImagePoints();
-    } catch (_) {}
-  }
   /// Открывает файловый пикер, выбирает GPX, загружает трек.
   /// Предыдущий загруженный трек заменяется.
   Future<void> pickLoadedTrack() async {
-    try {
-      final result = await FilePicker.pickFiles(type: FileType.any);
-      if (result == null || result.files.isEmpty) return;
-      final path = result.files.single.path;
-      if (path == null) return;
-
-      final file = File(path);
-      final content = await file.readAsString();
-      final gpsPoints = parseTrackFromGpx(content);
-
-      if (gpsPoints.isEmpty) {
-        showSnackBar('В файле нет трека');
-        return;
-      }
-
-      // Сохраняем путь в проект.
-      final project = state.project;
-      if (project != null) {
-        final updated = project.copyWith(loadedTrackPath: path);
-        await storageService.saveProject(updated);
-        setState(() {
-          state.project = updated;
-        });
-      }
-
-      setState(() {
-        state.loadedTrackGpsPoints = gpsPoints;
-      });
-      _recalculateLoadedTrackImagePoints();
-
-      showSnackBar('Трек загружен: ${gpsPoints.length} точек');
-    } catch (e) {
-      showSnackBar('Ошибка чтения GPX: $e');
-    }
+    await trackManager.pickLoadedTrack();
   }
 
-  /// Удаляет загруженный трек с карты и из проекта.
   Future<void> clearLoadedTrack() async {
-    final project = state.project;
-    if (project != null) {
-      final updated = project.copyWith(loadedTrackPath: null);
-      await storageService.saveProject(updated);
-      setState(() {
-        state.project = updated;
-      });
-    }
-    setState(() {
-      state.loadedTrackGpsPoints = [];
-      state.loadedTrackImagePoints = [];
-    });
+    await trackManager.clearLoadedTrack();
   }
 
   /// Пересчитывает пиксели загруженного трека под текущую привязку.
-  void _recalculateLoadedTrackImagePoints() {
-    if (state.loadedTrackGpsPoints.isEmpty) {
-      setState(() {
-        state.loadedTrackImagePoints = [];
-      });
-      return;
-    }
-    if (_calibrationService.usedAnchorCount == 0) {
-      setState(() {
-        state.loadedTrackImagePoints = [];
-      });
-      return;
-    }
-
-    final imagePoints = <Offset>[];
-    for (final gps in state.loadedTrackGpsPoints) {
-      final imagePoint = _calibrationService.geoToImagePointFromCurrent(
-        gps.dy,
-        gps.dx,
-      );
-      if (imagePoint != null) {
-        imagePoints.add(imagePoint);
-      }
-    }
-    setState(() {
-      state.loadedTrackImagePoints = imagePoints;
-    });
-  }
-
   
   /// Читает CSV-файл трека и заполняет trackImagePoints.
   /// Вызывается при открытии карты и при каждом изменении якорей
@@ -420,64 +316,15 @@ class MapScreenLogic {
   /// занимает сотни миллисекунд. Не оптимизировано осознанно: добавление
   /// якорей — редкая операция, задержка незаметна на фоне перерисовки.
   /// Возвращаться — только при реальных жалобах.
-  Future<void> _loadTrackFromCsv() async {
-    // Нет привязки — геопривязка пикселей невозможна. Оставляем
-    // trackImagePoints как есть: пользователь видит старый трек
-    // в произвольном месте экрана. Осознанно: очистка добавила бы
-    // мерцание при временных ситуациях (удалил/добавил якорь).
-    // Возвращаться — если появится жалоба на «висящий» трек.
-    if (_calibrationService.usedAnchorCount == 0) return;
-    final points = await TrackRecorder().getTrackPoints();
-    if (points.isEmpty) return;
-
-    final imagePoints = <Offset>[];
-    for (final (_, lat, lon) in points) {
-      final imagePoint = _calibrationService.geoToImagePointFromCurrent(
-        lat,
-        lon,
-      );
-      if (imagePoint != null) {
-        imagePoints.add(imagePoint);
-      }
-    }
-
-    setState(() {
-      state.trackImagePoints = pruneTrackPoints(points: imagePoints);
-    });
-  }
 
   /// Убирает трек с карты. Вызывается при остановке записи.
-  /// CSV-файл при этом сохраняется — при следующем старте записи
-  /// трек будет прочитан заново.
   void onRecordingStopped() {
-    setState(() {
-      state.trackImagePoints = [];
-    });
+    trackManager.onRecordingStopped();
   }
 
   /// Загружает трек на карту. Вызывается при старте записи.
-  /// Если привязки нет, трек не загрузится. Он подгрузится позже,
-  /// когда появится первый якорь (см. recalculateTargetsAfterNewAnchor).
   Future<void> onRecordingStarted() async {
-    await _loadTrackFromCsv();
-  }
-
-  /// Пересчитывает пиксели трека под текущую привязку.
-  ///
-  /// Вызывается при любом изменении якорей. Если пользователь остановил
-  /// запись (onRecordingStopped), а потом добавил якорь — трек снова
-  /// прочитается из CSV. Это осознанно: CSV — источник правды, а «стоп»
-  /// лишь очищает экранную копию. Возвращаться — только если такое
-  /// поведение начнёт мешать.
-  Future<void> _reloadTrackImagePoints() async {
-    // Сбрасываем буфер CSV, чтобы последние точки (уже видимые на карте,
-    // но ещё не записанные) не потерялись при перечитывании.
-    await TrackRecorder().flushPending();
-    await _loadTrackFromCsv();
-    // Между flushPending и чтением CSV мог прийти GPS-пакет и добавить
-    // точку в trackImagePoints. Чтение CSV перезапишет список без неё.
-    // Возвращаем текущую точку из _lastGpsData.
-    _appendTrackPointIfRecording();
+    await trackManager.onRecordingStarted();
   }
 
   /// Добавляет точку трека из GPS-потока, если идёт запись.
@@ -488,22 +335,6 @@ class MapScreenLogic {
   /// Оптимизация (буфер + пакетная запись) не делается осознанно:
   /// выигрыш неощутим, риск выше пользы. Возвращаться — если появятся
   /// просадки при малом интервале GPS.
-  void _appendTrackPointIfRecording() {
-    if (!TrackRecorder().isRecording) return;
-    final gps = _lastGpsData;
-    final lat = gps?.latitude;
-    final lon = gps?.longitude;
-    if (lat == null || lon == null) return;
-    if (_calibrationService.usedAnchorCount == 0) return;
-
-    final imagePoint = _calibrationService.geoToImagePointFromCurrent(lat, lon);
-    if (imagePoint == null) return;
-
-    setState(() {
-      final updated = [...state.trackImagePoints, imagePoint];
-      state.trackImagePoints = pruneTrackPoints(points: updated);
-    });
-  }
 
   Future<void> _loadImageSize() async {
     if (state.imagePath == null) return;
@@ -1350,8 +1181,8 @@ class MapScreenLogic {
     });
 
     // Пересчитываем пиксели трека под новую привязку.
-    await _reloadTrackImagePoints();
-    _recalculateLoadedTrackImagePoints();
+    await trackManager.reloadActiveTrackImagePoints();
+    trackManager.recalculateLoadedTrackImagePoints();
 
     if (restartNavigation &&
         onStartNavigation != null &&
@@ -1447,7 +1278,7 @@ class MapScreenLogic {
     if (gpsData.latitude == null || gpsData.longitude == null) return;
     _lastGpsData = gpsData;
     _recalculateUserImagePoint();
-    _appendTrackPointIfRecording();
+    trackManager.appendActiveTrackPointIfRecording(gpsData);
     if (state.followMode) {
       followController.centerMapOnUser();
     }
