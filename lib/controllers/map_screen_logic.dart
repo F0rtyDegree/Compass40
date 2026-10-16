@@ -306,7 +306,7 @@ class MapScreenLogic {
   }
 
   /// Пересчитывает пиксели загруженного трека под текущую привязку.
-  
+
   /// Читает CSV-файл трека и заполняет trackImagePoints.
   /// Вызывается при открытии карты и при каждом изменении якорей
   /// (через _reloadTrackImagePoints), чтобы пересчитать пиксели под
@@ -552,7 +552,7 @@ class MapScreenLogic {
 
     _recalculateCrosshairImagePoint();
 
-    if (state.project != null) {
+    if (state.project != null && !state.followMode) {
       storageService.saveTransform(state.project!.id, newTransform);
     }
   }
@@ -917,8 +917,9 @@ class MapScreenLogic {
 
     if (isAutoCorrection) {
       final anchors = state.project?.anchors;
-      final latest =
-          (anchors != null && anchors.isNotEmpty) ? anchors.last : null;
+      final latest = (anchors != null && anchors.isNotEmpty)
+          ? anchors.last
+          : null;
       setState(() {
         state.lastAutoAnchorId = latest?.id;
       });
@@ -1191,7 +1192,7 @@ class MapScreenLogic {
         newActiveTarget!.latitude!,
         newActiveTarget.longitude!,
       );
-//      showSnackBar('Навигация перезапущена с новыми координатами цели');
+      //      showSnackBar('Навигация перезапущена с новыми координатами цели');
     }
   }
 
@@ -1238,9 +1239,7 @@ class MapScreenLogic {
     if (state.viewportSize == null || state.imageSize == null) return;
 
     final current = state.transformState;
-    updateTransform(
-      current.copyWith(translation: current.translation + delta),
-    );
+    updateTransform(current.copyWith(translation: current.translation + delta));
   }
 
   void _onMagneticDeclinationChanged() {

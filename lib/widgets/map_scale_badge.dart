@@ -19,11 +19,11 @@ class MapScaleBadge extends StatelessWidget {
 
     final Color textColor;
     if (totalCount >= 3) {
-      textColor = Colors.green;
+      textColor = Colors.green.shade900;
     } else if (totalCount == 2 && usedCount == 2) {
-      textColor = Colors.orange;
+      textColor = Colors.orange.shade900;
     } else {
-      textColor = Colors.red;
+      textColor = Colors.red.shade900;
     }
 
     final String valueText = distanceMeters != null
@@ -34,17 +34,19 @@ class MapScaleBadge extends StatelessWidget {
 
     return Tooltip(
       message: 'Расстояние от прицела до текущего положения',
-      child: Text(
-        '📏 $valueText',
-        style: TextStyle(
-          color: textColor,
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          shadows: [
-            Shadow(color: Colors.white, blurRadius: 2),
-            Shadow(color: Colors.white, blurRadius: 4),
-            Shadow(color: Colors.white, blurRadius: 6),
-          ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withAlpha(77),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          '📏 $valueText',
+          style: TextStyle(
+            color: textColor,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
     );

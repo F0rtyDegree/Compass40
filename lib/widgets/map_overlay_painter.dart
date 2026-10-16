@@ -547,6 +547,17 @@ class MapOverlayPainter extends CustomPainter {
     );
   }
 
+  /// Цвет текста — как в индикаторе расстояния до курсора.
+  /// Зависит от количества якорей: 3+ — зелёный, 2 активных — оранжевый,
+  /// иначе красный.
+  Color _overlayTextColor() {
+    final total = anchors.length;
+    final used = activeAnchorIds.length;
+    if (total >= 3) return Colors.green;
+    if (total == 2 && used == 2) return Colors.orange;
+    return Colors.red;
+  }
+
   void _drawLabels(
     Canvas canvas,
     Offset from,
@@ -562,25 +573,48 @@ class MapOverlayPainter extends CustomPainter {
         : '${distanceMeters.round()} m';
     final bearText = formatBearing(bearingDegrees);
 
-    _drawLabel(canvas, distText, labelPos + const Offset(0, -12), Colors.red);
-    _drawLabel(canvas, bearText, labelPos + const Offset(0, 8), Colors.red);
+    final color = _overlayTextColor();
+    _drawLabel(canvas, distText, labelPos + const Offset(0, -18), color);
+    _drawLabel(canvas, bearText, labelPos + const Offset(0, 18), color);
   }
 
-  void _drawLabel(Canvas canvas, String text, Offset position, Color color) {
+  /// Рисует текст в белой полупрозрачной плашке с овальными краями.
+  void _drawLabel(
+    Canvas canvas,
+    String text,
+    Offset position,
+    Color color,
+  ) {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
           color: color,
-          fontSize: 16,
+          fontSize: 20,
           fontWeight: FontWeight.bold,
-          shadows: const [
-            Shadow(color: Colors.white, offset: Offset(1, 1), blurRadius: 2),
-          ],
         ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
+
+    const padH = 10.0;
+    const padV = 4.0;
+    final rect = Rect.fromCenter(
+      center: position,
+      width: tp.width + padH * 2,
+      height: tp.height + padV * 2,
+    );
+
+    final bgPaint = Paint()
+      ..color = Colors.white.withAlpha(77)
+      ..style = PaintingStyle.fill;
+    // Овальные края: радиус равен половине высоты — форма капсулы.
+    final rrect = RRect.fromRectAndRadius(
+      rect,
+      Radius.circular(rect.height / 2),
+    );
+    canvas.drawRRect(rrect, bgPaint);
+
     tp.paint(canvas, position - Offset(tp.width / 2, tp.height / 2));
   }
 
