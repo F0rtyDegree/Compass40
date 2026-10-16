@@ -553,9 +553,9 @@ class MapOverlayPainter extends CustomPainter {
   Color _overlayTextColor() {
     final total = anchors.length;
     final used = activeAnchorIds.length;
-    if (total >= 3) return Colors.green;
-    if (total == 2 && used == 2) return Colors.orange;
-    return Colors.red;
+    if (total >= 3) return Colors.green.shade900;
+    if (total == 2 && used == 2) return Colors.orange.shade900;
+    return Colors.red.shade900;
   }
 
   void _drawLabels(

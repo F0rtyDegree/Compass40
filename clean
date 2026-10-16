@@ -7,7 +7,7 @@ rm -rf /home/user/.gradle/daemon
 rm -rf /home/user/.gradle/caches/build-cache-1
 rm -rf /home/user/.gradle/caches/transforms-*
 
-touch -d 'Sep 23 09:38' /tmp/ref_time && find /home/user/.gradle/caches/8.12/transforms -mindepth 1 -maxdepth 1 -type d -newer /tmp/ref_time -exec rm -rf {} +; rm -f /tmp/ref_time
+# touch -d 'Sep 23 09:38' /tmp/ref_time && find /home/user/.gradle/caches/8.12/transforms -mindepth 1 -maxdepth 1 -type d -newer /tmp/ref_time -exec rm -rf {} +; rm -f /tmp/ref_time
 # ls -lt -r /home/user/.gradle/caches/8.12/transforms
 
 THRESHOLD_MB=4500   # предел папки /home/user/.gradle/caches/8.12/transforms
@@ -20,8 +20,8 @@ find /home/user/.gradle/caches -maxdepth 3 -type d -name transforms | while read
         echo -e "\033[0;31m$message\033[0m";
         echo -e "\033[0;31m  -> удаляю /home/user/.gradle/caches/8.12/transforms\033[0m"
         rm -rf "$t"
-#    else
-#        echo -e "\033[0;32m$message\033[0m";
+    else
+        echo -e "\033[0;32m$message\033[0m";
     fi
 done
 
