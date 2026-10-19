@@ -1,0 +1,81 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+
+    <group
+        android:scaleX="0.6"
+        android:scaleY="0.6"
+        android:pivotX="256"
+        android:pivotY="256">
+
+        <!-- Красный треугольник: заливка (нижний слой) -->
+        <path
+            android:pathData="M256 40 L472 440 L256 405 L40 440 Z"
+            android:fillColor="#FFFFFF"/>
+
+        <!-- Чёрный склон: сдвиг -82,-10, затем увеличение на 15% -->
+        <group
+            android:translateX="-82"
+            android:translateY="-10">
+            <group
+                android:scaleX="1.15"
+                android:scaleY="1.15"
+                android:pivotX="300"
+                android:pivotY="340">
+                <path
+                    android:pathData="M180 400 L420 400 L420 280 Z"
+                    android:fillColor="#1A1A1A"/>
+            </group>
+        </group>
+
+        <!-- Красный треугольник: контур (верхний слой) -->
+        <path
+            android:pathData="M256 40 L472 440 L256 405 L40 440 Z"
+            android:fillColor="#00000000"
+            android:strokeColor="#E31E24"
+            android:strokeWidth="30"
+            android:strokeLineJoin="miter"
+            android:strokeLineCap="butt"
+            android:strokeMiterLimit="4"/>
+
+        <!-- Надпись 40°: наклон + сдвиг (15,-15), затем уменьшение 0.81 -->
+        <group
+            android:rotation="-26.565"
+            android:pivotX="230"
+            android:pivotY="290"
+            android:translateX="15"
+            android:translateY="-15">
+            <group
+                android:scaleX="0.81"
+                android:scaleY="0.81"
+                android:pivotX="232"
+                android:pivotY="270">
+
+                <!-- Цифра 4 -->
+                <path
+                    android:pathData="M180 325 L180 215 L120 295 L190 295"
+                    android:fillColor="#00000000"
+                    android:strokeColor="#1A1A1A"
+                    android:strokeWidth="22"
+                    android:strokeLineCap="round"
+                    android:strokeLineJoin="round"/>
+
+                <!-- Цифра 0: ширина уменьшена на 20% (rx 45 → 36) -->
+                <path
+                    android:pathData="M296 270 A36 55 0 1 1 224 270 A36 55 0 1 1 296 270 Z"
+                    android:fillColor="#00000000"
+                    android:strokeColor="#1A1A1A"
+                    android:strokeWidth="22"/>
+
+                <!-- Знак градуса -->
+                <path
+                    android:pathData="M344 220 A14 14 0 1 1 316 220 A14 14 0 1 1 344 220 Z"
+                    android:fillColor="#00000000"
+                    android:strokeColor="#1A1A1A"
+                    android:strokeWidth="10"/>
+            </group>
+        </group>
+    </group>
+</vector>
