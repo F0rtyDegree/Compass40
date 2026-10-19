@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:compass40/controllers/map_screen_logic.dart';
+import 'dart:async';
 
 class MapScreenController {
   static final MapScreenController _instance = MapScreenController._();
@@ -29,7 +30,7 @@ class MapScreenController {
   }
 
   void nextCalibrationMode() {
-    _logic?.nextCalibrationMode();
+    unawaited(_logic?.nextCalibrationMode() ?? Future.value());
   }
 
   void cancelActiveTarget() {
@@ -43,7 +44,7 @@ class MapScreenController {
   void onRecordingStopped() {
     _logic?.onRecordingStopped();
   }
- 
+
   void panBy(Offset delta) {
     _logic?.panBy(delta);
   }

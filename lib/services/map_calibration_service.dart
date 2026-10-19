@@ -208,22 +208,20 @@ class MapCalibrationService {
     final allIds = allAnchors.map((a) => a.id).toSet();
     final pinnedCount = _pinnedAnchorIds.length;
 
-    if (pinnedCount == 0) {
-      // Все выключены -> включаем все
-      _pinnedAnchorIds.addAll(allIds);
-      _buildTransformFromAnchors();
-      return true;
-    }
-
     if (pinnedCount == allAnchors.length) {
-      // Все включены -> выключаем все
+      // Все включены -> выключаем все, но ОСТАЕМСЯ в ручном режиме
       _pinnedAnchorIds.clear();
+      _manualMode = true;
+      _buildTransformFromAnchors();
+      return true;
+    } else {
+      // Не все включены -> включаем все
+      _pinnedAnchorIds.clear();
+      _pinnedAnchorIds.addAll(allIds);
+      _manualMode = true;
       _buildTransformFromAnchors();
       return true;
     }
-
-    // Часть включена -> ничего не делаем
-    return false;
   }
 
   void restoreState({
@@ -269,7 +267,7 @@ class MapCalibrationService {
     // Переключаем точку в наборе
     if (_pinnedAnchorIds.contains(anchorId)) {
       _pinnedAnchorIds.remove(anchorId);
-      _manualMode = _pinnedAnchorIds.isNotEmpty;
+      _manualMode = true;
       _buildTransformFromAnchors();
       onManualSetApplied?.call();
     } else {
@@ -302,7 +300,7 @@ class MapCalibrationService {
     if (pinned.length >= 3 && _isCollinear(pinned)) {
       // Набор коллинеарен — удаляем последнюю добавленную точку
       _pinnedAnchorIds.remove(addedAnchorId);
-      _manualMode = _pinnedAnchorIds.isNotEmpty;
+      _manualMode = true;
     }
     // Применяем результат
     _buildTransformFromAnchors();

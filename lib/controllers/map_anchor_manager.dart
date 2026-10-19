@@ -550,19 +550,11 @@ class MapAnchorManager {
                 return;
               }
 
-              // Если мы уже в ручном режиме, переключаем все якоря
-              if (calibrationService.isManualMode) {
-                final changed = calibrationService.toggleAllAnchors(anchors);
-                if (changed) {
-                  _saveCalibrationState();
-                  setState(() {});
-                }
-              } else {
-                // Иначе, просто включаем ручной режим
-                calibrationService.enableManualMode();
-                _saveCalibrationState();
-                setState(() {});
-              }
+              // Логика тумблера: если не все включены — включаем все,
+              // если все включены — выключаем все.
+              calibrationService.toggleAllAnchors(anchors);
+              _saveCalibrationState();
+              setState(() {});
             },
             child: Text(
               'Ручной (M)',

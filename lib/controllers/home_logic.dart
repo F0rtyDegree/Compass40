@@ -43,6 +43,13 @@ class HomeLogic {
   Timer? _announceTimer;
   int _announcePeriod = 0;
 
+  // Статистика текущего трека
+  DateTime? _trackStartTime;
+  double _trackLength = 0.0;
+  double? _lastTrackLat;
+  double? _lastTrackLon;
+  int _trackPointCount = 0;
+
   HomeLogic({
     required this.state,
     required this.setState,
@@ -129,6 +136,8 @@ class HomeLogic {
     final settings = await sensorService.loadSettings();
     GpsCompassService.instance.updateSettings(settings);
     _compassService.updateSettings(settings);
+    // Перечитываем журнал: он мог быть очищен при удалении карты.
+    await loadLogEntries();
   }
 
   Future<void> setCompassMode(CompassMode mode) async {
@@ -159,13 +168,46 @@ class HomeLogic {
       await _subscribeToGpsDataStream();
     }
   }
-
+  void _updateTrackTooltip() {
+    if (_trackStartTime == null) return;
+    final duration = DateTime.now().difference(_trackStartTime!);
+    final h = duration.inHours;
+    final m = duration.inMinutes % 60;
+    final s = duration.inSeconds % 60;
+        final timeStr = h > 0
+        ? '$hч $mм $sс'
+        : '$mм $sс';
+    final distStr = _trackLength >= 1000 
+        ? '${(_trackLength / 1000).toStringAsFixed(2)} км'
+        : '${_trackLength.round()} м';
+        
+    state.trackTooltipNotifier.value = 
+        'Точек: $_trackPointCount\nДлина: $distStr\nВремя: $timeStr';
+  }
   Future<void> _subscribeToGpsDataStream() async {
     final settings = await sensorService.loadSettings();
     _gpsManager.start(settings.gpsInterval);
     _gpsSubscription = _gpsManager.gpsStream.listen(
       (gpsData) {
         state.gpsDataNotifier.value = gpsData;
+        // Если идёт запись, обновляем статистику.
+        if (state.isRecordingTrack && 
+            gpsData.latitude != null && 
+            gpsData.longitude != null) {
+          
+          if (_lastTrackLat != null && _lastTrackLon != null) {
+            _trackLength += calculateDistance(
+              _lastTrackLat!, _lastTrackLon!,
+              gpsData.latitude!, gpsData.longitude!,
+            );
+          }
+          _lastTrackLat = gpsData.latitude;
+          _lastTrackLon = gpsData.longitude;
+          _trackPointCount++;
+
+          state.trackPointTickNotifier.value++;
+          _updateTrackTooltip();
+        }
         if (!state.useManualDeclination) {
           final decl = gpsData.magneticDeclination ?? 0.0;
           setState(() {
@@ -432,6 +474,24 @@ class HomeLogic {
     final wasRecording = await TrackRecorder.recoverIfNeeded();
     if (wasRecording) {
       await _trackRecorder.initializeForRecovery();
+      
+      // Восстанавливаем статистику
+      final points = await _trackRecorder.getTrackPoints();
+      if (points.isNotEmpty) {
+        _trackPointCount = points.length;
+        _trackLength = 0.0;
+        for (int i = 1; i < points.length; i++) {
+          _trackLength += calculateDistance(
+            points[i - 1].$2, points[i - 1].$3,
+            points[i].$2, points[i].$3,
+          );
+        }
+        _lastTrackLat = points.last.$2;
+        _lastTrackLon = points.last.$3;
+        _trackStartTime = DateTime.parse(points.first.$1).toLocal();
+        _updateTrackTooltip();
+      }
+
       setState(() {
         state.isRecordingTrack = true;
         state.isRecordingTrackNotifier.value = true;
@@ -446,14 +506,21 @@ class HomeLogic {
       setState(() {
         state.isRecordingTrack = false;
         state.isRecordingTrackNotifier.value = false;
+        state.trackTooltipNotifier.value = 'Начать запись';
       });
       updateNotification(content: 'Запись трэка остановлена');
       MapScreenController().onRecordingStopped();
     } else {
       await _trackRecorder.start();
+      _trackStartTime = DateTime.now();
+      _trackLength = 0.0;
+      _lastTrackLat = null;
+      _lastTrackLon = null;
+      _trackPointCount = 0;
       setState(() {
         state.isRecordingTrack = true;
         state.isRecordingTrackNotifier.value = true;
+        state.trackTooltipNotifier.value = 'Запись трека...';
       });
       updateNotification(content: 'Идёт запись трэка...');
       MapScreenController().onRecordingStarted();

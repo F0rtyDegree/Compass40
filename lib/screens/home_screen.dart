@@ -10,6 +10,7 @@ import '../theme_provider.dart';
 import '../widgets/compass_section.dart';
 import '../widgets/gps_section.dart';
 import '../widgets/exit_confirm_dialog.dart';
+import '../widgets/record_button.dart';
 import '../controllers/home_logic.dart';
 import '../controllers/home_state.dart';
 import '../controllers/home_navigation_actions.dart';
@@ -140,20 +141,11 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           title: const Text('Compass 40°'),
           actions: [
             // Кнопка записи трека
-            ValueListenableBuilder<bool>(
-              valueListenable: _state.isRecordingTrackNotifier,
-              builder: (context, isRecording, _) {
-                return IconButton(
-                  icon: Icon(
-                    isRecording ? Icons.stop : Icons.play_arrow,
-                    color: isRecording ? Colors.red : Colors.grey,
-                  ),
-                  onPressed: _logic.toggleTrackRecording,
-                  tooltip: isRecording
-                      ? 'Остановить запись трека'
-                      : 'Начать запись трека',
-                );
-              },
+            RecordButton(
+              isRecordingNotifier: _state.isRecordingTrackNotifier,
+              tickNotifier: _state.trackPointTickNotifier,
+              tooltipNotifier: _state.trackTooltipNotifier,
+              onPressed: _logic.toggleTrackRecording,
             ),
             IconButton(
               icon: const Icon(Icons.settings),
@@ -208,6 +200,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                       headingNotifier: _state.headingNotifier,
                       isRecordingTrackNotifier:
                           _state.isRecordingTrackNotifier,
+                      trackPointTickNotifier: _state.trackPointTickNotifier,
+                      trackTooltipNotifier: _state.trackTooltipNotifier,
                       onToggleRecording: _logic.toggleTrackRecording,
                       onAnchorAdded: (lat, lon, distance, createdAt) async {
                         final items = await _logService.addMapAnchorLogEntry(

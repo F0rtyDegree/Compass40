@@ -127,13 +127,13 @@ class _CrosshairPainter extends CustomPainter {
     final gap = 10.0;
 
     final paint = Paint()
-      ..color = Colors.red
-      ..strokeWidth = 2.0
+      ..color = Colors.redAccent
+      ..strokeWidth = 3.0
       ..style = PaintingStyle.stroke;
 
     final shadowPaint = Paint()
-      ..color = Colors.white.withAlpha(180)
-      ..strokeWidth = 4.0
+      ..color = Colors.white
+      ..strokeWidth = 6.0
       ..style = PaintingStyle.stroke;
 
     // Тени (для видимости на любом фоне)
@@ -144,20 +144,20 @@ class _CrosshairPainter extends CustomPainter {
     // Центральная точка
     canvas.drawCircle(
       center,
-      3.0,
+      4.0,
       Paint()
-        ..color = Colors.red
+        ..color = Colors.redAccent
         ..style = PaintingStyle.fill,
     );
     
     // Белая окантовка центральной точки
     canvas.drawCircle(
       center,
-      3.0,
+      4.0,
       Paint()
-        ..color = Colors.white.withAlpha(200)
+        ..color = Colors.white
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+        ..strokeWidth = 2.0,
     );
   }
 

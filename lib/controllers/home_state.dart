@@ -54,6 +54,13 @@ class HomeState {
   bool isRecordingTrack = false;
   final ValueNotifier<bool> isRecordingTrackNotifier = ValueNotifier(false);
 
+  /// Счётчик записанных точек. Увеличивается с каждым GPS-пакетом
+  /// во время записи. Используется для мигания кнопки.
+  final ValueNotifier<int> trackPointTickNotifier = ValueNotifier(0);
+
+  /// Текст подсказки для кнопки записи трека.
+  final ValueNotifier<String> trackTooltipNotifier = ValueNotifier('Начать запись');
+
   void disposeNotifiers() {
     gpsDataNotifier.dispose();
     headingNotifier.dispose();
@@ -68,5 +75,7 @@ class HomeState {
     isGpsCompassActiveNotifier.dispose();
     calibrationStaleNotifier.dispose();
     isRecordingTrackNotifier.dispose();
+    trackPointTickNotifier.dispose();
+    trackTooltipNotifier.dispose();
   }
 }

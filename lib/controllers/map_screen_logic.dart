@@ -485,16 +485,15 @@ class MapScreenLogic {
     } else {
       await storageService.setCurrentProjectId(null);
     }
-
     _calibrationService.updateAnchors([]);
     _calibrationService.setPinnedAnchorIds([]);
     anchorManager.cachedGpxPoints = null;
 
+    // Очищаем внутренний журнал при удалении карты.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(AppConstants.prefLogItems);
+
     if (hadActiveTargetOnMap) {
-      // HomeLogic.clearTarget → MapScreenController.cancelActiveTarget →
-      // markActiveTargetAsPassed. На этом шаге state.activeTarget уже null,
-      // поэтому markActiveTargetAsPassed сделает ранний return. Цепочка
-      // выглядит реентрантной, но безвредна: цель уже погашена выше.
       onCancelNavigation?.call();
     }
   }
@@ -979,9 +978,10 @@ class MapScreenLogic {
   Future<void> showModePicker(BuildContext context) async {
     await anchorManager.showModePicker(context);
     _recalculateWorkingPairAndRotation();
+    await recalculateTargetsAfterNewAnchor();
   }
 
-  void nextCalibrationMode() {
+  Future<void> nextCalibrationMode() async {
     const order = [
       CalibrationMode.affine,
       CalibrationMode.pairFarthest,
@@ -1019,6 +1019,7 @@ class MapScreenLogic {
       }
 
       _recalculateWorkingPairAndRotation();
+      await recalculateTargetsAfterNewAnchor();
       return;
     }
   }
@@ -1086,6 +1087,7 @@ class MapScreenLogic {
 
     onAnchorsChangedForStatus?.call();
     _recalculateCanPlaceTarget();
+    _recalculateUserImagePoint();
   }
 
   // Всегда ставит true. Проверка привязки отсутствует осознанно.

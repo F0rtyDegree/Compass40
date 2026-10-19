@@ -18,6 +18,7 @@ import '../controllers/map_screen_controller.dart';
 import 'package:flutter/services.dart';
 import '../services/background_tracker.dart';
 import '../utils/app_constants.dart';
+import '../widgets/record_button.dart';
 
 typedef StartNavigationCallback = Future<void> Function(double lat, double lon);
 
@@ -26,6 +27,8 @@ class MapScreen extends StatefulWidget {
   final ValueNotifier<double> magneticDeclinationNotifier;
   final ValueNotifier<double> headingNotifier;
   final ValueNotifier<bool> isRecordingTrackNotifier;
+  final ValueNotifier<int> trackPointTickNotifier;
+  final ValueNotifier<String> trackTooltipNotifier;
   final VoidCallback? onToggleRecording;
   final Function(double lat, double lon, double? distance, DateTime createdAt)?
       onAnchorAdded;
@@ -38,6 +41,8 @@ class MapScreen extends StatefulWidget {
     required this.magneticDeclinationNotifier,
     required this.headingNotifier,
     required this.isRecordingTrackNotifier,
+    required this.trackPointTickNotifier,
+    required this.trackTooltipNotifier,
     this.onToggleRecording,
     this.onAnchorAdded,
     this.onStartNavigation,
@@ -130,20 +135,11 @@ class _MapScreenState extends State<MapScreen> {
         appBar: AppBar(
           centerTitle: true,
           actions: [
-            ValueListenableBuilder<bool>(
-              valueListenable: widget.isRecordingTrackNotifier,
-              builder: (context, isRecording, _) {
-                return IconButton(
-                  icon: Icon(
-                    isRecording ? Icons.stop : Icons.play_arrow,
-                    color: isRecording ? Colors.red : Colors.grey,
-                  ),
-                  onPressed: widget.onToggleRecording,
-                  tooltip: isRecording
-                      ? 'Остановить запись трека'
-                      : 'Начать запись трека',
-                );
-              },
+            RecordButton(
+              isRecordingNotifier: widget.isRecordingTrackNotifier,
+              tickNotifier: widget.trackPointTickNotifier,
+              tooltipNotifier: widget.trackTooltipNotifier,
+              onPressed: widget.onToggleRecording ?? () {},
             ),
             IconButton(
               icon: Icon(
