@@ -11,6 +11,7 @@ import '../widgets/map_image_painter.dart';
 import '../widgets/map_overlay_painter.dart';
 import '../widgets/map_scale_badge.dart';
 import '../widgets/map_zoom_buttons.dart';
+import '../widgets/map_action_buttons.dart';
 import 'help_viewer_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gps_info/gps_info.dart';
@@ -31,7 +32,7 @@ class MapScreen extends StatefulWidget {
   final ValueNotifier<String> trackTooltipNotifier;
   final VoidCallback? onToggleRecording;
   final Function(double lat, double lon, double? distance, DateTime createdAt)?
-      onAnchorAdded;
+  onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
 
@@ -359,21 +360,9 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
 
+              // Кнопки масштаба (справа)
               MapZoomButtons(
                 visible: _state.imagePath != null && _state.imageSize != null,
-                onHereNowPressed: _logic.addAnchorFromCurrentGps,
-                onHereFromClipboard: () => _logic.showHereOptions(context),
-                hereEnabled: !_state.followMode,
-                onTargetPressed: _state.canPlaceTarget && !_state.followMode
-                    ? (_state.plannedTarget == null
-                          ? _logic.placePlannedTargetAtCrosshair
-                          : _logic.setTargetAndStartNavigation)
-                    : null,
-                onTargetLongPressed: _state.canPlaceTarget && !_state.followMode
-                    ? _logic.placeTargetFromClipboard
-                    : null,
-                targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
-                targetEnabled: _state.canPlaceTarget && !_state.followMode,
                 onZoomIn: _logic.zoomIn,
                 onZoomOut: _logic.zoomOut,
                 rotateMode: _state.rotateMode,
@@ -386,9 +375,98 @@ class _MapScreenState extends State<MapScreen> {
                 },
                 onResetRotation: _resetRotation,
               ),
+
+              // Кнопки «ЦЕЛЬ» и «Я ЗДЕСЬ» (справа сверху)
+              if (_state.imagePath != null && _state.imageSize != null)
+                Positioned(
+                  right: 12,
+                  top: 45, // Чуть ниже индикатора расстояния
+                  child: MapActionButtons(
+                    onHereNowPressed: _logic.addAnchorFromCurrentGps,
+                    onHereFromClipboard: () => _logic.showHereOptions(context),
+                    hereEnabled: !_state.followMode,
+                    onTargetPressed: _state.canPlaceTarget && !_state.followMode
+                        ? (_state.plannedTarget == null
+                              ? _logic.placePlannedTargetAtCrosshair
+                              : _logic.setTargetAndStartNavigation)
+                        : null,
+                    onTargetLongPressed:
+                        _state.canPlaceTarget && !_state.followMode
+                        ? _logic.placeTargetFromClipboard
+                        : null,
+                    targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
+                    targetEnabled: _state.canPlaceTarget && !_state.followMode,
+                  ),
+                ),
+
+              // Кнопки перемещения < > ˄ ˅ (по краям экрана, только в follow mode)
+              if (_state.imagePath != null && _state.imageSize != null) ...[
+                Positioned(
+                  left: 3,
+                  top: constraints.maxHeight * 0.4,
+                  child: _buildPanButton(
+                    Icons.chevron_left,
+                    () => _logic.panBy(const Offset(-10, 0)),
+                    enabled: _state.followMode,
+                  ),
+                ),
+                Positioned(
+                  right: 3,
+                  top: constraints.maxHeight * 0.4,
+                  child: _buildPanButton(
+                    Icons.chevron_right,
+                    () => _logic.panBy(const Offset(10, 0)),
+                    enabled: _state.followMode,
+                  ),
+                ),
+                Positioned(
+                  top: 3,
+                  left: constraints.maxWidth / 2 - 24,
+                  child: _buildPanButton(
+                    Icons.keyboard_arrow_up,
+                    () => _logic.panBy(const Offset(0, -10)),
+                    enabled: _state.followMode,
+                  ),
+                ),
+                Positioned(
+                  bottom: 3,
+                  left: constraints.maxWidth / 2 - 24,
+                  child: _buildPanButton(
+                    Icons.keyboard_arrow_down,
+                    () => _logic.panBy(const Offset(0, 10)),
+                    enabled: _state.followMode,
+                  ),
+                ),
+              ],
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildPanButton(
+    IconData icon,
+    VoidCallback onPressed, {
+    bool enabled = true,
+  }) {
+    return Opacity(
+      opacity: enabled ? 1.0 : 0.45,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onPressed : null,
+          borderRadius: BorderRadius.circular(30),
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(60),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: Colors.white.withAlpha(230), size: 28),
+          ),
+        ),
       ),
     );
   }
@@ -455,10 +533,7 @@ class _MapScreenState extends State<MapScreen> {
   }) {
     if (pivotImage == null) {
       _logic.updateTransform(
-        baseTransform.copyWith(
-          scale: newScale,
-          rotationRadians: newRotation,
-        ),
+        baseTransform.copyWith(scale: newScale, rotationRadians: newRotation),
       );
       return;
     }
@@ -472,9 +547,7 @@ class _MapScreenState extends State<MapScreen> {
     _state.transformState = oldTransform;
     final delta = pivotScreen - pivotScreenAfter;
     _logic.updateTransform(
-      tempTransform.copyWith(
-        translation: baseTransform.translation + delta,
-      ),
+      tempTransform.copyWith(translation: baseTransform.translation + delta),
     );
   }
 
@@ -701,7 +774,6 @@ class _MapScreenState extends State<MapScreen> {
             },
             child: const Text('Удалить все якоря'),
           ),
-          
         ],
       ),
     );

@@ -745,6 +745,28 @@ class MapScreenLogic {
     Offset screenPoint, {
     required bool isAutoCorrection,
   }) async {
+    // Если это ACTION_PAN в follow mode — работаем мгновенно.
+    // Никакого ожидания GPS и интерполяции. Берем текущий пакет.
+    if (isAutoCorrection) {
+      final crosshair = screenToImage(screenPoint);
+      final gps = gpsDataNotifier.value;
+      if (gps.latitude == null || gps.longitude == null) return;
+
+      final oldId = state.lastAutoAnchorId;
+      if (oldId != null) {
+        await anchorManager.deleteAnchorAndUpdate(oldId);
+      }
+
+      await anchorManager.addAnchorFromGps(gps, crosshair, DateTime.now());
+
+      final anchors = state.project?.anchors;
+      final latest = (anchors != null && anchors.isNotEmpty) ? anchors.last : null;
+      setState(() {
+        state.lastAutoAnchorId = latest?.id;
+      });
+      return;
+    }
+
     // Фиксируем СИСТЕМНОЕ время нажатия (БЕЗ компенсации)
     final DateTime rawRequestTime = DateTime.now();
 
@@ -805,8 +827,12 @@ class MapScreenLogic {
 
     GpsData gps1 = roughGps;
 
-    const int maxIterations = 100;
+    // Берем текущий интервал GPS из настроек и даем 2 секунды запаса
+    // на то, чтобы пакет дошел и обработался.
+    final settings = await sensorService.loadSettings();
+    final maxWaitMs = (settings.gpsInterval + 2) * 1000;
     const Duration step = Duration(milliseconds: 50);
+    final int maxIterations = maxWaitMs ~/ 50;
 
     GpsData? finalGps;
     GpsData? gps2; // сохраним второй пакет для расчёта дельты
@@ -895,18 +921,9 @@ class MapScreenLogic {
           .toDouble();
       _updateCompensation(delta);
     }
-
     setState(() {
       state.pendingAnchor = null;
     });
-
-    // В авто-режиме удаляем предыдущий авто-якорь перед постановкой нового.
-    if (isAutoCorrection) {
-      final oldId = state.lastAutoAnchorId;
-      if (oldId != null) {
-        await anchorManager.deleteAnchorAndUpdate(oldId);
-      }
-    }
 
     await anchorManager.addAnchorFromGps(
       finalGps,
@@ -914,24 +931,14 @@ class MapScreenLogic {
       anchorRequestTime,
     );
 
-    if (isAutoCorrection) {
-      final anchors = state.project?.anchors;
-      final latest = (anchors != null && anchors.isNotEmpty)
-          ? anchors.last
-          : null;
+    // Обычный якорь (кнопка «Я ЗДЕСЬ», интент ADD_ANCHOR).
+    // Если до этого стоял авто-якорь от ACTION_PAN — снимаем с него
+    // метку «временный», чтобы следующий PAN его не удалил.
+    if (state.lastAutoAnchorId != null) {
       setState(() {
-        state.lastAutoAnchorId = latest?.id;
+        state.lastAutoAnchorId = null;
       });
-    } else {
-      // Обычный якорь (кнопка «Я ЗДЕСЬ», интент ADD_ANCHOR).
-      // Если до этого стоял авто-якорь от ACTION_PAN — снимаем с него
-      // метку «временный», чтобы следующий PAN его не удалил.
-      if (state.lastAutoAnchorId != null) {
-        setState(() {
-          state.lastAutoAnchorId = null;
-        });
-        showSnackBar('Якорь закреплён');
-      }
+      showSnackBar('Якорь закреплён');
     }
   }
 
