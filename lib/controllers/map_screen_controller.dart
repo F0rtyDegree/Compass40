@@ -49,7 +49,7 @@ class MapScreenController {
     _logic?.panBy(delta);
   }
 
-  void addAnchorAtCrosshair() {
-    _logic?.addAnchorFromCurrentGps();
+  void protectAutoAnchor() {
+    _logic?.protectAutoAnchor();
   }
 }

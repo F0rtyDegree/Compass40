@@ -53,7 +53,7 @@
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
             <intent-filter>
-                <action android:name="by.fortydegree.compass40.ACTION_ADD_ANCHOR"/>
+                <action android:name="by.fortydegree.compass40.ACTION_FREEZE_ANCHOR"/>
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
             <intent-filter>

@@ -399,15 +399,14 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
 
-              // Кнопки перемещения < > ˄ ˅ (по краям экрана, только в follow mode)
+              // Кнопки перемещения < > ˄ ˅ (по краям экрана)
               if (_state.imagePath != null && _state.imageSize != null) ...[
                 Positioned(
                   left: 3,
                   top: constraints.maxHeight * 0.4,
                   child: _buildPanButton(
                     Icons.chevron_left,
-                    () => _logic.panBy(const Offset(-10, 0)),
-                    enabled: _state.followMode,
+                    () => _logic.panBy(const Offset(10, 0)),
                   ),
                 ),
                 Positioned(
@@ -415,8 +414,7 @@ class _MapScreenState extends State<MapScreen> {
                   top: constraints.maxHeight * 0.4,
                   child: _buildPanButton(
                     Icons.chevron_right,
-                    () => _logic.panBy(const Offset(10, 0)),
-                    enabled: _state.followMode,
+                    () => _logic.panBy(const Offset(-10, 0)),
                   ),
                 ),
                 Positioned(
@@ -424,8 +422,7 @@ class _MapScreenState extends State<MapScreen> {
                   left: constraints.maxWidth / 2 - 24,
                   child: _buildPanButton(
                     Icons.keyboard_arrow_up,
-                    () => _logic.panBy(const Offset(0, -10)),
-                    enabled: _state.followMode,
+                    () => _logic.panBy(const Offset(0, 10)),
                   ),
                 ),
                 Positioned(
@@ -433,8 +430,7 @@ class _MapScreenState extends State<MapScreen> {
                   left: constraints.maxWidth / 2 - 24,
                   child: _buildPanButton(
                     Icons.keyboard_arrow_down,
-                    () => _logic.panBy(const Offset(0, 10)),
-                    enabled: _state.followMode,
+                    () => _logic.panBy(const Offset(0, -10)),
                   ),
                 ),
               ],

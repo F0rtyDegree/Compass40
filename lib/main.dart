@@ -47,8 +47,8 @@ Future<void> _handleIntent(MethodCall call) async {
         );
       }
       break;
-    case 'by.fortydegree.compass40.ACTION_ADD_ANCHOR':
-      MapScreenController().addAnchorAtCrosshair();
+    case 'by.fortydegree.compass40.ACTION_FREEZE_ANCHOR':
+      MapScreenController().protectAutoAnchor();
       break;
     case 'by.fortydegree.compass40.ACTION_ANNOUNCE_TARGET':
       final args = call.arguments;
