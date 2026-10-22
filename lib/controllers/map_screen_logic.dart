@@ -755,11 +755,13 @@ class MapScreenLogic {
       if (gps.latitude == null || gps.longitude == null) return;
 
       final oldId = state.lastAutoAnchorId;
-      if (oldId != null) {
-        await anchorManager.deleteAnchorAndUpdate(oldId);
-      }
 
-      await anchorManager.addAnchorFromGps(gps, crosshair, DateTime.now());
+      // Атомарная замена: один пересчет, без записи в журнал и пересчета целей.
+      await anchorManager.replaceAutoAnchor(oldId, gps, crosshair);
+
+      // Пересчитываем пиксели треков под новую привязку, чтобы линии не отставали.
+      await trackManager.reloadActiveTrackImagePoints();
+      trackManager.recalculateLoadedTrackImagePoints();
 
       final anchors = state.project?.anchors;
       final latest = (anchors != null && anchors.isNotEmpty) ? anchors.last : null;

@@ -474,6 +474,50 @@ class MapAnchorManager {
 
     showSnackBar('Координаты якоря обновлены');
   }
+  /// Атомарная замена авто-якоря. Удаляет старый (если есть) и ставит новый.
+  /// Выполняет один пересчет привязки. В журнал не пишет.
+  /// Цели не пересчитывает (они уточнятся вручную при подходе).
+  Future<void> replaceAutoAnchor(
+    String? oldId,
+    GpsData gpsData,
+    Offset imagePoint,
+  ) async {
+    final project = state.project;
+    if (project == null) return;
+
+    // Удаляем старый, если был
+    final updatedAnchors = project.anchors
+        .where((a) => a.id != oldId)
+        .toList();
+
+    // Создаем новый
+    final anchor = MapAnchor(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      imageX: imagePoint.dx,
+      imageY: imagePoint.dy,
+      latitude: gpsData.latitude!,
+      longitude: gpsData.longitude!,
+      createdAt: DateTime.now(),
+    );
+
+    updatedAnchors.add(anchor);
+
+    final updatedProject = project.copyWith(
+      anchors: updatedAnchors,
+      manualMode: calibrationService.isManualMode,
+      calibrationMode: calibrationService.currentMode.name,
+      pinnedAnchorIds: calibrationService.pinnedAnchorIdsList,
+    );
+
+    await storageService.saveProject(updatedProject);
+
+    setState(() {
+      state.project = updatedProject;
+    });
+
+    calibrationService.updateAnchors(updatedProject.anchors);
+    onAnchorsChanged();
+  }
 
   Future<void> deleteAnchorAndUpdate(String anchorId) async {
     final project = state.project;
