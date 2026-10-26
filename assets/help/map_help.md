@@ -181,14 +181,14 @@
 | Включить/выключить автосопровождение | `by.fortydegree.compass40.ACTION_TOGGLE_FOLLOW` |
 | Переключить режим привязки | `by.fortydegree.compass40.ACTION_NEXT_CALIBRATION_MODE` |
 | Коррекция привязки | `by.fortydegree.compass40.ACTION_PAN` |
-| Заморозка авто-якоря | `by.fortydegree.compass40.ACTION_FREEZE_ANCHOR` |
+| Фиксация якоря | `by.fortydegree.compass40.ACTION_FREEZE_ANCHOR` |
 
 **Как использовать в Tasker:**
 1. Создайте действие **Send Intent**.
 2. Укажите **Action** из таблицы выше.
 3. Установите **Cat** = `Default`, **Package** = `by.fortydegree.compass40`, **Class** = `by.fortydegree.compass40.MainActivity`, **Target** = `Activity`.
 
-**Интент ACTION_FREEZE_ANCHOR** «замораживает» текущий якорь, установленный интентом ACTION_PAN, защищая его от удаления следующей командой смещения. Работает без параметров.
+**Интент ACTION_FREEZE_ANCHOR** работает без параметров. Удаляет предыдущий временный авто-якорь и ставит постоянный якорь в текущей позиции маркера вашего местоположения (курсора).
 
 **Интент ACTION_PAN** предназначен для коррекции привязки карты. Требует extras:
 

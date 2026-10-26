@@ -719,15 +719,31 @@ class MapScreenLogic {
     );
   }
 
-  /// Вызывается из интента ACTION_ADD_ANCHOR.
-  /// Замораживает текущий авто-якорь (защищает от удаления следующим ACTION_PAN).
-  void protectAutoAnchor() {
-    if (state.lastAutoAnchorId != null) {
-      setState(() {
-        state.lastAutoAnchorId = null;
-      });
-      showSnackBar('Якорь закреплён');
+  /// Вызывается из интента ACTION_FREEZE_ANCHOR.
+  /// В пиксель, где сейчас находится маркер (курсор) ставим новый временный якорь,
+  /// но сразу же делаем его постоянным. Старый временный якорь удаляем. Пересчитываем треки.
+  Future<void> protectAutoAnchor() async {
+    final gps = gpsDataNotifier.value;
+    final userImagePoint = state.currentUserImagePoint;
+    
+    if (gps.latitude == null || gps.longitude == null || userImagePoint == null) {
+      showSnackBar('Нет данных для фиксации');
+      return;
     }
+
+    final oldId = state.lastAutoAnchorId;
+    
+    // Удаляем старый авто-якорь и ставим новый в позиции курсора.
+    await anchorManager.replaceAutoAnchor(oldId, gps, userImagePoint);
+    
+    // Пересчитываем пиксели треков.
+    await trackManager.reloadActiveTrackImagePoints();
+    trackManager.recalculateLoadedTrackImagePoints();
+
+    setState(() {
+      state.lastAutoAnchorId = null;
+    });
+    showSnackBar('Якорь зафиксирован');
   }
 
   /// Публичный метод: ставит якорь в позиции [screenPoint] с текущим GPS.

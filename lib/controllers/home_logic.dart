@@ -357,10 +357,8 @@ class HomeLogic {
   }
 
   /// Озвучивает текущее состояние автоозвучки.
-  /// Работает только при выключенном экране и активном GPS-компасе.
+  /// Работает всегда, независимо от экрана и GPS. Ограничения задаются в Tasker.
   Future<void> _announcePeriodStatus() async {
-    if (ScreenStateService().isScreenOn.value) return;
-    if (!GpsCompassService.instance.isActiveNotifier.value) return;
     final text = _announcePeriod > 0
         ? 'Автоозвучка $_announcePeriod секунд'
         : 'Автоозвучка выключена';
