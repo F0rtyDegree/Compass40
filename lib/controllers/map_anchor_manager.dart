@@ -11,6 +11,8 @@ import '../models/map_anchor.dart';
 import '../models/map_project.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
+import '../services/locus_calibration_service.dart';
+import '../utils/app_constants.dart';
 import 'map_screen_state.dart';
 import '../utils/geo_utils.dart';
 
@@ -304,6 +306,7 @@ class MapAnchorManager {
     calibrationService.updateAnchors(state.project!.anchors);
     onAnchorsChanged(enableFollow: true);
     await onRecalculateTargets(restartNavigation: true);
+    await _autoSaveLocusXml();
 
     onAnchorAdded?.call(
       latitude,
@@ -312,8 +315,8 @@ class MapAnchorManager {
       creationTimestamp,
     );
 
-//    final anchorNum = updatedAnchors.length;
-//    showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
+    //    final anchorNum = updatedAnchors.length;
+    //    showSnackBar('Привязка #$anchorNum добавлена. Всего: $anchorNum');
   }
 
   void handleTapOnMap(Offset screenPosition) {
@@ -374,9 +377,7 @@ class MapAnchorManager {
 
   /// Заменяет координаты якоря из буфера обмена.
   /// Пиксель якоря на карте не меняется. Пересчёт привязки, целей, трека.
-  Future<void> _replaceAnchorCoordinatesFromClipboard(
-    String anchorId,
-  ) async {
+  Future<void> _replaceAnchorCoordinatesFromClipboard(String anchorId) async {
     ClipboardData? clipboardData;
     try {
       clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
@@ -473,7 +474,9 @@ class MapAnchorManager {
     await onRecalculateTargets(restartNavigation: true);
 
     showSnackBar('Координаты якоря обновлены');
+    await _autoSaveLocusXml();
   }
+
   /// Атомарная замена авто-якоря. Удаляет старый (если есть) и ставит новый.
   /// Выполняет один пересчет привязки. В журнал не пишет.
   /// Цели не пересчитывает (они уточнятся вручную при подходе).
@@ -486,9 +489,7 @@ class MapAnchorManager {
     if (project == null) return;
 
     // Удаляем старый, если был
-    final updatedAnchors = project.anchors
-        .where((a) => a.id != oldId)
-        .toList();
+    final updatedAnchors = project.anchors.where((a) => a.id != oldId).toList();
 
     // Создаем новый
     final anchor = MapAnchor(
@@ -517,6 +518,29 @@ class MapAnchorManager {
 
     calibrationService.updateAnchors(updatedProject.anchors);
     onAnchorsChanged();
+    await _autoSaveLocusXml();
+  }
+
+  /// Автоматически сохраняет текущую привязку в формате Locus XML.
+  Future<void> _autoSaveLocusXml() async {
+    final project = state.project;
+    if (project == null || project.imagePath.isEmpty) return;
+
+    final photoPath = project.originalImagePath ?? project.imagePath;
+    final imageName = photoPath.split('/').last;
+    final dotIndex = imageName.lastIndexOf('.');
+    final nameWithoutExt = dotIndex > 0 ? imageName.substring(0, dotIndex) : imageName;
+    final xmlPath = '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}/$nameWithoutExt.xml';
+
+    try {
+      await LocusCalibrationService.saveCalibration(
+        outputPath: xmlPath,
+        photoPath: photoPath,
+        anchors: project.anchors,
+      );
+    } catch (e) {
+      print('Ошибка автосохранения XML: $e');
+    }
   }
 
   Future<void> deleteAnchorAndUpdate(String anchorId) async {
@@ -539,7 +563,8 @@ class MapAnchorManager {
     });
 
     calibrationService.removeAnchor(anchorId);
-    onAnchorsChanged();
+        onAnchorsChanged();
+    await _autoSaveLocusXml();
     await onRecalculateTargets();
   }
 
@@ -607,7 +632,7 @@ class MapAnchorManager {
           ),
           SimpleDialogOption(
             onPressed: () {
-                if (!canAffine) {
+              if (!canAffine) {
                 showHintAndClose('Нужно минимум 2 якоря', ctx);
                 return;
               }
@@ -623,12 +648,14 @@ class MapAnchorManager {
           ),
           SimpleDialogOption(
             onPressed: () {
-               if (!canFarthest) {
+              if (!canFarthest) {
                 showHintAndClose('Нужно минимум 2 якоря', ctx);
                 return;
               }
               Navigator.pop(ctx);
-              calibrationService.setCalibrationMode(CalibrationMode.pairFarthest);
+              calibrationService.setCalibrationMode(
+                CalibrationMode.pairFarthest,
+              );
               _saveCalibrationState();
               setState(() {});
             },
@@ -644,7 +671,9 @@ class MapAnchorManager {
                 return;
               }
               Navigator.pop(ctx);
-              calibrationService.setCalibrationMode(CalibrationMode.pairNearest);
+              calibrationService.setCalibrationMode(
+                CalibrationMode.pairNearest,
+              );
               _saveCalibrationState();
               setState(() {});
             },

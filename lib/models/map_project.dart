@@ -11,6 +11,9 @@ class MapProject extends Equatable {
   /// Путь к GPX-файлу с загруженным треком для отображения на карте.
   /// Null — трек не загружен.
   final String? loadedTrackPath;
+
+  /// Полный путь к оригинальному файлу картинки (для экспорта в Locus XML).
+  final String? originalImagePath;
   final double photoSeverLineMeters;
   final double photoSeverLinePixels;
   final double photoSeverNorthAngle;
@@ -28,6 +31,7 @@ class MapProject extends Equatable {
     this.photoSeverNorthAngle = 0.0,
     this.cachedGpxPoints,
     this.loadedTrackPath,
+    this.originalImagePath,
     this.pinnedAnchorIds = const [],
     this.manualMode = false,
     this.calibrationMode = 'affine',
@@ -45,6 +49,7 @@ class MapProject extends Equatable {
     double? photoSeverNorthAngle,
     Object? cachedGpxPoints = _unset,
     Object? loadedTrackPath = _unset,
+    Object? originalImagePath = _unset,
     List<String>? pinnedAnchorIds,
     bool? manualMode,
     String? calibrationMode,
@@ -63,6 +68,9 @@ class MapProject extends Equatable {
       loadedTrackPath: identical(loadedTrackPath, _unset)
           ? this.loadedTrackPath
           : loadedTrackPath as String?,
+      originalImagePath: identical(originalImagePath, _unset)
+          ? this.originalImagePath
+          : originalImagePath as String?,
       pinnedAnchorIds: pinnedAnchorIds ?? this.pinnedAnchorIds,
       manualMode: manualMode ?? this.manualMode,
       calibrationMode: calibrationMode ?? this.calibrationMode,
@@ -98,6 +106,7 @@ class MapProject extends Equatable {
           ?.map((e) => Map<String, String>.from(e as Map))
           .toList(),
       loadedTrackPath: json['loadedTrackPath'] as String?,
+      originalImagePath: json['originalImagePath'] as String?,
     );
   }
 
@@ -115,6 +124,7 @@ class MapProject extends Equatable {
       'photoSeverNorthAngle': photoSeverNorthAngle,
       'cachedGpxPoints': cachedGpxPoints,
       'loadedTrackPath': loadedTrackPath,
+      'originalImagePath': originalImagePath,
     };
   }
 
@@ -129,6 +139,7 @@ class MapProject extends Equatable {
     photoSeverNorthAngle,
     cachedGpxPoints,
     loadedTrackPath,
+    originalImagePath,
     pinnedAnchorIds,
     manualMode,
     calibrationMode,

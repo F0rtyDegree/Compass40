@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gps_info/gps_info.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/map_anchor.dart';
 import '../models/map_project.dart';
 import '../models/map_target.dart';
@@ -16,6 +16,7 @@ import '../services/log_service.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import '../services/gps_compass_service.dart';
+import '../services/locus_calibration_service.dart';
 import 'map_screen_state.dart';
 import '../services/sensor_service.dart';
 import 'map_anchor_manager.dart';
@@ -29,6 +30,7 @@ import '../utils/geo_utils.dart';
 import '../widgets/map_image_painter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:collection/collection.dart';
+import 'package:filesystem_picker/filesystem_picker.dart';
 
 class MapScreenLogic {
   final MapScreenState state;
@@ -396,31 +398,113 @@ class MapScreenLogic {
   // Выбор фото
   // --------------------------------------------------------
 
-  Future<void> pickImage() async {
+  Future<void> _autoSaveLocusXml(MapProject project) async {
+    if (project.imagePath.isEmpty) return;
+    final photoPath = project.originalImagePath ?? project.imagePath;
+    final imageName = photoPath.split('/').last;
+    final dotIndex = imageName.lastIndexOf('.');
+    final nameWithoutExt = dotIndex > 0 ? imageName.substring(0, dotIndex) : imageName;
+    final xmlPath = '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}/$nameWithoutExt.xml';
     try {
-      final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      if (image == null) return;
+      await LocusCalibrationService.saveCalibration(
+        outputPath: xmlPath,
+        photoPath: photoPath,
+        anchors: project.anchors,
+      );
+    } catch (_) {}
+  }
 
-      final savedPath = await storageService.saveImageToAppStorage(image.path);
+  Future<void> pickLocusXml() async {
+    try {
+      final result = await FilePicker.pickFiles(type: FileType.any);
+      if (result == null || result.files.isEmpty) return;
+      final xmlPath = result.files.single.path;
+      if (xmlPath == null) return;
 
-      try {
-        final tempFile = File(image.path);
-        if (await tempFile.exists()) {
-          await tempFile.delete();
-        }
-      } catch (e) {
-        print('pickImage(): Failed to delete temp file: $e');
+      final locusResult =
+          await LocusCalibrationService.loadCalibration(xmlPath);
+      if (locusResult == null) {
+        showSnackBar('Ошибка чтения XML привязки');
+        return;
       }
+
+      final imageFile = File(locusResult.photoPath);
+      if (!await imageFile.exists()) {
+        showSnackBar('Файл карты не найден по пути: ${locusResult.photoPath}');
+        return;
+      }
+
+      final savedPath =
+          await storageService.saveImageToAppStorage(locusResult.photoPath);
+
+      final projectId = DateTime.now().millisecondsSinceEpoch.toString();
+      final project = MapProject(
+        id: projectId,
+        imagePath: savedPath,
+        anchors: locusResult.anchors,
+        targets: [],
+        originalImagePath: locusResult.photoPath,
+      );
+
+      await storageService.saveProject(project);
+      await storageService.setCurrentProjectId(projectId);
+
+      setState(() {
+        state.project = project;
+        state.imagePath = savedPath;
+        state.imageSize = null;
+        state.workingPair = null;
+        state.canPlaceTarget = false;
+        state.transformState = const MapTransformState();
+        state.plannedTarget = null;
+        state.activeTarget = null;
+      });
+
+      _calibrationService.updateAnchors(locusResult.anchors);
+      await _loadImageSize();
+
+      // Сохраняем актуальный XML для внутренней копии.
+      await _autoSaveLocusXml(project);
+    } catch (e) {
+      showSnackBar('Ошибка загрузки привязки: $e');
+    }
+  }
+
+  Future<void> pickImage(BuildContext context) async {
+    try {
+      final rootDir = Directory('/storage/emulated/0');
+      if (!await rootDir.exists()) {
+        showSnackBar('Нет доступа к хранилищу');
+        return;
+      }
+
+      if (!context.mounted) return;
+
+      final String? pickedPath = await FilesystemPicker.open(
+        title: 'Выберите фото карты',
+        context: context,
+        rootDirectory: rootDir,
+        fsType: FilesystemType.file,
+        allowedExtensions: ['.jpg', '.jpeg', '.png'],
+        fileTileSelectMode: FileTileSelectMode.wholeTile,
+      );
+
+      if (pickedPath == null) return;
+
+      final originalPath = pickedPath;
+      final savedPath = await storageService.saveImageToAppStorage(originalPath);
+
       final projectId = DateTime.now().millisecondsSinceEpoch.toString();
       final project = MapProject(
         id: projectId,
         imagePath: savedPath,
         anchors: [],
         targets: [],
+        originalImagePath: originalPath,
       );
 
       await storageService.saveProject(project);
+            await _autoSaveLocusXml(project);
       await storageService.setCurrentProjectId(projectId);
 
       setState(() {
@@ -504,6 +588,7 @@ class MapScreenLogic {
     if (project == null) return;
     final updatedProject = project.copyWith(anchors: []);
     await storageService.saveProject(updatedProject);
+        await _autoSaveLocusXml(updatedProject);
     setState(() {
       state.project = updatedProject;
       state.workingPair = null;

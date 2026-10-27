@@ -209,9 +209,15 @@ class _MapScreenState extends State<MapScreen> {
             const Text('Карта не загружена', style: TextStyle(fontSize: 18)),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () => _logic.pickImage(),
+              onPressed: () => _logic.pickImage(context),
               icon: const Icon(Icons.add_photo_alternate),
               label: const Text('Выбрать фото карты'),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: () => _logic.pickLocusXml(),
+              icon: const Icon(Icons.settings_backup_restore),
+              label: const Text('Выбрать карту (XML)'),
             ),
           ],
         ),

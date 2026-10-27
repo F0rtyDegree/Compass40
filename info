@@ -3,7 +3,11 @@ flutter clean & flutter pub get --offline
 git reset --soft HEAD~1
 git add . 
 git commit -m "
-ver. 7.6.4 Добавил показ Rmse и самой "плохой" точки.
+ver. 7.7.0 
+- Автосохранение привязки карты в формат Locus XML (файл создается в Download/Compass40).
+- Загрузка карты и привязки из XML файла через экран «Карта не загружена».
+- Замена image_picker на filesystem_picker для получения абсолютных путей к картинкам.
+- Имя XML-файла теперь совпадает с именем исходного изображения карты.
 "
 
 ver. 7.6.3 
