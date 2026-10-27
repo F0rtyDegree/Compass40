@@ -578,4 +578,28 @@ class MapCalibrationService {
     return geoAngle - imageAngle;
   }
 
+  String getWorstAnchorInfo() {
+    final t = _currentTransform;
+    if (t == null || t is! _AffineTransformerAdapter) return '---';
+    if (_anchors.isEmpty) return '---';
+
+    double maxError = -1;
+    int worstIndex = -1;
+
+    for (int i = 0; i < _anchors.length; i++) {
+      final a = _anchors[i];
+      final pred = t.imageToGeo(Offset(a.imageX, a.imageY));
+      final err = calculateDistance(a.latitude, a.longitude, pred.dy, pred.dx);
+      if (err > maxError) {
+        maxError = err;
+        worstIndex = i;
+      }
+    }
+
+    if (worstIndex == -1) return '---';
+    
+    final indexFromEnd = _anchors.length - worstIndex;
+    return '$indexFromEnd-${maxError.round()}';
+  }
+
 }

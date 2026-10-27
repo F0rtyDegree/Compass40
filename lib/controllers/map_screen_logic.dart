@@ -106,6 +106,7 @@ class MapScreenLogic {
   int get usedAnchorCount => _calibrationService.usedAnchorCount;
   int get totalAnchorCount => _calibrationService.totalAnchorCount;
   double? get rmseMeters => _calibrationService.rmseMeters;
+  String get worstAnchorInfo => _calibrationService.getWorstAnchorInfo();
   double? get selfPointErrorMeters => _calibrationService.selfPointErrorMeters;
   Set<String>? get activeAnchorIds => _calibrationService.activeAnchorIds;
   String get calibrationModeLetter => _calibrationService.calibrationModeLetter;

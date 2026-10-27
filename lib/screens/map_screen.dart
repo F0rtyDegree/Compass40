@@ -71,6 +71,8 @@ class _MapScreenState extends State<MapScreen> {
   double _lastAngle = 0.0;
   int _lastUsed = -1;
   int _lastTotal = -1;
+  String _lastRmseStr = '';
+  String _lastWorstInfo = '';
 
   @override
   void initState() {
@@ -108,10 +110,22 @@ class _MapScreenState extends State<MapScreen> {
   void _updateStatusText() {
     final used = _logic.usedAnchorCount;
     final total = _logic.totalAnchorCount;
-    if (used == _lastUsed && total == _lastTotal) return;
+    final rmse = _logic.rmseMeters;
+    final worst = _logic.worstAnchorInfo;
+
+    final rmseStr = rmse != null ? rmse.round().toString() : '---';
+
+    if (used == _lastUsed &&
+        total == _lastTotal &&
+        rmseStr == _lastRmseStr &&
+        worst == _lastWorstInfo) {
+      return;
+    }
     _lastUsed = used;
     _lastTotal = total;
-    updateNotification(title: 'Режим - Карта $used/$total');
+    _lastRmseStr = rmseStr;
+    _lastWorstInfo = worst;
+    updateNotification(title: 'Режим - Карта $used/$total | $rmseStr | $worst');
   }
 
   @override
