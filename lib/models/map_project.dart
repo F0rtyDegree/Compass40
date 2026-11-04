@@ -14,6 +14,9 @@ class MapProject extends Equatable {
 
   /// Полный путь к оригинальному файлу картинки (для экспорта в Locus XML).
   final String? originalImagePath;
+
+  /// ID временного (авто) якоря. Хранится, чтобы удалить его после сбоя.
+  final String? lastAutoAnchorId;
   final double photoSeverLineMeters;
   final double photoSeverLinePixels;
   final double photoSeverNorthAngle;
@@ -32,6 +35,7 @@ class MapProject extends Equatable {
     this.cachedGpxPoints,
     this.loadedTrackPath,
     this.originalImagePath,
+    this.lastAutoAnchorId,
     this.pinnedAnchorIds = const [],
     this.manualMode = false,
     this.calibrationMode = 'affine',
@@ -50,6 +54,7 @@ class MapProject extends Equatable {
     Object? cachedGpxPoints = _unset,
     Object? loadedTrackPath = _unset,
     Object? originalImagePath = _unset,
+    Object? lastAutoAnchorId = _unset,
     List<String>? pinnedAnchorIds,
     bool? manualMode,
     String? calibrationMode,
@@ -71,6 +76,9 @@ class MapProject extends Equatable {
       originalImagePath: identical(originalImagePath, _unset)
           ? this.originalImagePath
           : originalImagePath as String?,
+      lastAutoAnchorId: identical(lastAutoAnchorId, _unset)
+          ? this.lastAutoAnchorId
+          : lastAutoAnchorId as String?,
       pinnedAnchorIds: pinnedAnchorIds ?? this.pinnedAnchorIds,
       manualMode: manualMode ?? this.manualMode,
       calibrationMode: calibrationMode ?? this.calibrationMode,
@@ -107,6 +115,7 @@ class MapProject extends Equatable {
           .toList(),
       loadedTrackPath: json['loadedTrackPath'] as String?,
       originalImagePath: json['originalImagePath'] as String?,
+      lastAutoAnchorId: json['lastAutoAnchorId'] as String?,
     );
   }
 
@@ -125,6 +134,7 @@ class MapProject extends Equatable {
       'cachedGpxPoints': cachedGpxPoints,
       'loadedTrackPath': loadedTrackPath,
       'originalImagePath': originalImagePath,
+      'lastAutoAnchorId': lastAutoAnchorId,
     };
   }
 
@@ -140,6 +150,7 @@ class MapProject extends Equatable {
     cachedGpxPoints,
     loadedTrackPath,
     originalImagePath,
+    lastAutoAnchorId,
     pinnedAnchorIds,
     manualMode,
     calibrationMode,

@@ -483,8 +483,9 @@ class MapAnchorManager {
   Future<void> replaceAutoAnchor(
     String? oldId,
     GpsData gpsData,
-    Offset imagePoint,
-  ) async {
+    Offset imagePoint, {
+    bool isTemporary = false,
+  }) async {
     final project = state.project;
     if (project == null) return;
 
@@ -508,6 +509,7 @@ class MapAnchorManager {
       manualMode: calibrationService.isManualMode,
       calibrationMode: calibrationService.currentMode.name,
       pinnedAnchorIds: calibrationService.pinnedAnchorIdsList,
+      lastAutoAnchorId: isTemporary ? anchor.id : null,
     );
 
     await storageService.saveProject(updatedProject);
@@ -555,11 +557,15 @@ class MapAnchorManager {
       manualMode: calibrationService.isManualMode,
       calibrationMode: calibrationService.currentMode.name,
       pinnedAnchorIds: calibrationService.pinnedAnchorIdsList,
+      lastAutoAnchorId: project.lastAutoAnchorId == anchorId ? null : project.lastAutoAnchorId,
     );
     await storageService.saveProject(updatedProject);
 
     setState(() {
       state.project = updatedProject;
+      if (state.lastAutoAnchorId == anchorId) {
+        state.lastAutoAnchorId = null;
+      }
     });
 
     calibrationService.removeAnchor(anchorId);

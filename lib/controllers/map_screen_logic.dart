@@ -239,21 +239,38 @@ class MapScreenLogic {
 
     final savedTransform = await storageService.loadTransform(projectId);
 
+    MapProject projectToUse = project;
+    bool needsSave = false;
+
+    // Удаляем временный якорь, если приложение было закрыто аварийно.
+    if (projectToUse.lastAutoAnchorId != null) {
+      final updatedAnchors = projectToUse.anchors
+          .where((a) => a.id != projectToUse.lastAutoAnchorId)
+          .toList();
+      projectToUse = projectToUse.copyWith(
+        anchors: updatedAnchors,
+        lastAutoAnchorId: null,
+      );
+      needsSave = true;
+    }
+
     // Активная цель при старте переводится в planned: сессия прервана,
-    // ведение не восстанавливается. Пользователь активирует цель
-    // повторно кнопкой ГОУ.
-    final hasActive = project.targets.any(
+    // ведение не восстанавливается.
+    final hasActive = projectToUse.targets.any(
       (t) => t.status == MapTargetStatus.active,
     );
-    MapProject projectToUse = project;
     if (hasActive) {
-      final updatedTargets = project.targets.map((t) {
+      final updatedTargets = projectToUse.targets.map((t) {
         if (t.status == MapTargetStatus.active) {
           return t.copyWith(status: MapTargetStatus.planned);
         }
         return t;
       }).toList();
-      projectToUse = project.copyWith(targets: updatedTargets);
+      projectToUse = projectToUse.copyWith(targets: updatedTargets);
+      needsSave = true;
+    }
+
+    if (needsSave) {
       await storageService.saveProject(projectToUse);
     }
 
@@ -820,7 +837,12 @@ class MapScreenLogic {
     final oldId = state.lastAutoAnchorId;
     
     // Удаляем старый авто-якорь и ставим новый в позиции курсора.
-    await anchorManager.replaceAutoAnchor(oldId, gps, userImagePoint);
+    await anchorManager.replaceAutoAnchor(
+      oldId,
+      gps,
+      userImagePoint,
+      isTemporary: false,
+    );
     
     // Пересчитываем пиксели треков.
     await trackManager.reloadActiveTrackImagePoints();
@@ -859,7 +881,12 @@ class MapScreenLogic {
       final oldId = state.lastAutoAnchorId;
 
       // Атомарная замена: один пересчет, без записи в журнал и пересчета целей.
-      await anchorManager.replaceAutoAnchor(oldId, gps, crosshair);
+      await anchorManager.replaceAutoAnchor(
+        oldId,
+        gps,
+        crosshair,
+        isTemporary: true,
+      );
 
       // Пересчитываем пиксели треков под новую привязку, чтобы линии не отставали.
       await trackManager.reloadActiveTrackImagePoints();

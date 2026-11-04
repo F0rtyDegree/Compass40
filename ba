@@ -5,7 +5,7 @@ rm -rf /home/user/myapp/Compass40.apk.gz
 ./clean
 
 # flutter clean 
-# flutter pub get --offline
+# flutter pub get
 
 flutter test --no-pub
 flutter build apk --release --split-per-abi --tree-shake-icons --no-pub
