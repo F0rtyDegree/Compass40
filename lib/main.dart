@@ -50,7 +50,7 @@ Future<void> _handleIntent(MethodCall call) async {
     case 'by.fortydegree.compass40.ACTION_FREEZE_ANCHOR':
       MapScreenController().protectAutoAnchor();
       break;
-    case 'by.fortydegree.compass40.ACTION_ANNOUNCE_TARGET':
+    case 'by.fortydegree.compass40.ACTION_VOICE_HINT':
       final args = call.arguments;
       int? period;
       if (args is Map) {

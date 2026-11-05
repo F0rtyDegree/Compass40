@@ -28,6 +28,8 @@
     int _loadedTrackColor = AppConstants.loadedTrackColorDefault;
     double _compassSmoothness = AppConstants.compassSmoothnessDefault.toDouble();
     CompassMode _compassMode = CompassMode.magnetic;
+    bool _announceTargetEnabled = true;
+    bool _announceScreenOffEnabled = false;
 
     @override
     void initState() {
@@ -79,6 +81,11 @@
       _compassMode = (modeIndex >= 0 && modeIndex < CompassMode.values.length)
           ? CompassMode.values[modeIndex]
           : CompassMode.magnetic;
+
+      _announceTargetEnabled =
+          prefs.getBool(AppConstants.prefAnnounceTargetEnabled) ?? true;
+      _announceScreenOffEnabled =
+          prefs.getBool(AppConstants.prefAnnounceScreenOffEnabled) ?? false;
     }
 
     Future<void> _saveSettings() async {
@@ -123,6 +130,11 @@
           AppConstants.prefAnnouncePeriod, announcePeriod < 0 ? 0 : announcePeriod);
 
       await prefs.setInt(AppConstants.prefLoadedTrackColor, _loadedTrackColor);
+
+      await prefs.setBool(
+          AppConstants.prefAnnounceTargetEnabled, _announceTargetEnabled);
+      await prefs.setBool(
+          AppConstants.prefAnnounceScreenOffEnabled, _announceScreenOffEnabled);
     }
 
     Future<void> _pickLoadedTrackColor(BuildContext context) async {
@@ -562,10 +574,28 @@
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Голосовые подсказки о дистанции и направлении на цель. '
-                        'Работают при выключенном экране и активном GPS-компасе. '
-                        '0 — выключено.',
+                        'Голосовые подсказки. Работают при выключенном экране и активном GPS-компасе. '
+                        '0 — автоозвучка выключена.',
                         style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _announceTargetEnabled,
+                            onChanged: (v) => setState(() => _announceTargetEnabled = v ?? false),
+                          ),
+                          const Text('Дистанция до цели'),
+                        ],
+                      ),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _announceScreenOffEnabled,
+                            onChanged: (v) => setState(() => _announceScreenOffEnabled = v ?? false),
+                          ),
+                          const Text('Дистанция с момента выкл. экрана'),
+                        ],
                       ),
                     ],
                   ),

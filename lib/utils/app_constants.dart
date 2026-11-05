@@ -28,6 +28,8 @@ class AppConstants {
   static const String prefIsRecordingTrack = 'isRecordingTrack';
   static const String prefAnnouncePeriod = 'announcePeriod';
   static const String prefLoadedTrackColor = 'loadedTrackColor';
+  static const String prefAnnounceTargetEnabled = 'announceTargetEnabled';
+  static const String prefAnnounceScreenOffEnabled = 'announceScreenOffEnabled';
 
   static const int loadedTrackColorDefault = 0xFF00BCD4;
   static const double loadedTrackStepPx = 40.0;

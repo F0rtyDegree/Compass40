@@ -42,6 +42,7 @@ class HomeLogic {
 
   Timer? _announceTimer;
   int _announcePeriod = 0;
+  GpsData? _screenOffStartPoint;
 
   // Статистика текущего трека
   DateTime? _trackStartTime;
@@ -72,6 +73,7 @@ class HomeLogic {
     await _initServicesAndPermissions();
 
     ScreenStateService().start();
+    ScreenStateService().isScreenOn.addListener(_onScreenStateChanged);
     await TtsService().init();
     AnnouncerController().register(_handleAnnounceIntent);
     await _compassService.start();
@@ -99,6 +101,7 @@ class HomeLogic {
     _announceTimer?.cancel();
     _announceTimer = null;
     AnnouncerController().unregister();
+    ScreenStateService().isScreenOn.removeListener(_onScreenStateChanged);
     _gpsManager.stop();
     _compassService.stop();
     ScreenStateService().stop();
@@ -119,6 +122,8 @@ class HomeLogic {
 
     final settings = await sensorService.loadSettings();
     setState(() {
+      state.announceTargetEnabled = prefs.getBool(AppConstants.prefAnnounceTargetEnabled) ?? true;
+      state.announceScreenOffEnabled = prefs.getBool(AppConstants.prefAnnounceScreenOffEnabled) ?? false;
       state.useManualDeclination = settings.useManualDeclination;
       state.magneticDeclination = settings.magneticDeclination;
       state.magneticDeclinationNotifier.value = settings.magneticDeclination;
@@ -325,6 +330,17 @@ class HomeLogic {
     clearTarget();
   }
 
+  void _onScreenStateChanged() {
+    if (ScreenStateService().isScreenOn.value) {
+      _screenOffStartPoint = null;
+    } else {
+      final gps = state.gpsDataNotifier.value;
+      if (gps.latitude != null && gps.longitude != null) {
+        _screenOffStartPoint = gps;
+      }
+    }
+  }
+
   /// Обработчик интента ACTION_ANNOUNCE_TARGET.
   Future<void> _handleAnnounceIntent({int? period}) async {
     if (period != null) {
@@ -372,46 +388,57 @@ class HomeLogic {
   Future<void> _announceOnce({bool manual = false}) async {
     if (ScreenStateService().isScreenOn.value) return;
 
-    final target = state.target;
-    if (target == null) {
-      // Автоозвучка при отсутствии цели молчит. Ручной вызов сообщает
-      // «Нет цели»: пользователь спросил — получил ответ.
-      if (manual) {
-        await TtsService().speak('Нет цели');
-      }
-      return;
-    }
-
     final gps = state.gpsDataNotifier.value;
     if (gps.latitude == null || gps.longitude == null) return;
 
-    // Скорость ниже порога — направление движения не определено.
-    // Авто молчит, ручной вызов подсказывает начать движение.
+    // Общая проверка скорости для всех типов озвучки.
     final speedKmh = (gps.speed ?? 0) * 3.6;
     if (speedKmh < state.autoSwitchSpeedKmh) {
-      if (manual) {
-        await TtsService().speak('Начните движение');
-      }
+      if (manual) await TtsService().speak('Начните движение');
       return;
     }
 
-    final heading = GpsCompassService.instance.bearingNotifier.value;
-    if (heading == null) return;
+    final target = state.target;
 
-    final nav = calculateNavigationData(
-      fromLat: gps.latitude!,
-      fromLon: gps.longitude!,
-      toLat: target['latitude']!,
-      toLon: target['longitude']!,
-      magneticDeclination: state.magneticDeclination,
-    );
+    // Если есть цель и включена озвучка цели — озвучиваем её.
+    if (state.announceTargetEnabled && target != null) {
+      final heading = GpsCompassService.instance.bearingNotifier.value;
+      if (heading == null) return;
 
-    final phrase = buildAnnouncePhrase(
-      distanceMeters: nav.distanceMeters,
-      bearingToTarget: nav.magneticBearing,
-      currentHeading: heading,
-    );
-    await TtsService().speak(phrase);
+      final nav = calculateNavigationData(
+        fromLat: gps.latitude!,
+        fromLon: gps.longitude!,
+        toLat: target['latitude']!,
+        toLon: target['longitude']!,
+        magneticDeclination: state.magneticDeclination,
+      );
+
+      final phrase = buildAnnouncePhrase(
+        distanceMeters: nav.distanceMeters,
+        bearingToTarget: nav.magneticBearing,
+        currentHeading: heading,
+      );
+      await TtsService().speak(phrase);
+      return;
+    }
+
+    // Если цели нет (или озвучка цели выключена), но включена дистанция скрин-офф.
+    if (state.announceScreenOffEnabled && _screenOffStartPoint != null) {
+      final dist = calculateDistance(
+        _screenOffStartPoint!.latitude!,
+        _screenOffStartPoint!.longitude!,
+        gps.latitude!,
+        gps.longitude!,
+      );
+      final roundedDist = (dist / 10).round() * 10;
+      await TtsService().speak('$roundedDist');
+      return;
+    }
+
+    // Если ничего не подошло, но это ручной вызов — сообщаем об отсутствии цели.
+    if (manual && target == null) {
+      await TtsService().speak('Нет цели');
+    }
   }
 
   Future<void> addTargetCreationLogEntry({

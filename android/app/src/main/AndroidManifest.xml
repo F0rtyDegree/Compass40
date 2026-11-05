@@ -57,7 +57,7 @@
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
             <intent-filter>
-                <action android:name="by.fortydegree.compass40.ACTION_ANNOUNCE_TARGET"/>
+                <action android:name="by.fortydegree.compass40.ACTION_VOICE_HINT"/>
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>

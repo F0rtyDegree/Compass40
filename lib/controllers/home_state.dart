@@ -37,6 +37,10 @@ class HomeState {
       ValueNotifier(0.0);
   bool useManualDeclination = false;
 
+  // Настройки озвучки
+  bool announceTargetEnabled = true;
+  bool announceScreenOffEnabled = false;
+
   GpsData? waypoint;
   final ValueNotifier<double?> distanceToWaypoint = ValueNotifier(null);
   final ValueNotifier<double?> bearingToWaypoint = ValueNotifier(null);
