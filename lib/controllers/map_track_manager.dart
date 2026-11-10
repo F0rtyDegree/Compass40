@@ -178,6 +178,36 @@ class MapTrackManager {
     } catch (_) {}
   }
 
+  /// Читает стиль линии активного трека из SharedPreferences.
+  Future<void> loadTrackLineStyle() async {
+    final prefs = await SharedPreferences.getInstance();
+    final style = prefs.getInt(AppConstants.prefTrackLineStyle);
+    if (style == null) return;
+    setState(() {
+      state.trackLineStyle = style;
+    });
+  }
+
+  /// Читает цвет активного трека из SharedPreferences.
+  Future<void> loadTrackColor() async {
+    final prefs = await SharedPreferences.getInstance();
+    final color = prefs.getInt(AppConstants.prefTrackColor);
+    if (color == null) return;
+    setState(() {
+      state.trackColor = color;
+    });
+  }
+
+  /// Читает стиль линии загруженного трека из SharedPreferences.
+  Future<void> loadLoadedTrackLineStyle() async {
+    final prefs = await SharedPreferences.getInstance();
+    final style = prefs.getInt(AppConstants.prefLoadedTrackLineStyle);
+    if (style == null) return;
+    setState(() {
+      state.loadedTrackLineStyle = style;
+    });
+  }
+
   /// Читает цвет загруженного трека из SharedPreferences.
   Future<void> loadLoadedTrackColor() async {
     final prefs = await SharedPreferences.getInstance();

@@ -32,6 +32,19 @@ class AppConstants {
   static const String prefAnnounceScreenOffEnabled = 'announceScreenOffEnabled';
 
   static const int loadedTrackColorDefault = 0xFF00BCD4;
+  static const int trackColorDefault = 0xFFF44336;
+  static const String prefTrackColor = 'trackColor';
+  static const String prefTrackLineStyle = 'trackLineStyle';
+  static const int trackLineStyleDefault = 0;
+  static const String prefLoadedTrackLineStyle = 'loadedTrackLineStyle';
+  static const int loadedTrackLineStyleDefault = 3;
+  static const double trackDashLength = 12.0;
+  static const double trackDashGap = 8.0;
+  static const double trackDotStep = 15.0;
+  static const double trackArrowStepPx = 40.0;
+  static const double trackArrowLenPx = 20.0;
+  static const double trackArrowHeadLen = 6.0;
+  static const double trackArrowHeadAngle = 0.6;
   static const double loadedTrackStepPx = 40.0;
   static const double loadedTrackArrowLenPx = 20.0;
   static const double loadedTrackArrowHeadLen = 6.0;

@@ -49,6 +49,7 @@ class MapScreenLogic {
   onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
+  final Future<void> Function()? onSetWaypoint;
   final VoidCallback? onAnchorsChangedForStatus;
   late final PhotoSeverController photoSeverController;
 
@@ -70,6 +71,7 @@ class MapScreenLogic {
     this.onAnchorAdded,
     this.onStartNavigation,
     this.onCancelNavigation,
+    this.onSetWaypoint,
     this.onAnchorsChangedForStatus,
     required this.askDistanceDialog,
   });
@@ -135,6 +137,7 @@ class MapScreenLogic {
       onRecalculateTargets: recalculateTargetsAfterNewAnchor,
       screenToImage: screenToImage,
       onAnchorAdded: onAnchorAdded,
+      onSetWaypoint: onSetWaypoint,
       onStartPhotoSever: () => photoSeverController.start(),
     );
     targetManager = MapTargetManager(
@@ -188,6 +191,9 @@ class MapScreenLogic {
     };
     await followController.loadRotateModeTimeout();
     await trackManager.loadLoadedTrackColor();
+    await trackManager.loadTrackLineStyle();
+    await trackManager.loadTrackColor();
+    await trackManager.loadLoadedTrackLineStyle();
     _calibrationService.setMagneticDeclination(magneticDeclination);
     magneticDeclinationNotifier.addListener(_onMagneticDeclinationChanged);
     await _loadLastProject();

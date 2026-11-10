@@ -74,6 +74,15 @@ class MapScreenState {
   /// Цвет загруженного трека (ARGB int).
   int loadedTrackColor = AppConstants.loadedTrackColorDefault;
 
+  /// Стиль линии активного трека: 0 — сплошная, 1 — пунктир, 2 — точки, 3 — стрелки.
+  int trackLineStyle = AppConstants.trackLineStyleDefault;
+
+  /// Цвет активного трека (ARGB int).
+  int trackColor = AppConstants.trackColorDefault;
+
+  /// Стиль линии загруженного трека: 0 — сплошная, 1 — пунктир, 2 — точки, 3 — стрелки.
+  int loadedTrackLineStyle = AppConstants.loadedTrackLineStyleDefault;
+
   // Текущая позиция пользователя
   Offset? currentUserImagePoint;
   bool isGpsActive = false;

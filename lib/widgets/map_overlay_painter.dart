@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show PointMode;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../models/map_anchor.dart';
@@ -38,6 +39,15 @@ class MapOverlayPainter extends CustomPainter {
   /// Цвет загруженного трека (ARGB int).
   final int loadedTrackColor;
 
+  /// Стиль линии активного трека: 0 — сплошная, 1 — пунктир, 2 — точки, 3 — стрелки.
+  final int trackLineStyle;
+
+  /// Цвет активного трека (ARGB int).
+  final int trackColor;
+
+  /// Стиль линии загруженного трека.
+  final int loadedTrackLineStyle;
+
   /// Экранная позиция прицела. Центр кругов расстояния.
   final Offset? crosshairScreenPoint;
 
@@ -62,6 +72,9 @@ class MapOverlayPainter extends CustomPainter {
     this.crosshairScreenPoint,
     this.loadedTrackImagePoints = const [],
     this.loadedTrackColor = AppConstants.loadedTrackColorDefault,
+    this.trackLineStyle = AppConstants.trackLineStyleDefault,
+    this.trackColor = AppConstants.trackColorDefault,
+    this.loadedTrackLineStyle = AppConstants.loadedTrackLineStyleDefault,
   });
 
   @override
@@ -264,6 +277,49 @@ class MapOverlayPainter extends CustomPainter {
   void _drawLoadedTrack(Canvas canvas) {
     if (loadedTrackImagePoints.length < 2) return;
 
+    if (loadedTrackLineStyle != 3) {
+      final paint = Paint()
+        ..color = Color(loadedTrackColor)
+        ..strokeWidth = 3.0
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+
+      final path = Path();
+      final first = imageToScreen(loadedTrackImagePoints.first);
+      path.moveTo(first.dx, first.dy);
+      for (int i = 1; i < loadedTrackImagePoints.length; i++) {
+        final p = imageToScreen(loadedTrackImagePoints[i]);
+        path.lineTo(p.dx, p.dy);
+      }
+
+      if (loadedTrackLineStyle == 0) {
+        canvas.drawPath(path, paint);
+      } else if (loadedTrackLineStyle == 1) {
+        for (final metric in path.computeMetrics()) {
+          double distance = 0.0;
+          while (distance < metric.length) {
+            final end = (distance + AppConstants.trackDashLength)
+                .clamp(0.0, metric.length);
+            canvas.drawPath(metric.extractPath(distance, end), paint);
+            distance += AppConstants.trackDashLength + AppConstants.trackDashGap;
+          }
+        }
+      } else if (loadedTrackLineStyle == 2) {
+        for (final metric in path.computeMetrics()) {
+          final offsets = <Offset>[];
+          double distance = 0.0;
+          while (distance < metric.length) {
+            final tangent = metric.getTangentForOffset(distance);
+            if (tangent != null) offsets.add(tangent.position);
+            distance += AppConstants.trackDotStep;
+          }
+          canvas.drawPoints(PointMode.points, offsets, paint);
+        }
+      }
+      return;
+    }
+
     final paint = Paint()
       ..color = Color(loadedTrackColor)
       ..strokeWidth = 3.0
@@ -349,16 +405,98 @@ class MapOverlayPainter extends CustomPainter {
     if (trackImagePoints.length < 2) return;
 
     final trackPaint = Paint()
-      ..color = Colors.red.withAlpha((255 * 0.8).round())
+      ..color = Color(trackColor).withAlpha((255 * 0.8).round())
       ..strokeWidth = 6.0
       ..style = PaintingStyle.stroke
       ..strokeJoin = StrokeJoin.round
       ..strokeCap = StrokeCap.round;
 
+    if (trackLineStyle == 0) {
+      final path = Path();
+      final first = imageToScreen(trackImagePoints.first);
+      path.moveTo(first.dx, first.dy);
+      for (int i = 1; i < trackImagePoints.length; i++) {
+        final p = imageToScreen(trackImagePoints[i]);
+        path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(path, trackPaint);
+      return;
+    }
+
+    if (trackLineStyle == 3) {
+      final linePaint = Paint()
+        ..color = Color(trackColor).withAlpha((255 * 0.8).round())
+        ..strokeWidth = 3.0
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+      final arrowPaint = Paint()
+        ..color = Color(trackColor)
+        ..style = PaintingStyle.fill;
+
+      final path = Path();
+      final first = imageToScreen(trackImagePoints.first);
+      path.moveTo(first.dx, first.dy);
+      for (int i = 1; i < trackImagePoints.length; i++) {
+        final p = imageToScreen(trackImagePoints[i]);
+        path.lineTo(p.dx, p.dy);
+      }
+      canvas.drawPath(path, linePaint);
+
+      for (final metric in path.computeMetrics()) {
+        double distance = AppConstants.trackArrowStepPx;
+        while (distance < metric.length) {
+          final tangent = metric.getTangentForOffset(distance);
+          if (tangent != null) {
+            final dir = tangent.vector;
+            final tip = tangent.position;
+            final backX = -dir.dx * AppConstants.trackArrowHeadLen;
+            final backY = -dir.dy * AppConstants.trackArrowHeadLen;
+            final cosA = math.cos(AppConstants.trackArrowHeadAngle);
+            final sinA = math.sin(AppConstants.trackArrowHeadAngle);
+            final leftX = backX * cosA - backY * sinA;
+            final leftY = backX * sinA + backY * cosA;
+            final rightX = backX * cosA + backY * sinA;
+            final rightY = -backX * sinA + backY * cosA;
+            final arrowPath = Path()
+              ..moveTo(tip.dx, tip.dy)
+              ..lineTo(tip.dx + leftX, tip.dy + leftY)
+              ..lineTo(tip.dx + rightX, tip.dy + rightY)
+              ..close();
+            canvas.drawPath(arrowPath, arrowPaint);
+          }
+          distance += AppConstants.trackArrowStepPx;
+        }
+      }
+      return;
+    }
+
+    final path = Path();
+    final first = imageToScreen(trackImagePoints.first);
+    path.moveTo(first.dx, first.dy);
     for (int i = 1; i < trackImagePoints.length; i++) {
-      final p1 = imageToScreen(trackImagePoints[i - 1]);
-      final p2 = imageToScreen(trackImagePoints[i]);
-      canvas.drawLine(p1, p2, trackPaint);
+      final p = imageToScreen(trackImagePoints[i]);
+      path.lineTo(p.dx, p.dy);
+    }
+
+    for (final metric in path.computeMetrics()) {
+      if (trackLineStyle == 1) {
+        double distance = 0.0;
+        while (distance < metric.length) {
+          final end = (distance + AppConstants.trackDashLength).clamp(0.0, metric.length);
+          canvas.drawPath(metric.extractPath(distance, end), trackPaint);
+          distance += AppConstants.trackDashLength + AppConstants.trackDashGap;
+        }
+      } else if (trackLineStyle == 2) {
+        final offsets = <Offset>[];
+        double distance = 0.0;
+        while (distance < metric.length) {
+          final tangent = metric.getTangentForOffset(distance);
+          if (tangent != null) offsets.add(tangent.position);
+          distance += AppConstants.trackDotStep;
+        }
+        canvas.drawPoints(PointMode.points, offsets, trackPaint);
+      }
     }
   }
 
@@ -465,12 +603,19 @@ class MapOverlayPainter extends CustomPainter {
   }
 
   void _drawLine(Canvas canvas, Offset from, Offset to) {
+    final backgroundPaint = Paint()
+      ..color = Colors.white.withAlpha(200)
+      ..strokeWidth = 4.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
     final paint = Paint()
       ..color = Colors.red.withAlpha((255 * 0.7).round())
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
+    _drawDashedLine(canvas, from, to, backgroundPaint);
     _drawDashedLine(canvas, from, to, paint);
   }
 
@@ -606,7 +751,7 @@ class MapOverlayPainter extends CustomPainter {
     );
 
     final bgPaint = Paint()
-      ..color = Colors.white.withAlpha(77)
+      ..color = Colors.white.withAlpha(180)
       ..style = PaintingStyle.fill;
     // Овальные края: радиус равен половине высоты — форма капсулы.
     final rrect = RRect.fromRectAndRadius(
@@ -674,6 +819,15 @@ class MapOverlayPainter extends CustomPainter {
       return true;
     }
     if (oldDelegate.loadedTrackColor != loadedTrackColor) {
+      return true;
+    }
+    if (oldDelegate.trackLineStyle != trackLineStyle) {
+      return true;
+    }
+    if (oldDelegate.trackColor != trackColor) {
+      return true;
+    }
+    if (oldDelegate.loadedTrackLineStyle != loadedTrackLineStyle) {
       return true;
     }
 

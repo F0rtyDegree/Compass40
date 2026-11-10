@@ -26,6 +26,9 @@
     final _rotateModeTimeoutController = TextEditingController();
     final _announcePeriodController = TextEditingController();
     int _loadedTrackColor = AppConstants.loadedTrackColorDefault;
+    int _trackLineStyle = AppConstants.trackLineStyleDefault;
+    int _trackColor = AppConstants.trackColorDefault;
+    int _loadedTrackLineStyle = AppConstants.loadedTrackLineStyleDefault;
     double _compassSmoothness = AppConstants.compassSmoothnessDefault.toDouble();
     CompassMode _compassMode = CompassMode.magnetic;
     bool _announceTargetEnabled = true;
@@ -70,6 +73,15 @@
       _loadedTrackColor =
           prefs.getInt(AppConstants.prefLoadedTrackColor) ??
               AppConstants.loadedTrackColorDefault;
+      _trackLineStyle =
+          prefs.getInt(AppConstants.prefTrackLineStyle) ??
+              AppConstants.trackLineStyleDefault;
+      _trackColor =
+          prefs.getInt(AppConstants.prefTrackColor) ??
+              AppConstants.trackColorDefault;
+      _loadedTrackLineStyle =
+          prefs.getInt(AppConstants.prefLoadedTrackLineStyle) ??
+              AppConstants.loadedTrackLineStyleDefault;
 
       _compassSmoothness =
           (prefs.getInt(AppConstants.prefCompassSmoothness) ??
@@ -130,11 +142,59 @@
           AppConstants.prefAnnouncePeriod, announcePeriod < 0 ? 0 : announcePeriod);
 
       await prefs.setInt(AppConstants.prefLoadedTrackColor, _loadedTrackColor);
+      await prefs.setInt(AppConstants.prefTrackLineStyle, _trackLineStyle);
+      await prefs.setInt(AppConstants.prefTrackColor, _trackColor);
+      await prefs.setInt(AppConstants.prefLoadedTrackLineStyle, _loadedTrackLineStyle);
 
       await prefs.setBool(
           AppConstants.prefAnnounceTargetEnabled, _announceTargetEnabled);
       await prefs.setBool(
           AppConstants.prefAnnounceScreenOffEnabled, _announceScreenOffEnabled);
+    }
+
+    Future<void> _pickTrackColor(BuildContext context) async {
+      const palette = [
+        0xFF00BCD4, 0xFF2196F3, 0xFF4CAF50, 0xFF8BC34A, 0xFFFFEB3B,
+        0xFFFF9800, 0xFFF44336, 0xFFE91E63, 0xFF9C27B0, 0xFFFFFFFF,
+      ];
+      final selected = await showDialog<int>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('Цвет активного трека'),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: palette.map((argb) {
+                  final isCurrent = argb == _trackColor;
+                  return GestureDetector(
+                    onTap: () => Navigator.pop(ctx, argb),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Color(argb),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isCurrent ? Colors.blue : Colors.grey,
+                          width: isCurrent ? 3 : 1,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (selected != null) {
+        setState(() {
+          _trackColor = selected;
+        });
+      }
     }
 
     Future<void> _pickLoadedTrackColor(BuildContext context) async {
@@ -535,11 +595,85 @@
                         suffix: 'мс',
                       ),
                       const SizedBox(height: 10),
+                      Text('Активный трек',
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 6),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Цвет загруженного трека:',
+                            'Тип линии:',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          DropdownButton<int>(
+                            value: _trackLineStyle,
+                            items: const [
+                              DropdownMenuItem(value: 0, child: Text('Сплошная')),
+                              DropdownMenuItem(value: 1, child: Text('Пунктир')),
+                              DropdownMenuItem(value: 2, child: Text('Точки')),
+                              DropdownMenuItem(value: 3, child: Text('Стрелки')),
+                            ],
+                            onChanged: (v) {
+                              if (v == null) return;
+                              setState(() => _trackLineStyle = v);
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Цвет:',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          GestureDetector(
+                            onTap: () => _pickTrackColor(context),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Color(_trackColor),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Загруженный трек',
+                          style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Тип линии:',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          DropdownButton<int>(
+                            value: _loadedTrackLineStyle,
+                            items: const [
+                              DropdownMenuItem(value: 0, child: Text('Сплошная')),
+                              DropdownMenuItem(value: 1, child: Text('Пунктир')),
+                              DropdownMenuItem(value: 2, child: Text('Точки')),
+                              DropdownMenuItem(value: 3, child: Text('Стрелки')),
+                            ],
+                            onChanged: (v) {
+                              if (v == null) return;
+                              setState(() => _loadedTrackLineStyle = v);
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Цвет:',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           GestureDetector(

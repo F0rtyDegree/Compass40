@@ -219,6 +219,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                       },
                       onStartNavigation: _logic.startNavigationFromExternal,
                       onCancelNavigation: _logic.cancelExternalNavigation,
+                      onSetWaypoint: _logic.setWaypoint,
                     ),
                   ),
                 ).then((_) => _logic.reloadSettings());

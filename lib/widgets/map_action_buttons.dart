@@ -41,6 +41,7 @@ class MapActionButtons extends StatelessWidget {
           onTap: onHereNowPressed,
           onLongPress: onHereFromClipboard,
           enabled: hereEnabled,
+          longPressEnabled: true,
         ),
       ],
     );
@@ -53,12 +54,13 @@ class MapActionButtons extends StatelessWidget {
     VoidCallback? onTap,
     VoidCallback? onLongPress,
     bool enabled = true,
+    bool longPressEnabled = true,
   }) {
     return Opacity(
       opacity: enabled ? 1.0 : 0.45,
       child: GestureDetector(
         onTap: enabled ? onTap : null,
-        onLongPress: enabled ? onLongPress : null,
+        onLongPress: longPressEnabled ? onLongPress : null,
         child: Container(
           width: 75,
           height: 75,

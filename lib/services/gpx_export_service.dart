@@ -30,47 +30,6 @@ class GpxExportService {
       buffer.writeln('  </wpt>');
     }
 
-    // --- 2. Waypoints: Цели (TargetCreationLogEntry) ---
-    final targetEntries = logItems.whereType<TargetCreationLogEntry>().toList();
-    for (int i = 0; i < targetEntries.length; i++) {
-      final entry = targetEntries[i];
-      final lat = entry.targetLatitude.toStringAsFixed(6);
-      final lon = entry.targetLongitude.toStringAsFixed(6);
-      final time = entry.timestamp.toUtc().toIso8601String();
-      final name = 'ЦЕЛЬ${i + 1}';
-      final desc = '${entry.distance.round()}м ${entry.azimuth.round()}°';
-      buffer.writeln('  <wpt lat="$lat" lon="$lon">');
-      buffer.writeln('    <time>$time</time>');
-      buffer.writeln('    <name>$name</name>');
-      buffer.writeln('    <desc><![CDATA[$desc]]></desc>');
-      buffer.writeln('  </wpt>');
-    }
-
-    // --- 2.5. Waypoints: Точки привязки (MapAnchorLogEntry) ---
-    final anchorEntries = logItems.whereType<MapAnchorLogEntry>().toList();
-    for (int i = 0; i < anchorEntries.length; i++) {
-      final entry = anchorEntries[i];
-      final lat = entry.latitude.toStringAsFixed(6);
-      final lon = entry.longitude.toStringAsFixed(6);
-
-      // Используем timestamp напрямую, так как timeStr удален
-      final time = entry.timestamp.toUtc().toIso8601String();
-
-      final name = 'ТП${i + 1}';
-      String desc = '';
-      if (entry.distanceFromPrevious != null) {
-        desc = '${entry.distanceFromPrevious!.round()}м';
-      }
-      
-      buffer.writeln('  <wpt lat="$lat" lon="$lon">');
-      buffer.writeln('    <time>$time</time>');
-      buffer.writeln('    <name>$name</name>');
-      if (desc.isNotEmpty) {
-        buffer.writeln('    <desc><![CDATA[$desc]]></desc>');
-      }
-      buffer.writeln('  </wpt>');
-    }
-
     // --- 3. Трек (из CSV) ---
     if (trackPoints.isNotEmpty) {
       final fileName = DateTime.now()

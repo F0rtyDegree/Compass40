@@ -27,6 +27,7 @@ class MapAnchorManager {
   final Function(double lat, double lon, double? distance, DateTime createdAt)?
   onAnchorAdded;
   final VoidCallback? onStartPhotoSever;
+  final Future<void> Function()? onSetWaypoint;
 
   List<Map<String, String>>? cachedGpxPoints;
 
@@ -45,6 +46,7 @@ class MapAnchorManager {
     required this.screenToImage,
     this.onAnchorAdded,
     this.onStartPhotoSever,
+    this.onSetWaypoint,
   });
 
   /// Сохраняет список точек из GPX в проект для быстрого доступа.
@@ -163,6 +165,13 @@ class MapAnchorManager {
               onStartPhotoSever?.call();
             },
             child: const Text('ФотоСевер'),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              onSetWaypoint?.call();
+            },
+            child: const Text('Отметить КП'),
           ),
         ],
       ),
@@ -304,7 +313,7 @@ class MapAnchorManager {
     });
 
     calibrationService.updateAnchors(state.project!.anchors);
-    onAnchorsChanged(enableFollow: true);
+    onAnchorsChanged();
     await onRecalculateTargets(restartNavigation: true);
     await _autoSaveLocusXml();
 

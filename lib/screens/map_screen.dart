@@ -35,6 +35,7 @@ class MapScreen extends StatefulWidget {
   onAnchorAdded;
   final StartNavigationCallback? onStartNavigation;
   final VoidCallback? onCancelNavigation;
+  final Future<void> Function()? onSetWaypoint;
 
   const MapScreen({
     super.key,
@@ -48,7 +49,8 @@ class MapScreen extends StatefulWidget {
     this.onAnchorAdded,
     this.onStartNavigation,
     this.onCancelNavigation,
-  });
+    this.onSetWaypoint,
+  }); 
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -96,6 +98,7 @@ class _MapScreenState extends State<MapScreen> {
       onAnchorAdded: widget.onAnchorAdded,
       onStartNavigation: widget.onStartNavigation,
       onCancelNavigation: widget.onCancelNavigation,
+      onSetWaypoint: widget.onSetWaypoint,
       askDistanceDialog: _showPhotoSeverDistanceDialog,
       onAnchorsChangedForStatus: _updateStatusText, // <-- Наша новая связь
     );
@@ -272,6 +275,9 @@ class _MapScreenState extends State<MapScreen> {
                   trackImagePoints: _state.trackImagePoints,
                   loadedTrackImagePoints: _state.loadedTrackImagePoints,
                   loadedTrackColor: _state.loadedTrackColor,
+                  trackLineStyle: _state.trackLineStyle,
+                  trackColor: _state.trackColor,
+                  loadedTrackLineStyle: _state.loadedTrackLineStyle,
                   targets: [
                     ..._state.project?.targets ?? [],
                     if (_state.plannedTarget != null) _state.plannedTarget!,
