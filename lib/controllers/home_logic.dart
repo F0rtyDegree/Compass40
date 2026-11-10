@@ -31,7 +31,7 @@ class HomeLogic {
   final SensorService sensorService;
   final GpsManager _gpsManager = GpsManager();
   final CompassService _compassService = CompassService();
-  
+
   StreamSubscription<GpsData>? _gpsSubscription;
   StreamSubscription? _headingSubscription;
 
@@ -76,16 +76,7 @@ class HomeLogic {
     ScreenStateService().isScreenOn.addListener(_onScreenStateChanged);
     await TtsService().init();
     AnnouncerController().register(_handleAnnounceIntent);
-    await _compassService.start();
-    _headingSubscription = _compassService.dataStream.listen((data) {
-      final useGps = _useGpsCompass();
-      if (!useGps) {
-        state.headingNotifier.value = data.heading;
-      }
-      state.accuracyNotifier.value = data.accuracy;
-      state.calibrationProgressNotifier.value = data.calibrationProgress;
-      state.calibrationStaleNotifier.value = data.calibrationStale;
-    });
+    await _applyCompassMode(state.compassMode);
   }
 
   void dispose() {
@@ -122,8 +113,10 @@ class HomeLogic {
 
     final settings = await sensorService.loadSettings();
     setState(() {
-      state.announceTargetEnabled = prefs.getBool(AppConstants.prefAnnounceTargetEnabled) ?? true;
-      state.announceScreenOffEnabled = prefs.getBool(AppConstants.prefAnnounceScreenOffEnabled) ?? false;
+      state.announceTargetEnabled =
+          prefs.getBool(AppConstants.prefAnnounceTargetEnabled) ?? true;
+      state.announceScreenOffEnabled =
+          prefs.getBool(AppConstants.prefAnnounceScreenOffEnabled) ?? false;
       state.useManualDeclination = settings.useManualDeclination;
       state.magneticDeclination = settings.magneticDeclination;
       state.magneticDeclinationNotifier.value = settings.magneticDeclination;
@@ -138,6 +131,7 @@ class HomeLogic {
 
   Future<void> reloadSettings() async {
     await _loadAllSettings();
+    await _applyCompassMode(state.compassMode);
     final settings = await sensorService.loadSettings();
     GpsCompassService.instance.updateSettings(settings);
     _compassService.updateSettings(settings);
@@ -145,13 +139,13 @@ class HomeLogic {
     await loadLogEntries();
   }
 
-  Future<void> setCompassMode(CompassMode mode) async {
-    setState(() {
-      state.compassMode = mode;
-    });
-    await sensorService.saveCompassMode(mode);
-    _onGpsActiveChanged();
-  }
+Future<void> setCompassMode(CompassMode mode) async {
+  setState(() {
+    state.compassMode = mode;
+  });
+  await sensorService.saveCompassMode(mode);
+  await _applyCompassMode(mode);
+}
 
   Future<void> setAutoSwitchSpeed(double speedKmh) async {
     setState(() {
@@ -160,35 +154,27 @@ class HomeLogic {
     await sensorService.saveAutoSwitchSpeed(speedKmh);
   }
 
-  Future<void> _initServicesAndPermissions() async {
-    if (await sensorService.requestLocationPermission()) {
-      final settings = await sensorService.loadSettings();
-      GpsCompassService.instance.start(settings);
-      GpsCompassService.instance.bearingNotifier.addListener(
-        _onGpsBearingChanged,
-      );
-      GpsCompassService.instance.isActiveNotifier.addListener(
-        _onGpsActiveChanged,
-      );
-      await _subscribeToGpsDataStream();
-    }
+Future<void> _initServicesAndPermissions() async {
+  if (await sensorService.requestLocationPermission()) {
+    await _subscribeToGpsDataStream();
   }
+}
+
   void _updateTrackTooltip() {
     if (_trackStartTime == null) return;
     final duration = DateTime.now().difference(_trackStartTime!);
     final h = duration.inHours;
     final m = duration.inMinutes % 60;
     final s = duration.inSeconds % 60;
-        final timeStr = h > 0
-        ? '$hч $mм $sс'
-        : '$mм $sс';
-    final distStr = _trackLength >= 1000 
+    final timeStr = h > 0 ? '$hч $mм $sс' : '$mм $sс';
+    final distStr = _trackLength >= 1000
         ? '${(_trackLength / 1000).toStringAsFixed(2)} км'
         : '${_trackLength.round()} м';
-        
-    state.trackTooltipNotifier.value = 
+
+    state.trackTooltipNotifier.value =
         'Точек: $_trackPointCount\nДлина: $distStr\nВремя: $timeStr';
   }
+
   Future<void> _subscribeToGpsDataStream() async {
     final settings = await sensorService.loadSettings();
     _gpsManager.start(settings.gpsInterval);
@@ -196,14 +182,15 @@ class HomeLogic {
       (gpsData) {
         state.gpsDataNotifier.value = gpsData;
         // Если идёт запись, обновляем статистику.
-        if (state.isRecordingTrack && 
-            gpsData.latitude != null && 
+        if (state.isRecordingTrack &&
+            gpsData.latitude != null &&
             gpsData.longitude != null) {
-          
           if (_lastTrackLat != null && _lastTrackLon != null) {
             _trackLength += calculateDistance(
-              _lastTrackLat!, _lastTrackLon!,
-              gpsData.latitude!, gpsData.longitude!,
+              _lastTrackLat!,
+              _lastTrackLon!,
+              gpsData.latitude!,
+              gpsData.longitude!,
             );
           }
           _lastTrackLat = gpsData.latitude;
@@ -494,12 +481,11 @@ class HomeLogic {
     );
   }
 
-
   Future<void> _checkAndRecoverTrack() async {
     final wasRecording = await TrackRecorder.recoverIfNeeded();
     if (wasRecording) {
       await _trackRecorder.initializeForRecovery();
-      
+
       // Восстанавливаем статистику
       final points = await _trackRecorder.getTrackPoints();
       if (points.isNotEmpty) {
@@ -507,8 +493,10 @@ class HomeLogic {
         _trackLength = 0.0;
         for (int i = 1; i < points.length; i++) {
           _trackLength += calculateDistance(
-            points[i - 1].$2, points[i - 1].$3,
-            points[i].$2, points[i].$3,
+            points[i - 1].$2,
+            points[i - 1].$3,
+            points[i].$2,
+            points[i].$3,
           );
         }
         _lastTrackLat = points.last.$2;
@@ -525,7 +513,7 @@ class HomeLogic {
     }
   }
 
-    Future<void> toggleTrackRecording() async {
+  Future<void> toggleTrackRecording() async {
     if (state.isRecordingTrack) {
       await _trackRecorder.stop();
       setState(() {
@@ -581,35 +569,34 @@ class HomeLogic {
     await _trackRecorder.clear();
   }
 
-String getAccuracyText(double accuracy) {
-  switch (accuracy.toInt()) {
-    case 0:
-      return 'нет данных';
-    case 1:
-      return 'Калибровка: нет';
-    case 2:
-      return 'Калибровка: средняя';
-    case 3:
-      return 'Калибровка: ОК';
-    default:
-      return 'Инициализация...';
+  String getAccuracyText(double accuracy) {
+    switch (accuracy.toInt()) {
+      case 0:
+        return 'нет данных';
+      case 1:
+        return 'Калибровка: нет';
+      case 2:
+        return 'Калибровка: средняя';
+      case 3:
+        return 'Калибровка: ОК';
+      default:
+        return 'Инициализация...';
+    }
   }
-}
 
-Color getAccuracyStatusColor(double accuracy) {
-  switch (accuracy.toInt()) {
-    case 0:
-    case 1: 
-      return Colors.redAccent;    // Красный флаг для сбитого компаса [health]
-    case 2: 
-      return Colors.orangeAccent; // Оранжевый для средних помех
-    case 3: 
-      return Colors.green;        // Зеленый — всё идеально
-    default: 
-      return Colors.grey;
+  Color getAccuracyStatusColor(double accuracy) {
+    switch (accuracy.toInt()) {
+      case 0:
+      case 1:
+        return Colors.redAccent; // Красный флаг для сбитого компаса [health]
+      case 2:
+        return Colors.orangeAccent; // Оранжевый для средних помех
+      case 3:
+        return Colors.green; // Зеленый — всё идеально
+      default:
+        return Colors.grey;
+    }
   }
-}
-
 
   String getCardinalDirection(double heading) {
     if (heading >= 337.5 || heading < 22.5) return 'Север';
@@ -667,5 +654,79 @@ Color getAccuracyStatusColor(double accuracy) {
     } else {
       state.headingValidNotifier.value = false;
     }
+  }
+
+  void _onCompassData(CompassData data) {
+    final useGps = _useGpsCompass();
+    if (!useGps) {
+      state.headingNotifier.value = data.heading;
+    }
+    state.accuracyNotifier.value = data.accuracy;
+    state.calibrationProgressNotifier.value = data.calibrationProgress;
+    state.calibrationStaleNotifier.value = data.calibrationStale;
+  }
+
+  Future<void> _applyCompassMode(CompassMode mode) async {
+    final settings = await sensorService.loadSettings();
+
+    switch (mode) {
+      case CompassMode.magnetic:
+        GpsCompassService.instance.stop();
+        GpsCompassService.instance.bearingNotifier.removeListener(
+          _onGpsBearingChanged,
+        );
+        GpsCompassService.instance.isActiveNotifier.removeListener(
+          _onGpsActiveChanged,
+        );
+        if (_headingSubscription == null) {
+          await _compassService.start();
+          _headingSubscription = _compassService.dataStream.listen(
+            _onCompassData,
+          );
+        }
+        break;
+
+      case CompassMode.gps:
+        await _headingSubscription?.cancel();
+        _headingSubscription = null;
+        _compassService.stop();
+        GpsCompassService.instance.start(settings);
+        GpsCompassService.instance.bearingNotifier.removeListener(
+          _onGpsBearingChanged,
+        );
+        GpsCompassService.instance.bearingNotifier.addListener(
+          _onGpsBearingChanged,
+        );
+        GpsCompassService.instance.isActiveNotifier.removeListener(
+          _onGpsActiveChanged,
+        );
+        GpsCompassService.instance.isActiveNotifier.addListener(
+          _onGpsActiveChanged,
+        );
+        break;
+
+      case CompassMode.auto:
+        if (_headingSubscription == null) {
+          await _compassService.start();
+          _headingSubscription = _compassService.dataStream.listen(
+            _onCompassData,
+          );
+        }
+        GpsCompassService.instance.start(settings);
+        GpsCompassService.instance.bearingNotifier.removeListener(
+          _onGpsBearingChanged,
+        );
+        GpsCompassService.instance.bearingNotifier.addListener(
+          _onGpsBearingChanged,
+        );
+        GpsCompassService.instance.isActiveNotifier.removeListener(
+          _onGpsActiveChanged,
+        );
+        GpsCompassService.instance.isActiveNotifier.addListener(
+          _onGpsActiveChanged,
+        );
+        break;
+    }
+    _onGpsActiveChanged();
   }
 }
