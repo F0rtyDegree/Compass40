@@ -28,6 +28,7 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
     }
 
     private var activity: Activity? = null
+    private var activityBinding: ActivityPluginBinding? = null
     private lateinit var locationManager: LocationManager
     private var eventSink: EventChannel.EventSink? = null
     private val GPS_DATA_CHANNEL_NAME = "com.example.gps_info/gps_data_stream"
@@ -71,10 +72,13 @@ class GpsInfoPlugin : FlutterPlugin, ActivityAware,
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
+        activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
     }
 
     override fun onDetachedFromActivity() {
+        activityBinding?.removeRequestPermissionsResultListener(this)
+        activityBinding = null
         activity = null
     }
 

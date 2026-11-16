@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:gps_info/gps_info.dart';
-
+import '../utils/app_constants.dart';
 import '../log_entry.dart';
 
 // Режимы компаса
@@ -30,7 +30,7 @@ class HomeState {
   CompassMode compassMode = CompassMode.auto;
 
   // Скорость автопереключения км/ч
-  double autoSwitchSpeedKmh = 3.0;
+  double autoSwitchSpeedKmh = AppConstants.autoSwitchSpeedDefaultKmh;
 
   double magneticDeclination = 0.0;
   final ValueNotifier<double> magneticDeclinationNotifier =

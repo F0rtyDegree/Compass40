@@ -45,7 +45,8 @@ class GpsCompassService {
   void _onGpsData(GpsData data) {
     final speedKmh = (data.speed ?? 0) * 3.6;
     final trueBearing = data.gpsBearing;
-    final threshold = _settings?.autoSwitchSpeedKmh ?? 3.0;
+    final threshold =
+        _settings?.autoSwitchSpeedKmh ?? AppConstants.autoSwitchSpeedDefaultKmh;
 
     final useManual = _settings?.useManualDeclination ?? false;
     final declination = useManual
@@ -63,12 +64,15 @@ class GpsCompassService {
       // Скорость упала ниже порога — буфер устарел.
       // Чистим, чтобы при следующем наборе скорости не использовать
       // сэмплы из старого направления движения.
+      // ВАЖНО: bearingNotifier НЕ сбрасывается — хранит последнее известное
+      // направление. При остановке GPS-компас "замирает" на нём, а не гаснет.
+      // Сброс произойдёт только при явном stop() или dispose().
       _samples.clear();
       isActiveNotifier.value = false;
     }
   }
 
-  Future<void> _processSamples() async {
+  void _processSamples() {
     final windowSize = _settings?.gpsAveragingSamples ?? 3;
     if (_samples.length < windowSize) {
       isActiveNotifier.value = false;

@@ -54,6 +54,11 @@ class MapActionButtons extends StatelessWidget {
     VoidCallback? onTap,
     VoidCallback? onLongPress,
     bool enabled = true,
+    // Короткий тап подчиняется enabled, длинный — longPressEnabled.
+    // Для кнопки Я ЗДЕСЬ это значит: в follow mode короткий тап заблокирован
+    // (якорь ложится в прицел, а прицел смещён), длинный доступен всегда,
+    // потому что меню Я ЗДЕСЬ (буфер, GPX, ФотоСевер, КП) от прицела не зависит.
+    // При рефакторинге не связывать longPressEnabled с enabled без причины.
     bool longPressEnabled = true,
   }) {
     return Opacity(

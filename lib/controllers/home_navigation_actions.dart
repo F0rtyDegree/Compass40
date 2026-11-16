@@ -34,7 +34,9 @@ class HomeNavigationActions {
   }
 
   Future<void> handleVerticalDragEnd(DragEndDetails details) async {
-    if (details.primaryVelocity! < 0) {
+    final velocity = details.primaryVelocity;
+    if (velocity == null) return;
+    if (velocity < 0) {
       await Navigator.push(
         context,
         MaterialPageRoute(builder: (c) => LogScreen(logItems: state.logItems)),

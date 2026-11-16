@@ -12,6 +12,19 @@ void removeImageFromCache(String path) {
   image?.dispose();
 }
 
+/// Возвращает изображение из кэша. Если нет — декодирует и кладёт в кэш.
+/// Владелец — кэш. Вызывающий не должен вызывать dispose.
+Future<ui.Image> getOrCreateImage(String path) async {
+  final cached = _imageCache[path];
+  if (cached != null) return cached;
+  final bytes = await File(path).readAsBytes();
+  final codec = await ui.instantiateImageCodec(bytes);
+  final frame = await codec.getNextFrame();
+  final image = frame.image;
+  _imageCache[path] = image;
+  return image;
+}
+
 /// Отрисовывает изображение карты с трансформацией.
 class MapImageLayer extends StatefulWidget {
   final String imagePath;

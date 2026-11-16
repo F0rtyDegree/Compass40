@@ -77,7 +77,7 @@ class AppConstants {
   static const int rotateModeTimeoutDefaultMs = 1000;
   static const double smoothingFactorDefault = 0.5;
 
-  static const double minMapScale = 0.05;
+  static const double minMapScale = 0.001;
   static const double maxMapScale = 20.0;
 
   static const double imageFitPaddingFactor = 0.92;

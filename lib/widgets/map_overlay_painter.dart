@@ -802,8 +802,8 @@ class MapOverlayPainter extends CustomPainter {
       return true;
     }
 
-    // Pending-якорь: проверка наличия
-    if ((oldDelegate.pendingAnchor == null) != (pendingAnchor == null)) {
+    // Pending-якорь: полное сравнение (Equatable).
+    if (oldDelegate.pendingAnchor != pendingAnchor) {
       return true;
     }
 

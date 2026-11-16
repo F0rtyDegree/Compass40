@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:gps_info/gps_info.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../services/log_service.dart';
 import '../services/sensor_service.dart';
 import '../services/gps_manager.dart';
@@ -59,11 +58,6 @@ class HomeLogic {
   });
 
   Future<void> init() async {
-    final status = await Permission.storage.request();
-    if (!status.isGranted) {
-      await Permission.manageExternalStorage.request();
-    }
-
     await FileLogger.init();
     FileLogger.writeLog('Compass40 start');
 
@@ -154,11 +148,12 @@ Future<void> setCompassMode(CompassMode mode) async {
     await sensorService.saveAutoSwitchSpeed(speedKmh);
   }
 
-Future<void> _initServicesAndPermissions() async {
-  if (await sensorService.requestLocationPermission()) {
-    await _subscribeToGpsDataStream();
+  Future<void> _initServicesAndPermissions() async {
+    if (await sensorService.requestLocationPermission()) {
+      startBackgroundService();
+      await _subscribeToGpsDataStream();
+    }
   }
-}
 
   void _updateTrackTooltip() {
     if (_trackStartTime == null) return;

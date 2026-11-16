@@ -49,9 +49,8 @@ class _GpsSectionState extends State<GpsSection> {
     return ValueListenableBuilder<GpsData>(
       valueListenable: widget.gpsDataNotifier,
       builder: (context, gps, _) {
-        return ValueListenableBuilder<double>(
-          valueListenable: widget.accuracyNotifier,
-          builder: (context, acc, _) {
+        return Builder(
+          builder: (context) {
             final speedKmh = (gps.speed ?? 0) * 3.6;
             final decl = widget.magneticDeclination;
 

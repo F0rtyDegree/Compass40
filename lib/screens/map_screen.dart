@@ -641,7 +641,10 @@ class _MapScreenState extends State<MapScreen> {
       final rotationChange = details.rotation.abs();
       final pivotScreen = _logic.getCrosshairScreenPoint();
       if (scaleChange > rotationChange) {
-        final newScale = (_gestureStartScale * details.scale).clamp(0.05, 20.0);
+        final newScale = (_gestureStartScale * details.scale).clamp(
+          AppConstants.minMapScale,
+          AppConstants.maxMapScale,
+        );
         _applyTransformWithPivot(
           pivotImage: _gestureStartPivotImage,
           pivotScreen: pivotScreen,

@@ -15,24 +15,48 @@ class AffineTransform {
     final w = weights ?? List.filled(n, 1.0);
     if (w.length != n) throw ArgumentError('weights length mismatch');
 
+    // Центрирование координат перед решением нормальных уравнений.
+    // Без центрирования элементы матрицы A^T A имеют разброс порядков:
+    // пиксели ~1e3 (в квадрате ~1e6), градусы ~1e-2 (в квадрате ~1e-4).
+    // Число обусловленности системы достигает 1e12, точность решения падает.
+    // После вычитания средних координаты становятся ~1e2 и ~1e-3,
+    // обусловленность снижается на несколько порядков.
+    double sx = 0, sy = 0, su = 0, sv = 0;
+    for (int i = 0; i < n; i++) {
+      sx += imagePoints[i].dx;
+      sy += imagePoints[i].dy;
+      su += geoPoints[i].dx;
+      sv += geoPoints[i].dy;
+    }
+    final mx = sx / n;
+    final my = sy / n;
+    final mu = su / n;
+    final mv = sv / n;
+
     final ata = List.generate(6, (_) => List.filled(6, 0.0));
     final atb = List.filled(6, 0.0);
 
     for (int i = 0; i < n; i++) {
       final weight = w[i];
-      final x = imagePoints[i].dx;
-      final y = imagePoints[i].dy;
-      final u = geoPoints[i].dx;
-      final v = geoPoints[i].dy;
+      final x = imagePoints[i].dx - mx;
+      final y = imagePoints[i].dy - my;
+      final u = geoPoints[i].dx - mu;
+      final v = geoPoints[i].dy - mv;
 
       _addRow(ata, atb, [x, y, 1, 0, 0, 0], u, weight);
       _addRow(ata, atb, [0, 0, 0, x, y, 1], v, weight);
     }
 
     final solution = _solve6x6(ata, atb);
+
+    // Восстановление свободных членов после центрирования.
+    // c = ū - a*x̄ - b*ȳ,  f = v̄ - d*x̄ - e*ȳ.
+    final c = mu - solution[0] * mx - solution[1] * my;
+    final f = mv - solution[3] * mx - solution[4] * my;
+
     return AffineTransform._([
-      solution[0], solution[1], solution[2],
-      solution[3], solution[4], solution[5],
+      solution[0], solution[1], c,
+      solution[3], solution[4], f,
       0, 0, 1,
     ]);
   }

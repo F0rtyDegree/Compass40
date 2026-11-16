@@ -17,6 +17,7 @@ import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import '../services/gps_compass_service.dart';
 import '../services/locus_calibration_service.dart';
+import '../services/locus_xml_auto_saver.dart';
 import 'map_screen_state.dart';
 import '../services/sensor_service.dart';
 import 'map_anchor_manager.dart';
@@ -121,6 +122,9 @@ class MapScreenLogic {
     return imageScale / state.transformState.scale;
   }
 
+  // Дебаунс сохранения трансформации карты.
+  Timer? _transformSaveTimer;
+
   // Динамическая компенсация (мс)
   double _compensationMs = 1500.0;
   static const String _compensationPrefKey =
@@ -216,6 +220,10 @@ class MapScreenLogic {
       _onGpsActiveChanged,
     );
     gpsDataNotifier.removeListener(_onGpsDataChanged);
+    _transformSaveTimer?.cancel();
+    if (state.project != null && state.transformState != const MapTransformState()) {
+      storageService.saveTransform(state.project!.id, state.transformState);
+    }
     if (state.project != null) {
       // saveProject асинхронный, но dispose синхронный — await здесь невозможен.
       // Осознанно оставлено без await. Все критичные изменения проекта уже
@@ -367,14 +375,12 @@ class MapScreenLogic {
     final file = File(state.imagePath!);
     if (!await file.exists()) return;
 
-    final bytes = await file.readAsBytes();
-    final decoded = await decodeImageFromList(bytes);
+    // Используем кэш, чтобы не декодировать дважды.
+    // Владелец — кэш, dispose не вызываем.
+    final decoded = await getOrCreateImage(state.imagePath!);
 
     final imgW = decoded.width.toDouble();
     final imgH = decoded.height.toDouble();
-
-    // Освобождаем нативный ресурс — размеры уже извлечены.
-    decoded.dispose();
 
     setState(() {
       state.imageSize = Size(imgW, imgH);
@@ -420,22 +426,6 @@ class MapScreenLogic {
   // --------------------------------------------------------
   // Выбор фото
   // --------------------------------------------------------
-
-  Future<void> _autoSaveLocusXml(MapProject project) async {
-    if (project.imagePath.isEmpty) return;
-    final photoPath = project.originalImagePath ?? project.imagePath;
-    final imageName = photoPath.split('/').last;
-    final dotIndex = imageName.lastIndexOf('.');
-    final nameWithoutExt = dotIndex > 0 ? imageName.substring(0, dotIndex) : imageName;
-    final xmlPath = '${AppConstants.externalDownloadDir}/${AppConstants.compassFolderName}/$nameWithoutExt.xml';
-    try {
-      await LocusCalibrationService.saveCalibration(
-        outputPath: xmlPath,
-        photoPath: photoPath,
-        anchors: project.anchors,
-      );
-    } catch (_) {}
-  }
 
   Future<void> pickLocusXml() async {
     try {
@@ -487,7 +477,7 @@ class MapScreenLogic {
       await _loadImageSize();
 
       // Сохраняем актуальный XML для внутренней копии.
-      await _autoSaveLocusXml(project);
+      await LocusXmlAutoSaver.save(project);
     } catch (e) {
       showSnackBar('Ошибка загрузки привязки: $e');
     }
@@ -527,7 +517,7 @@ class MapScreenLogic {
       );
 
       await storageService.saveProject(project);
-            await _autoSaveLocusXml(project);
+            await LocusXmlAutoSaver.save(project);
       await storageService.setCurrentProjectId(projectId);
 
       setState(() {
@@ -611,7 +601,7 @@ class MapScreenLogic {
     if (project == null) return;
     final updatedProject = project.copyWith(anchors: []);
     await storageService.saveProject(updatedProject);
-        await _autoSaveLocusXml(updatedProject);
+        await LocusXmlAutoSaver.save(updatedProject);
     setState(() {
       state.project = updatedProject;
       state.workingPair = null;
@@ -639,6 +629,8 @@ class MapScreenLogic {
           state.activeTarget = null;
         });
       }
+      // Синхронизируем с главным экраном: убираем строку цели.
+      onCancelNavigation?.call();
     }
     //    showSnackBar('Все якоря удалены');
   }
@@ -661,7 +653,12 @@ class MapScreenLogic {
     _recalculateCrosshairImagePoint();
 
     if (state.project != null && !state.followMode) {
-      storageService.saveTransform(state.project!.id, newTransform);
+      _transformSaveTimer?.cancel();
+      _transformSaveTimer = Timer(const Duration(milliseconds: 500), () {
+        final project = state.project;
+        if (project == null || state.isDisposed) return;
+        storageService.saveTransform(project.id, state.transformState);
+      });
     }
   }
 
@@ -1296,10 +1293,13 @@ class MapScreenLogic {
     final project = state.project;
     if (project == null) return;
 
-    // Пересчитываем только активную цель. Пройденные — история,
+    // Пересчитываем активные и запланированные цели. Пройденные — история,
     // их координаты фиксированы на момент прохождения.
     final updatedTargets = project.targets.map((t) {
-      if (t.status != MapTargetStatus.active) return t;
+      if (t.status != MapTargetStatus.active &&
+          t.status != MapTargetStatus.planned) {
+        return t;
+      }
       final geo = _calibrationService.imagePointToGeoFromCurrent(
         Offset(t.imageX, t.imageY),
       );
@@ -1313,10 +1313,30 @@ class MapScreenLogic {
     final newActiveTarget = updatedTargets.firstWhereOrNull(
       (t) => t.status == MapTargetStatus.active,
     );
+    final newPlannedTarget = updatedTargets.firstWhereOrNull(
+      (t) => t.status == MapTargetStatus.planned,
+    );
+
+    // Планируемая цель, созданная кнопкой ЦЕЛЬ, но ещё не активированная,
+    // в project.targets отсутствует. Пересчитываем её отдельно.
+    MapTarget? plannedFromState = state.plannedTarget;
+    if (plannedFromState != null &&
+        !updatedTargets.any((t) => t.id == plannedFromState!.id)) {
+      final geo = _calibrationService.imagePointToGeoFromCurrent(
+        Offset(plannedFromState.imageX, plannedFromState.imageY),
+      );
+      if (geo != null) {
+        plannedFromState = plannedFromState.copyWith(
+          latitude: geo.latitude,
+          longitude: geo.longitude,
+        );
+      }
+    }
 
     setState(() {
       state.project = updatedProject;
       state.activeTarget = newActiveTarget;
+      state.plannedTarget = newPlannedTarget ?? plannedFromState;
     });
 
     // Пересчитываем пиксели трека под новую привязку.
@@ -1384,11 +1404,15 @@ class MapScreenLogic {
 
   void _onHeadingChanged() {
     final magneticHeading = headingNotifier.value;
-    setState(() {
-      state.magneticHeading = magneticHeading;
-    });
     if (state.followMode) {
+      // applyHeadingRotation → updateTransform вызовет setState.
+      // Второй setState здесь избыточен.
+      state.magneticHeading = magneticHeading;
       followController.applyHeadingRotation();
+    } else {
+      setState(() {
+        state.magneticHeading = magneticHeading;
+      });
     }
   }
 
