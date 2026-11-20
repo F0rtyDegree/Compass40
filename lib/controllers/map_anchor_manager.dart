@@ -528,6 +528,7 @@ class MapAnchorManager {
 
     calibrationService.updateAnchors(updatedProject.anchors);
     onAnchorsChanged();
+    await onRecalculateTargets();
     await LocusXmlAutoSaver.save(state.project!);
   }
 

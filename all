@@ -3,9 +3,11 @@
 # Список всех файлов в нужном порядке
 files=(
     "info"
+    "PD"
     "pubspec.yaml"
     "analysis_options.yaml"
     "android/app/src/main/AndroidManifest.xml"
+    "/home/user/myapp/android/app/src/main/kotlin/by/fortydegree/compass40/MainActivity.kt"
 )
 
 # Добавить все .md файлы из assets/
@@ -31,7 +33,7 @@ done < <(find test -type f -name "*.dart" | sort)
 # Вывести все файлы
 for file in "${files[@]}"; do
     if [ -f "$file" ]; then
-        echo "============= $file ==="
+        echo "=== $file ==="
 #        cat -n "$file"
         cat "$file"
         echo ""

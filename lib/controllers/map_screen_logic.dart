@@ -846,10 +846,6 @@ class MapScreenLogic {
       userImagePoint,
       isTemporary: false,
     );
-    
-    // Пересчитываем пиксели треков.
-    await trackManager.reloadActiveTrackImagePoints();
-    trackManager.recalculateLoadedTrackImagePoints();
 
     setState(() {
       state.lastAutoAnchorId = null;
@@ -883,17 +879,13 @@ class MapScreenLogic {
 
       final oldId = state.lastAutoAnchorId;
 
-      // Атомарная замена: один пересчет, без записи в журнал и пересчета целей.
+      // Атомарная замена: один пересчет.
       await anchorManager.replaceAutoAnchor(
         oldId,
         gps,
         crosshair,
         isTemporary: true,
       );
-
-      // Пересчитываем пиксели треков под новую привязку, чтобы линии не отставали.
-      await trackManager.reloadActiveTrackImagePoints();
-      trackManager.recalculateLoadedTrackImagePoints();
 
       final anchors = state.project?.anchors;
       final latest = (anchors != null && anchors.isNotEmpty) ? anchors.last : null;

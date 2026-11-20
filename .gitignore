@@ -17,3 +17,4 @@ android/local.properties
 *.loc
 *.diff
 sizes-log.txt
+code
