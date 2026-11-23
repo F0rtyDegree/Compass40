@@ -190,7 +190,7 @@ class _MapScreenState extends State<MapScreen> {
                   onTap: () => _showMapActionsDialog(context),
                   child: const Padding(
                     padding: EdgeInsets.all(12.0),
-                    child: Icon(Icons.delete_forever),
+                    child: Icon(Icons.layers),
                   ),
                 ),
               ),
@@ -737,6 +737,26 @@ class _MapScreenState extends State<MapScreen> {
       builder: (ctx) => SimpleDialog(
         title: const Text('Действия с картой'),
         children: [
+          SimpleDialogOption(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _logic.closeMap();
+              if (!context.mounted) return;
+              await _logic.pickImage(context);
+              _updateStatusText();
+            },
+            child: const Text('Выбрать фото карты'),
+          ),
+          SimpleDialogOption(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _logic.closeMap();
+              if (!mounted) return;
+              await _logic.pickLocusXml();
+              _updateStatusText();
+            },
+            child: const Text('Выбрать карту (XML)'),
+          ),
           SimpleDialogOption(
             onPressed: () async {
               Navigator.pop(ctx); // закрываем меню действий

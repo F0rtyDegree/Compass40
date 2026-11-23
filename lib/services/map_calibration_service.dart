@@ -379,6 +379,17 @@ class MapCalibrationService {
     }
   }
 
+  void reset() {
+    _anchors = [];
+    _pinnedAnchorIds.clear();
+    _currentTransform = null;
+    _mode = CalibrationMode.affine;
+    _manualMode = false;
+    _psLineMeters = 0.0;
+    _psLinePixels = 0.0;
+    _psNorthAngle = 0.0;
+  }
+
   void removeAnchor(String anchorId) {
     _anchors.removeWhere((a) => a.id == anchorId);
     _pinnedAnchorIds.remove(anchorId);

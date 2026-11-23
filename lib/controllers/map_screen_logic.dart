@@ -475,6 +475,9 @@ class MapScreenLogic {
 
       _calibrationService.updateAnchors(locusResult.anchors);
       await _loadImageSize();
+      _recalculateWorkingPairAndRotation();
+      _recalculateCanPlaceTarget();
+      await trackManager.loadActiveTrackFromCsv();
 
       // Сохраняем актуальный XML для внутренней копии.
       await LocusXmlAutoSaver.save(project);
@@ -545,6 +548,8 @@ class MapScreenLogic {
   Future<void> closeMap() async {
     // Снимаем режим ожидания координат, если был активен.
     state.pendingAnchorCoordId = null;
+    state.rotateModeTimer?.cancel();
+    state.rotateModeTimer = null;
 
     // Синхронизируем с главным экраном: убираем строку цели, но только
     // если активная цель была на карте. Иначе цель, заданная через
@@ -561,6 +566,14 @@ class MapScreenLogic {
       state.workingPair = null;
       state.canPlaceTarget = false;
       state.transformState = const MapTransformState();
+      state.mapRotation = 0.0;
+      state.followMode = false;
+      state.crosshairInCenter = true;
+      state.rotateMode = false;
+      state.crosshairImagePoint = null;
+      state.lastAutoAnchorId = null;
+      state.previewDistanceMeters = null;
+      state.previewBearingDegrees = null;
       state.plannedTarget = null;
       state.activeTarget = null;
       state.currentUserImagePoint = null;
@@ -585,9 +598,9 @@ class MapScreenLogic {
     } else {
       await storageService.setCurrentProjectId(null);
     }
-    _calibrationService.updateAnchors([]);
-    _calibrationService.setPinnedAnchorIds([]);
+    _calibrationService.reset();
     anchorManager.cachedGpxPoints = null;
+    onAnchorsChangedForStatus?.call();
 
     // Очищаем внутренний журнал при удалении карты.
     final prefs = await SharedPreferences.getInstance();
