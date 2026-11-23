@@ -323,7 +323,7 @@ Future<void> setCompassMode(CompassMode mode) async {
     }
   }
 
-  /// Обработчик интента ACTION_ANNOUNCE_TARGET.
+  /// Обработчик интента ACTION_VOICE_HINT.
   Future<void> _handleAnnounceIntent({int? period}) async {
     if (period != null) {
       _announcePeriod += period;

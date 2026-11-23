@@ -566,8 +566,10 @@ class MapScreenLogic {
       state.currentUserImagePoint = null;
       state.pendingAnchor = null;
       state.trackImagePoints = [];
+      state.trackVersion++;
       state.loadedTrackGpsPoints = [];
       state.loadedTrackImagePoints = [];
+      state.loadedTrackVersion++;
     });
 
     if (imagePathToDelete != null) {

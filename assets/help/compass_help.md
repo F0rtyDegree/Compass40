@@ -109,7 +109,7 @@
 
 Действие **Send Intent**:
 
-* Action: `by.fortydegree.compass40.ACTION_ANNOUNCE_TARGET`
+* Action: `by.fortydegree.compass40.ACTION_VOICE_HINT`
 * Extra: `period:10` (или без extra для разового вызова)
 * Cat: `Default`
 * Package: `by.fortydegree.compass40`

@@ -1,4 +1,4 @@
-/// Мост между интентом ACTION_ANNOUNCE_TARGET и активным HomeLogic.
+/// Мост между интентом ACTION_VOICE_HINT и активным HomeLogic.
 /// Не знает о HomeLogic напрямую — регистрируется колбэк.
 class AnnouncerController {
   static final AnnouncerController _instance = AnnouncerController._();

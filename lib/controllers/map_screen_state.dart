@@ -63,6 +63,7 @@ class MapScreenState {
   /// из CSV-файла и пополняется из GPS-потока, пока идёт запись.
   /// Живёт только в памяти сессии, в проект не сохраняется.
   List<Offset> trackImagePoints = [];
+  int trackVersion = 0;
 
   /// GPS-точки загруженного GPX-трека (dx = долгота, dy = широта).
   /// Используется для пересчёта пикселей при смене привязки.
@@ -70,6 +71,7 @@ class MapScreenState {
 
   /// Пиксели загруженного GPX-трека. Производное от loadedTrackGpsPoints.
   List<Offset> loadedTrackImagePoints = [];
+  int loadedTrackVersion = 0;
 
   /// Цвет загруженного трека (ARGB int).
   int loadedTrackColor = AppConstants.loadedTrackColorDefault;

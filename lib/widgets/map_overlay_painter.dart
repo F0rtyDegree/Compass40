@@ -18,6 +18,7 @@ class MapOverlayPainter extends CustomPainter {
   final MapAnchor? pendingAnchor;
   final Set<String> activeAnchorIds;
   final List<Offset> trackImagePoints;
+  final int trackVersion;
 
   final Offset? currentUserImagePoint;
   final Offset? activeTargetImagePoint;
@@ -35,6 +36,7 @@ class MapOverlayPainter extends CustomPainter {
 
   /// Пиксели загруженного GPX-трека. Рисуется стрелками.
   final List<Offset> loadedTrackImagePoints;
+  final int loadedTrackVersion;
 
   /// Цвет загруженного трека (ARGB int).
   final int loadedTrackColor;
@@ -60,6 +62,7 @@ class MapOverlayPainter extends CustomPainter {
     this.pendingAnchor,
     this.activeAnchorIds = const {},
     this.trackImagePoints = const [],
+    this.trackVersion = 0,
     this.currentUserImagePoint,
     this.activeTargetImagePoint,
     this.previewDistanceMeters,
@@ -71,6 +74,7 @@ class MapOverlayPainter extends CustomPainter {
     this.metersPerScreenPixel,
     this.crosshairScreenPoint,
     this.loadedTrackImagePoints = const [],
+    this.loadedTrackVersion = 0,
     this.loadedTrackColor = AppConstants.loadedTrackColorDefault,
     this.trackLineStyle = AppConstants.trackLineStyleDefault,
     this.trackColor = AppConstants.trackColorDefault,
@@ -811,13 +815,8 @@ class MapOverlayPainter extends CustomPainter {
     // поэтому listEquals даёт точный результат без эвристик.
     if (!listEquals(oldDelegate.anchors, anchors)) return true;
     if (!listEquals(oldDelegate.targets, targets)) return true;
-    if (!listEquals(oldDelegate.trackImagePoints, trackImagePoints)) {
-      return true;
-    }
-    if (!listEquals(
-        oldDelegate.loadedTrackImagePoints, loadedTrackImagePoints)) {
-      return true;
-    }
+    if (oldDelegate.trackVersion != trackVersion) return true;
+    if (oldDelegate.loadedTrackVersion != loadedTrackVersion) return true;
     if (oldDelegate.loadedTrackColor != loadedTrackColor) {
       return true;
     }

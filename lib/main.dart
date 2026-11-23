@@ -19,6 +19,19 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 final FlutterLocalNotificationsPlugin _notificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
+double? _parseDouble(dynamic value) {
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value.trim());
+  return null;
+}
+
+int? _parseInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value.trim());
+  return null;
+}
+
 Future<void> _handleIntent(MethodCall call) async {
   switch (call.method) {
     case 'by.fortydegree.compass40.ACTION_ZOOM_IN':
@@ -36,15 +49,10 @@ Future<void> _handleIntent(MethodCall call) async {
     case 'by.fortydegree.compass40.ACTION_PAN':
       final args = call.arguments;
       if (args is Map) {
-        final dx = args['dx'];
-        final dy = args['dy'];
+        final dx = _parseDouble(args['dx']);
+        final dy = _parseDouble(args['dy']);
         if (dx == null && dy == null) break;
-        MapScreenController().panBy(
-          Offset(
-            (dx is int) ? dx.toDouble() : 0.0,
-            (dy is int) ? dy.toDouble() : 0.0,
-          ),
-        );
+        MapScreenController().panBy(Offset(dx ?? 0.0, dy ?? 0.0));
       }
       break;
     case 'by.fortydegree.compass40.ACTION_FREEZE_ANCHOR':
@@ -54,8 +62,7 @@ Future<void> _handleIntent(MethodCall call) async {
       final args = call.arguments;
       int? period;
       if (args is Map) {
-        final p = args['period'];
-        if (p is int) period = p;
+        period = _parseInt(args['period']);
       }
       AnnouncerController().announce(period: period);
       break;

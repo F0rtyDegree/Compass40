@@ -5,24 +5,47 @@ import '../models/map_transform_state.dart';
 
 // Статический кеш загруженных изображений
 final Map<String, ui.Image> _imageCache = {};
+final Map<String, Future<ui.Image>> _pendingLoads = {};
 
 /// Удаляет изображение из кэша и освобождает память.
 void removeImageFromCache(String path) {
+  _pendingLoads.remove(path);
   final image = _imageCache.remove(path);
   image?.dispose();
 }
 
 /// Возвращает изображение из кэша. Если нет — декодирует и кладёт в кэш.
+/// Параллельные вызовы для одного пути ожидают единую задачу декодирования.
 /// Владелец — кэш. Вызывающий не должен вызывать dispose.
-Future<ui.Image> getOrCreateImage(String path) async {
+Future<ui.Image> getOrCreateImage(String path) {
   final cached = _imageCache[path];
-  if (cached != null) return cached;
-  final bytes = await File(path).readAsBytes();
-  final codec = await ui.instantiateImageCodec(bytes);
-  final frame = await codec.getNextFrame();
-  final image = frame.image;
-  _imageCache[path] = image;
-  return image;
+  if (cached != null) return Future.value(cached);
+
+  final pending = _pendingLoads[path];
+  if (pending != null) return pending;
+
+  final loadFuture = _decodeImage(path);
+  _pendingLoads[path] = loadFuture;
+  return loadFuture;
+}
+
+Future<ui.Image> _decodeImage(String path) async {
+  try {
+    final bytes = await File(path).readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+
+    if (!_pendingLoads.containsKey(path)) {
+      image.dispose();
+      return image;
+    }
+
+    _imageCache[path] = image;
+    return image;
+  } finally {
+    _pendingLoads.remove(path);
+  }
 }
 
 /// Отрисовывает изображение карты с трансформацией.
@@ -46,7 +69,6 @@ class MapImageLayer extends StatefulWidget {
 
 class _MapImageLayerState extends State<MapImageLayer> {
   ui.Image? _image;
-  bool _isLoading = false;
 
   @override
   void initState() {
@@ -63,43 +85,30 @@ class _MapImageLayerState extends State<MapImageLayer> {
   }
 
   Future<void> _loadImage() async {
-    if (_imageCache.containsKey(widget.imagePath)) {
+    final targetPath = widget.imagePath;
+    if (_imageCache.containsKey(targetPath)) {
       if (mounted) {
         setState(() {
-          _image = _imageCache[widget.imagePath];
+          _image = _imageCache[targetPath];
         });
       }
       return;
     }
 
-    if (_isLoading) return;
-
-    if (mounted) {
+    if (mounted && _image != null) {
       setState(() {
-        _isLoading = true;
-        _image = null; // Reset image on new load
+        _image = null;
       });
     }
 
     try {
-      final bytes = await File(widget.imagePath).readAsBytes();
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final loadedImage = frame.image;
-      _imageCache[widget.imagePath] = loadedImage;
-      if (mounted) {
+      final loadedImage = await getOrCreateImage(targetPath);
+      if (mounted && widget.imagePath == targetPath) {
         setState(() {
           _image = loadedImage;
-          _isLoading = false;
         });
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+    } catch (_) {}
   }
 
   @override

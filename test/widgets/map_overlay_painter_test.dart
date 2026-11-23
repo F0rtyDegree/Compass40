@@ -30,6 +30,7 @@ MapOverlayPainter _painter({
   List<MapTarget> targets = const [],
   MapAnchor? pendingAnchor,
   List<Offset> trackImagePoints = const [],
+  int trackVersion = 0,
 }) {
   return MapOverlayPainter(
     imageSize: const Size(1000, 1000),
@@ -39,6 +40,7 @@ MapOverlayPainter _painter({
     targets: targets,
     pendingAnchor: pendingAnchor,
     trackImagePoints: trackImagePoints,
+    trackVersion: trackVersion,
   );
 }
 
@@ -115,9 +117,13 @@ void main() {
     });
 
     test('добавление точки трека → true', () {
-      final a = _painter(trackImagePoints: const [Offset(0, 0)]);
+      final a = _painter(
+        trackImagePoints: const [Offset(0, 0)],
+        trackVersion: 1,
+      );
       final b = _painter(
         trackImagePoints: const [Offset(0, 0), Offset(1, 1)],
+        trackVersion: 2,
       );
       expect(b.shouldRepaint(a), isTrue);
     });
@@ -125,9 +131,11 @@ void main() {
     test('равные треки → false', () {
       final a = _painter(
         trackImagePoints: const [Offset(0, 0), Offset(1, 1)],
+        trackVersion: 1,
       );
       final b = _painter(
         trackImagePoints: const [Offset(0, 0), Offset(1, 1)],
+        trackVersion: 1,
       );
       expect(b.shouldRepaint(a), isFalse);
     });
@@ -135,9 +143,11 @@ void main() {
     test('изменение середины трека → true', () {
       final a = _painter(
         trackImagePoints: const [Offset(0, 0), Offset(5, 5), Offset(9, 9)],
+        trackVersion: 1,
       );
       final b = _painter(
         trackImagePoints: const [Offset(0, 0), Offset(6, 6), Offset(9, 9)],
+        trackVersion: 2,
       );
       expect(b.shouldRepaint(a), isTrue);
     });

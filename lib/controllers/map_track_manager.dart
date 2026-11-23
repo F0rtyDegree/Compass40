@@ -52,6 +52,7 @@ class MapTrackManager {
 
     setState(() {
       state.trackImagePoints = pruneTrackPoints(points: imagePoints);
+      state.trackVersion++;
     });
   }
 
@@ -69,6 +70,7 @@ class MapTrackManager {
     setState(() {
       final updated = [...state.trackImagePoints, imagePoint];
       state.trackImagePoints = pruneTrackPoints(points: updated);
+      state.trackVersion++;
     });
   }
 
@@ -91,6 +93,7 @@ class MapTrackManager {
   void onRecordingStopped() {
     setState(() {
       state.trackImagePoints = [];
+      state.trackVersion++;
     });
   }
 
@@ -148,6 +151,7 @@ class MapTrackManager {
     setState(() {
       state.loadedTrackGpsPoints = [];
       state.loadedTrackImagePoints = [];
+      state.loadedTrackVersion++;
     });
   }
 
@@ -223,12 +227,14 @@ class MapTrackManager {
     if (state.loadedTrackGpsPoints.isEmpty) {
       setState(() {
         state.loadedTrackImagePoints = [];
+        state.loadedTrackVersion++;
       });
       return;
     }
     if (calibrationService.usedAnchorCount == 0) {
       setState(() {
         state.loadedTrackImagePoints = [];
+        state.loadedTrackVersion++;
       });
       return;
     }
@@ -245,6 +251,7 @@ class MapTrackManager {
     }
     setState(() {
       state.loadedTrackImagePoints = imagePoints;
+      state.loadedTrackVersion++;
     });
   }
 
