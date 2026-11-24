@@ -47,10 +47,10 @@ class MapCrosshair extends StatelessWidget {
                 ),
               // Прицел
               Positioned(
-                left: position.dx - 24,
-                top: position.dy - 24,
+                left: position.dx - 30,
+                top: position.dy - 30,
                 child: const CustomPaint(
-                  size: Size(48, 48),
+                  size: Size(60, 60),
                   painter: _CrosshairPainter(),
                 ),
               ),
@@ -121,43 +121,42 @@ class _CrosshairPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    // Луч от 10 до 20 пикселей от центра. Конец луча (20 px) —
-    // визуальный ориентир, куда попадёт якорь при постановке.
-    final lineLen = 10.0;
+    // Пробел 10 пикселей от центра (ориентир шага коррекции 10 px),
+    // длина луча 15 пикселей.
+    final lineLen = 15.0;
     final gap = 10.0;
 
     final paint = Paint()
-      ..color = Colors.redAccent
-      ..strokeWidth = 3.0
+      ..color = Colors.red
+      ..strokeWidth = 4.0
       ..style = PaintingStyle.stroke;
 
     final shadowPaint = Paint()
       ..color = Colors.white
-      ..strokeWidth = 6.0
+      ..strokeWidth = 8.0
       ..style = PaintingStyle.stroke;
 
-    // Тени (для видимости на любом фоне)
-    _drawLines(canvas, center, lineLen, gap, shadowPaint);
+    // Белая подложка (с выступом 2 px на торцах лучей для полного обрамления)
+    _drawLines(canvas, center, lineLen + 4.0, gap - 2.0, shadowPaint);
     // Основные линии
     _drawLines(canvas, center, lineLen, gap, paint);
+
+    // Белая окантовка центральной точки (под точкой)
+    canvas.drawCircle(
+      center,
+      3.5,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill,
+    );
 
     // Центральная точка
     canvas.drawCircle(
       center,
-      4.0,
+      2.0,
       Paint()
-        ..color = Colors.redAccent
+        ..color = Colors.red
         ..style = PaintingStyle.fill,
-    );
-    
-    // Белая окантовка центральной точки
-    canvas.drawCircle(
-      center,
-      4.0,
-      Paint()
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0,
     );
   }
 

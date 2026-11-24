@@ -1,0 +1,82 @@
+SDD: Ведение на цель через BRouter
+
+
+1. Общее описание
+
+Функция добавляет для экрана карты два режима ведения на цель:
+• «По азимуту» (по умолчанию) — всё работает как сейчас: прямая пунктирная линия от текущей позиции до цели и две плашки (дистанция и азимут).
+• «По маршруту» — прямая линия заменяется на ломаную по дорогам OSM, построенную внешним приложением BRouter. На главном экране компаса зелёная стрелка остаётся без изменений и указывает направление по прямой.
+
+2. Поведение и интерфейс
+
+
+2.1. Экран настроек (SettingsScreen, раздел «Карта»)
+
+• Добавляется выбор способа ведения на цель: «По азимуту» / «По маршруту».
+• При открытии настроек выполняется проверка установки BRouter (btools.routingapp).
+	• Если BRouter не установлен: пункт «По маршруту» отображается серым и недоступен для выбора; активным остаётся «По азимуту».
+	• Если BRouter установлен: доступны оба варианта. При выборе «По маршруту» отображается выпадающий список профиля расчёта маршрута:
+		• Пешком (foot, по умолчанию);
+		• Велосипед (trekking);
+		• Автомобиль (car-fast).
+• Смена режима или профиля при наличии активной цели применяется сразу после закрытия экрана настроек:
+	• переключили на «По азимуту» — ломаная очищается, возвращается прямая линия;
+	• переключили на «По маршруту» (или сменили профиль) — сразу запрашивается новый маршрут.
+
+2.2. Активация цели («ЦЕЛЬ» → «ГОУ»)
+
+• В режиме «По азимуту» — строится прямая линия.
+• В режиме «По маршруту» — приложение запрашивает у BRouter маршрут от текущей GPS-позиции до координат цели с выбранным профилем.
+• Если BRouter вернул ошибку (нет данных OSM для региона, маршрут не найден) — ломаная не рисуется, отображается стандартная прямая линия («по азимуту») и показывается уведомление: Нет данных маршрута для региона.
+
+2.3. Отображение на карте (MapOverlayPainter)
+
+При наличии построенного маршрута (routeImagePoints.length >= 2):
+• Линия маршрута: рисуется ломаная по routeImagePoints стилем линии на цель (белая подложка 4.0 px, поверх неё красный пунктир 2.0 px, штрих 10 px, пробел 6 px).
+• Состыковка концов: так как BRouter строит маршрут от ближайшей к старту дороги до ближайшей к цели дороги, ломаная дополняется двумя замыкающими отрезками тем же стилем:
+	• от текущей позиции пользователя (currentUserScreenPoint) до routeImagePoints.first;
+	• от routeImagePoints.last до флага цели (activeTargetScreenPoint).
+• Плашка над целью: рисуется одна плашка, отображающая только суммарную длину ломаной линии маршрута (плашка азимута скрывается). Приоритет размещения — над флагом цели (если флаг и плашка помещаются в экран), иначе — в середине видимой части отрезка пользователь–цель.
+
+2.4. Изменение привязки и завершение ведения
+
+• Смена привязки карты: GPS-точки маршрута (routeGpsPoints) пересчитываются в пиксели карты (routeImagePoints) через geoToImagePointFromCurrent без повторного обращения к BRouter.
+• Прохождение или отмена цели / удаление карты: списки routeGpsPoints и routeImagePoints очищаются (routeVersion++), ломаная исчезает.
+
+3. Архитектура и контракт с BRouter
+
+
+3.1. Нативный слой (Android / Kotlin)
+
+• AndroidManifest.xml: в <queries> добавляется <package android:name="btools.routingapp" /> (требование Android 11).
+• android/app/build.gradle: включается поддержка AIDL (aidl = true).
+• android/app/src/main/aidl/btools/routingapp/IBRouterService.aidl:java
+package btools.routingapp;
+interface IBRouterService {
+    String getTrackFromParams(in Bundle params);
+}
+• MainActivity.kt: новый MethodChannel("by.fortydegree.compass40/brouter") с методами:
+	• isInstalled → Boolean (проверка через PackageManager).
+	• getRoute → String? (асинхронный bindService к btools.routingapp.BRouterService в фоновом потоке, вызов getTrackFromParams с параметрами lats, lons, v, trackFormat = "gpx", maxRunningTime = "15", обязательный unbindService).
+
+3.2. Слой Dart
+
+• AppConstants:
+	• prefRoutingMode = 'routingMode' (0 — по азимуту, 1 — по маршруту);
+	• prefRoutingProfile = 'routingProfile' ('foot', 'trekking', 'car-fast').
+• BRouterService (lib/services/brouter_service.dart):
+	• isInstalled() — проверка доступности BRouter;
+	• getRoute(...) — запрос GPX-строки, парсинг координат через существующий parseTrackFromGpx и расчёт суммарной длины ломаной в метрах через calculateDistance.
+• MapScreenState:
+	• отдельные поля (не пересекаются с загруженным GPX-треком): List<Offset> routeGpsPoints, List<Offset> routeImagePoints, double? routeDistanceMeters, int routeVersion.
+• MapScreenLogic / MapTargetManager:
+	• запрос маршрута при нажатии «ГОУ», при возврате из SettingsScreen (если изменился режим/профиль и есть активная цель) и при пересчёте координат активной цели после добавления якоря;
+	• пересчёт routeGpsPoints → routeImagePoints при каждом изменении привязки;
+	• очистка маршрута при отмене цели, смене режима на «По азимуту» или удалении карты.
+
+4. План поэтапной реализации
+
+1. Этап 1 (Нативный слой): AndroidManifest.xml, build.gradle, IBRouterService.aidl, канал в MainActivity.kt.
+2. Этап 2 (Сервис и состояние Dart): константы в AppConstants, класс BRouterService, поля в MapScreenState.
+3. Этап 3 (Настройки): UI выбора режима и профиля в SettingsScreen.
+4. Этап 4 (Логика карты и рендеринг): интеграция в MapScreenLogic / MapTargetManager / MapScreen и отрисовка в MapOverlayPainter.

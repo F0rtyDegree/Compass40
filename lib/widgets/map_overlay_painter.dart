@@ -714,27 +714,45 @@ class MapOverlayPainter extends CustomPainter {
     double distanceMeters,
     double bearingDegrees,
   ) {
-    final labelPos = _getLabelPositionInsideViewport(from, to, viewportSize);
-    if (labelPos == null) return;
-
     final distText = distanceMeters >= 1000
         ? '${(distanceMeters / 1000).toStringAsFixed(2)} km'
         : '${distanceMeters.round()} m';
     final bearText = formatBearing(bearingDegrees);
-
     final color = _overlayTextColor();
-    _drawLabel(canvas, distText, labelPos + const Offset(0, -18), color);
-    _drawLabel(canvas, bearText, labelPos + const Offset(0, 18), color);
+
+    final distTp = _buildLabelTextPainter(distText, color);
+    final bearTp = _buildLabelTextPainter(bearText, color);
+
+    const padH = 10.0;
+    const padV = 4.0;
+    const topOffset = 82.0;
+    const bottomOffset = 48.0;
+    const flagRightExtent = 14.0;
+
+    final maxHalfW = math.max(distTp.width, bearTp.width) / 2 + padH;
+    final halfH = distTp.height / 2 + padV;
+
+    final fitsAboveFlag =
+        to.dy - topOffset - halfH >= 0 &&
+        to.dy <= viewportSize.height &&
+        to.dx - maxHalfW >= 0 &&
+        to.dx + math.max(maxHalfW, flagRightExtent) <= viewportSize.width;
+
+    if (fitsAboveFlag) {
+      _drawPreparedLabel(canvas, distTp, to + const Offset(0, -topOffset));
+      _drawPreparedLabel(canvas, bearTp, to + const Offset(0, -bottomOffset));
+      return;
+    }
+
+    final labelPos = _getLabelPositionInsideViewport(from, to, viewportSize);
+    if (labelPos == null) return;
+
+    _drawPreparedLabel(canvas, distTp, labelPos + const Offset(0, -18));
+    _drawPreparedLabel(canvas, bearTp, labelPos + const Offset(0, 18));
   }
 
-  /// Рисует текст в белой полупрозрачной плашке с овальными краями.
-  void _drawLabel(
-    Canvas canvas,
-    String text,
-    Offset position,
-    Color color,
-  ) {
-    final tp = TextPainter(
+  TextPainter _buildLabelTextPainter(String text, Color color) {
+    return TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
@@ -745,7 +763,14 @@ class MapOverlayPainter extends CustomPainter {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
+  }
 
+  /// Рисует текст в белой полупрозрачной плашке с овальными краями.
+  void _drawPreparedLabel(
+    Canvas canvas,
+    TextPainter tp,
+    Offset position,
+  ) {
     const padH = 10.0;
     const padV = 4.0;
     final rect = Rect.fromCenter(
