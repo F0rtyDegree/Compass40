@@ -30,6 +30,13 @@ class AppConstants {
   static const String prefLoadedTrackColor = 'loadedTrackColor';
   static const String prefAnnounceTargetEnabled = 'announceTargetEnabled';
   static const String prefAnnounceScreenOffEnabled = 'announceScreenOffEnabled';
+  static const String prefRoutingMode = 'routingMode';
+  static const String prefRoutingProfile = 'routingProfile';
+
+  static const int routingModeAzimuth = 0;
+  static const int routingModeRoute = 1;
+  static const int routingModeDefault = routingModeAzimuth;
+  static const String routingProfileDefault = 'foot';
 
   static const int loadedTrackColorDefault = 0xFF00BCD4;
   static const int trackColorDefault = 0xFFF44336;

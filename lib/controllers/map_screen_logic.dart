@@ -16,6 +16,7 @@ import '../services/log_service.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import '../services/gps_compass_service.dart';
+import '../services/brouter_service.dart';
 import '../services/locus_calibration_service.dart';
 import '../services/locus_xml_auto_saver.dart';
 import 'map_screen_state.dart';
@@ -153,6 +154,8 @@ class MapScreenLogic {
       onStartNavigation: onStartNavigation,
       onCancelNavigation: onCancelNavigation,
       onRecalculatePreview: _recalculatePreview,
+      onTargetActivatedForRoute: updateRouteForActiveTarget,
+      onTargetClearedForRoute: clearRoute,
     );
     trackManager = MapTrackManager(
       state: state,
@@ -583,6 +586,10 @@ class MapScreenLogic {
       state.loadedTrackGpsPoints = [];
       state.loadedTrackImagePoints = [];
       state.loadedTrackVersion++;
+      state.routeGpsPoints = [];
+      state.routeImagePoints = [];
+      state.routeDistanceMeters = null;
+      state.routeVersion++;
     });
 
     if (imagePathToDelete != null) {
@@ -643,6 +650,7 @@ class MapScreenLogic {
           state.project = updated;
           state.activeTarget = null;
         });
+        clearRoute();
       }
       // Синхронизируем с главным экраном: убираем строку цели.
       onCancelNavigation?.call();
@@ -1346,9 +1354,10 @@ class MapScreenLogic {
       state.plannedTarget = newPlannedTarget ?? plannedFromState;
     });
 
-    // Пересчитываем пиксели трека под новую привязку.
+    // Пересчитываем пиксели трека и маршрута под новую привязку.
     await trackManager.reloadActiveTrackImagePoints();
     trackManager.recalculateLoadedTrackImagePoints();
+    _recalculateRouteImagePoints();
 
     if (restartNavigation &&
         onStartNavigation != null &&
@@ -1357,8 +1366,141 @@ class MapScreenLogic {
         newActiveTarget!.latitude!,
         newActiveTarget.longitude!,
       );
-      //      showSnackBar('Навигация перезапущена с новыми координатами цели');
+      await updateRouteForActiveTarget();
     }
+  }
+
+  // --------------------------------------------------------
+  // Маршрут BRouter
+  // --------------------------------------------------------
+
+  void clearRoute() {
+    setState(() {
+      state.routeGpsPoints = [];
+      state.routeImagePoints = [];
+      state.routeDistanceMeters = null;
+      state.routeVersion++;
+    });
+  }
+
+  Future<void> updateRouteForActiveTarget() async {
+    final active = state.activeTarget;
+    if (active == null || active.latitude == null || active.longitude == null) {
+      clearRoute();
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final routingMode =
+        prefs.getInt(AppConstants.prefRoutingMode) ??
+            AppConstants.routingModeDefault;
+    if (routingMode != AppConstants.routingModeRoute) {
+      clearRoute();
+      return;
+    }
+
+    final gps = _lastGpsData ?? gpsDataNotifier.value;
+    if (gps.latitude == null || gps.longitude == null) {
+      clearRoute();
+      return;
+    }
+
+    final profile =
+        prefs.getString(AppConstants.prefRoutingProfile) ??
+            AppConstants.routingProfileDefault;
+
+    final result = await BRouterService.getRoute(
+      startLat: gps.latitude!,
+      startLon: gps.longitude!,
+      targetLat: active.latitude!,
+      targetLon: active.longitude!,
+      profile: profile,
+    );
+
+    if (state.isDisposed) return;
+
+    if (result == null) {
+      clearRoute();
+      showSnackBar('Нет данных маршрута для региона');
+      return;
+    }
+
+    setState(() {
+      state.routeGpsPoints = result.gpsPoints;
+      state.routeDistanceMeters = result.distanceMeters;
+    });
+    _recalculateRouteImagePoints();
+    _trimRouteToCurrentPosition(gps.latitude!, gps.longitude!);
+  }
+
+  void _trimRouteToCurrentPosition(double userLat, double userLon) {
+    if (state.routeGpsPoints.length < 2) return;
+
+    int closestIndex = 0;
+    double minDistance = double.infinity;
+
+    for (int i = 0; i < state.routeGpsPoints.length; i++) {
+      final pt = state.routeGpsPoints[i];
+      final d = calculateDistance(userLat, userLon, pt.dy, pt.dx);
+      if (d < minDistance) {
+        minDistance = d;
+        closestIndex = i;
+      }
+    }
+
+    if (minDistance > 100.0) return;
+
+    final trimmedGps = closestIndex > 0
+        ? state.routeGpsPoints.sublist(closestIndex)
+        : state.routeGpsPoints;
+
+    final trimmedImage = (closestIndex > 0 &&
+            state.routeImagePoints.length == state.routeGpsPoints.length)
+        ? state.routeImagePoints.sublist(closestIndex)
+        : state.routeImagePoints;
+
+    double remainingDist = minDistance;
+    for (int i = 1; i < trimmedGps.length; i++) {
+      remainingDist += calculateDistance(
+        trimmedGps[i - 1].dy,
+        trimmedGps[i - 1].dx,
+        trimmedGps[i].dy,
+        trimmedGps[i].dx,
+      );
+    }
+
+    setState(() {
+      state.routeGpsPoints = trimmedGps;
+      state.routeImagePoints = trimmedImage;
+      state.routeDistanceMeters = remainingDist;
+      state.routeVersion++;
+    });
+  }
+
+  void _recalculateRouteImagePoints() {
+    if (state.routeGpsPoints.isEmpty ||
+        _calibrationService.usedAnchorCount == 0) {
+      setState(() {
+        state.routeImagePoints = [];
+        state.routeVersion++;
+      });
+      return;
+    }
+
+    final imagePoints = <Offset>[];
+    for (final gps in state.routeGpsPoints) {
+      final imagePoint = _calibrationService.geoToImagePointFromCurrent(
+        gps.dy,
+        gps.dx,
+      );
+      if (imagePoint != null) {
+        imagePoints.add(imagePoint);
+      }
+    }
+    setState(() {
+      state.routeImagePoints = imagePoints;
+      state.routeVersion++;
+    });
   }
 
   // --------------------------------------------------------
@@ -1442,6 +1584,7 @@ class MapScreenLogic {
     if (gpsData.latitude == null || gpsData.longitude == null) return;
     _lastGpsData = gpsData;
     _recalculateUserImagePoint();
+    _trimRouteToCurrentPosition(gpsData.latitude!, gpsData.longitude!);
     trackManager.appendActiveTrackPointIfRecording(gpsData);
     if (state.followMode) {
       followController.centerMapOnUser();

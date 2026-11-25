@@ -25,6 +25,9 @@ class MapOverlayPainter extends CustomPainter {
 
   final double? previewDistanceMeters;
   final double? previewBearingDegrees;
+  final List<Offset> routeImagePoints;
+  final double? routeDistanceMeters;
+  final int routeVersion;
   final double? heading;
   final bool isGpsActive;
   final double mapRotation;
@@ -67,6 +70,9 @@ class MapOverlayPainter extends CustomPainter {
     this.activeTargetImagePoint,
     this.previewDistanceMeters,
     this.previewBearingDegrees,
+    this.routeImagePoints = const [],
+    this.routeDistanceMeters,
+    this.routeVersion = 0,
     this.heading,
     this.isGpsActive = false,
     this.mapRotation = 0.0,
@@ -109,15 +115,27 @@ class MapOverlayPainter extends CustomPainter {
 
       if (activeTargetImagePoint != null) {
         final targetScreen = imageToScreen(activeTargetImagePoint!);
-        _drawLine(canvas, screen, targetScreen);
-        if (previewDistanceMeters != null && previewBearingDegrees != null) {
-          _drawLabels(
-            canvas,
-            screen,
-            targetScreen,
-            previewDistanceMeters!,
-            previewBearingDegrees!,
-          );
+        if (routeImagePoints.length >= 2) {
+          _drawRoute(canvas, screen, targetScreen);
+          if (routeDistanceMeters != null) {
+            _drawRouteDistanceLabel(
+              canvas,
+              screen,
+              targetScreen,
+              routeDistanceMeters!,
+            );
+          }
+        } else {
+          _drawLine(canvas, screen, targetScreen);
+          if (previewDistanceMeters != null && previewBearingDegrees != null) {
+            _drawLabels(
+              canvas,
+              screen,
+              targetScreen,
+              previewDistanceMeters!,
+              previewBearingDegrees!,
+            );
+          }
         }
       }
       _drawCurrentPosition(canvas, screen);
@@ -623,6 +641,68 @@ class MapOverlayPainter extends CustomPainter {
     _drawDashedLine(canvas, from, to, paint);
   }
 
+  void _drawRoute(Canvas canvas, Offset userScreen, Offset targetScreen) {
+    final backgroundPaint = Paint()
+      ..color = Colors.white.withAlpha(200)
+      ..strokeWidth = 4.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final paint = Paint()
+      ..color = Colors.red.withAlpha((255 * 0.7).round())
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    final screenPoints = <Offset>[
+      userScreen,
+      ...routeImagePoints.map(imageToScreen),
+      targetScreen,
+    ];
+
+    for (int i = 1; i < screenPoints.length; i++) {
+      _drawDashedLine(canvas, screenPoints[i - 1], screenPoints[i], backgroundPaint);
+      _drawDashedLine(canvas, screenPoints[i - 1], screenPoints[i], paint);
+    }
+  }
+
+  void _drawRouteDistanceLabel(
+    Canvas canvas,
+    Offset from,
+    Offset to,
+    double distanceMeters,
+  ) {
+    final distText = distanceMeters >= 1000
+        ? '${(distanceMeters / 1000).toStringAsFixed(2)} km'
+        : '${distanceMeters.round()} m';
+    final color = _overlayTextColor();
+    final distTp = _buildLabelTextPainter(distText, color);
+
+    const padH = 10.0;
+    const padV = 4.0;
+    const labelOffset = 48.0;
+    const flagRightExtent = 14.0;
+
+    final halfW = distTp.width / 2 + padH;
+    final halfH = distTp.height / 2 + padV;
+
+    final fitsAboveFlag =
+        to.dy - labelOffset - halfH >= 0 &&
+        to.dy <= viewportSize.height &&
+        to.dx - halfW >= 0 &&
+        to.dx + math.max(halfW, flagRightExtent) <= viewportSize.width;
+
+    if (fitsAboveFlag) {
+      _drawPreparedLabel(canvas, distTp, to + const Offset(0, -labelOffset));
+      return;
+    }
+
+    final labelPos = _getLabelPositionInsideViewport(from, to, viewportSize);
+    if (labelPos == null) return;
+
+    _drawPreparedLabel(canvas, distTp, labelPos);
+  }
+
   void _drawDashedLine(Canvas canvas, Offset from, Offset to, Paint paint) {
     const dashLength = 10.0;
     const gapLength = 6.0;
@@ -842,6 +922,8 @@ class MapOverlayPainter extends CustomPainter {
     if (!listEquals(oldDelegate.targets, targets)) return true;
     if (oldDelegate.trackVersion != trackVersion) return true;
     if (oldDelegate.loadedTrackVersion != loadedTrackVersion) return true;
+    if (oldDelegate.routeVersion != routeVersion) return true;
+    if (oldDelegate.routeDistanceMeters != routeDistanceMeters) return true;
     if (oldDelegate.loadedTrackColor != loadedTrackColor) {
       return true;
     }

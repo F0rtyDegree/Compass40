@@ -3,11 +3,13 @@
 # Список всех файлов в нужном порядке
 files=(
     "info"
-    "PD"
+    "SAD"
+    "SDD"
     "pubspec.yaml"
     "analysis_options.yaml"
     "android/app/src/main/AndroidManifest.xml"
     "/home/user/myapp/android/app/src/main/kotlin/by/fortydegree/compass40/MainActivity.kt"
+    "android/app/build.gradle.kts"
 )
 
 # Добавить все .md файлы из assets/

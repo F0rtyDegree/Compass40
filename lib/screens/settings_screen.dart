@@ -6,6 +6,7 @@
   import 'help_viewer_screen.dart';
   import '../theme_provider.dart';
   import '../controllers/home_state.dart';
+  import '../services/brouter_service.dart';
   import '../services/compass_service.dart';
 
   class SettingsScreen extends StatefulWidget {
@@ -29,6 +30,9 @@
     int _trackLineStyle = AppConstants.trackLineStyleDefault;
     int _trackColor = AppConstants.trackColorDefault;
     int _loadedTrackLineStyle = AppConstants.loadedTrackLineStyleDefault;
+    int _routingMode = AppConstants.routingModeDefault;
+    String _routingProfile = AppConstants.routingProfileDefault;
+    bool _isBRouterInstalled = false;
     double _compassSmoothness = AppConstants.compassSmoothnessDefault.toDouble();
     CompassMode _compassMode = CompassMode.magnetic;
     bool _announceTargetEnabled = true;
@@ -82,6 +86,22 @@
       _loadedTrackLineStyle =
           prefs.getInt(AppConstants.prefLoadedTrackLineStyle) ??
               AppConstants.loadedTrackLineStyleDefault;
+
+      _isBRouterInstalled = await BRouterService.isInstalled();
+      final savedRoutingMode =
+          prefs.getInt(AppConstants.prefRoutingMode) ??
+              AppConstants.routingModeDefault;
+      _routingMode = _isBRouterInstalled
+          ? savedRoutingMode
+          : AppConstants.routingModeAzimuth;
+
+      final savedProfile =
+          prefs.getString(AppConstants.prefRoutingProfile) ??
+              AppConstants.routingProfileDefault;
+      const validProfiles = ['foot', 'trekking', 'car-fast'];
+      _routingProfile = validProfiles.contains(savedProfile)
+          ? savedProfile
+          : AppConstants.routingProfileDefault;
 
       _compassSmoothness =
           (prefs.getInt(AppConstants.prefCompassSmoothness) ??
@@ -145,6 +165,8 @@
       await prefs.setInt(AppConstants.prefTrackLineStyle, _trackLineStyle);
       await prefs.setInt(AppConstants.prefTrackColor, _trackColor);
       await prefs.setInt(AppConstants.prefLoadedTrackLineStyle, _loadedTrackLineStyle);
+      await prefs.setInt(AppConstants.prefRoutingMode, _routingMode);
+      await prefs.setString(AppConstants.prefRoutingProfile, _routingProfile);
 
       await prefs.setBool(
           AppConstants.prefAnnounceTargetEnabled, _announceTargetEnabled);
@@ -594,6 +616,79 @@
                         '${AppConstants.rotateModeTimeoutDefaultMs}',
                         suffix: 'мс',
                       ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Ведение на цель:',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          DropdownButton<int>(
+                            value: _routingMode,
+                            items: [
+                              const DropdownMenuItem(
+                                value: AppConstants.routingModeAzimuth,
+                                child: Text('По азимуту'),
+                              ),
+                              DropdownMenuItem(
+                                value: AppConstants.routingModeRoute,
+                                enabled: _isBRouterInstalled,
+                                child: Text(
+                                  'По маршруту',
+                                  style: TextStyle(
+                                    color: _isBRouterInstalled
+                                        ? null
+                                        : Colors.grey,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            onChanged: (v) {
+                              if (v == null) return;
+                              if (v == AppConstants.routingModeRoute &&
+                                  !_isBRouterInstalled) {
+                                return;
+                              }
+                              setState(() => _routingMode = v);
+                            },
+                          ),
+                        ],
+                      ),
+                      if (_routingMode == AppConstants.routingModeRoute &&
+                          _isBRouterInstalled) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Профиль маршрута:',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            DropdownButton<String>(
+                              value: _routingProfile,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'foot',
+                                  child: Text('Пешком'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'trekking',
+                                  child: Text('Велосипед'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'car-fast',
+                                  child: Text('Автомобиль'),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                if (v == null) return;
+                                setState(() => _routingProfile = v);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       Text('Активный трек',
                           style: Theme.of(context).textTheme.titleSmall),

@@ -31,6 +31,9 @@ MapOverlayPainter _painter({
   MapAnchor? pendingAnchor,
   List<Offset> trackImagePoints = const [],
   int trackVersion = 0,
+  List<Offset> routeImagePoints = const [],
+  double? routeDistanceMeters,
+  int routeVersion = 0,
 }) {
   return MapOverlayPainter(
     imageSize: const Size(1000, 1000),
@@ -41,6 +44,9 @@ MapOverlayPainter _painter({
     pendingAnchor: pendingAnchor,
     trackImagePoints: trackImagePoints,
     trackVersion: trackVersion,
+    routeImagePoints: routeImagePoints,
+    routeDistanceMeters: routeDistanceMeters,
+    routeVersion: routeVersion,
   );
 }
 
@@ -140,7 +146,7 @@ void main() {
       expect(b.shouldRepaint(a), isFalse);
     });
 
-    test('изменение середины трека → true', () {
+        test('изменение середины трека → true', () {
       final a = _painter(
         trackImagePoints: const [Offset(0, 0), Offset(5, 5), Offset(9, 9)],
         trackVersion: 1,
@@ -149,6 +155,18 @@ void main() {
         trackImagePoints: const [Offset(0, 0), Offset(6, 6), Offset(9, 9)],
         trackVersion: 2,
       );
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('изменение routeVersion → true', () {
+      final a = _painter(routeVersion: 1);
+      final b = _painter(routeVersion: 2);
+      expect(b.shouldRepaint(a), isTrue);
+    });
+
+    test('изменение routeDistanceMeters → true', () {
+      final a = _painter(routeDistanceMeters: 500.0);
+      final b = _painter(routeDistanceMeters: 450.0);
       expect(b.shouldRepaint(a), isTrue);
     });
   });

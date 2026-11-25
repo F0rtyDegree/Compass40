@@ -14,6 +14,8 @@ class MapTargetManager {
   final Future<void> Function(double lat, double lon)? onStartNavigation;
   final VoidCallback? onCancelNavigation;
   final VoidCallback onRecalculatePreview;
+  final Future<void> Function()? onTargetActivatedForRoute;
+  final VoidCallback? onTargetClearedForRoute;
 
   MapTargetManager({
     required this.state,
@@ -24,6 +26,8 @@ class MapTargetManager {
     required this.onStartNavigation,
     this.onCancelNavigation,
     required this.onRecalculatePreview,
+    this.onTargetActivatedForRoute,
+    this.onTargetClearedForRoute,
   });
 
   // Молча выходим, если нет привязки. Цель без координат бесполезна.
@@ -79,6 +83,7 @@ class MapTargetManager {
       state.project = updated;
       state.activeTarget = null;
     });
+    onTargetClearedForRoute?.call();
     // Синхронизируем с главным экраном: убираем строку цели.
     // Цепочка: HomeLogic.clearTarget → MapScreenController.cancelActiveTarget
     // → markActiveTargetAsPassed. На этом шаге state.activeTarget уже null,
@@ -161,6 +166,7 @@ class MapTargetManager {
       await onStartNavigation!(planned.latitude!, planned.longitude!);
 //      showSnackBar('Ведение на цель в компасе запущено');
     }
+    await onTargetActivatedForRoute?.call();
   }
 
   Future<void> _persistAndSetActiveTarget({required bool copyCoords}) async {
@@ -225,5 +231,6 @@ class MapTargetManager {
       state.project = updatedProject;
       state.activeTarget = null;
     });
+    onTargetClearedForRoute?.call();
   }
 }

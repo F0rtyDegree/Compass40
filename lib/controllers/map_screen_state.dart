@@ -73,6 +73,18 @@ class MapScreenState {
   List<Offset> loadedTrackImagePoints = [];
   int loadedTrackVersion = 0;
 
+  /// GPS-точки маршрута BRouter (dx = долгота, dy = широта).
+  List<Offset> routeGpsPoints = [];
+
+  /// Пиксели маршрута BRouter на текущей карте.
+  List<Offset> routeImagePoints = [];
+
+  /// Суммарная длина маршрута BRouter по дорогам (в метрах).
+  double? routeDistanceMeters;
+
+  /// Счётчик версии маршрута BRouter для MapOverlayPainter.shouldRepaint.
+  int routeVersion = 0;
+
   /// Цвет загруженного трека (ARGB int).
   int loadedTrackColor = AppConstants.loadedTrackColorDefault;
 

@@ -2,9 +2,14 @@ package by.fortydegree.compass40
 
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.IBinder
+import android.os.Parcel
 import android.util.Log
 import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
@@ -17,6 +22,7 @@ class MainActivity : FlutterActivity() {
     private val CONTROL_CHANNEL = "by.fortydegree.compass40/control"
     private val NOTIFICATION_CHANNEL = "by.fortydegree.compass40/notification"
     private val SCREEN_CHANNEL = "by.fortydegree.compass40/screen"
+    private val BROUTER_CHANNEL = "by.fortydegree.compass40/brouter"
     private val NOTIFICATION_ID = 888
 
     private var screenReceiver: android.content.BroadcastReceiver? = null
@@ -32,6 +38,7 @@ class MainActivity : FlutterActivity() {
         setupControlChannel()
         setupNotificationChannel()
         setupScreenReceiver()
+        setupBRouterChannel()
     }
 
     private fun setupScreenReceiver() {
@@ -108,6 +115,121 @@ class MainActivity : FlutterActivity() {
                         else -> result.notImplemented()
                     }
                 }
+        }
+    }
+
+    private fun setupBRouterChannel() {
+        flutterEngine?.let { engine ->
+            MethodChannel(engine.dartExecutor.binaryMessenger, BROUTER_CHANNEL)
+                .setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "isInstalled" -> {
+                            result.success(isBRouterInstalled())
+                        }
+                        "getRoute" -> {
+                            val lats = call.argument<List<Double>>("lats")?.toDoubleArray()
+                            val lons = call.argument<List<Double>>("lons")?.toDoubleArray()
+                            val profile = call.argument<String>("v") ?: "foot"
+                            if (lats == null || lons == null || lats.size < 2 || lons.size < 2) {
+                                result.success(null)
+                                return@setMethodCallHandler
+                            }
+                            getBRouterRoute(lats, lons, profile, result)
+                        }
+                        else -> result.notImplemented()
+                    }
+                }
+        }
+    }
+
+    private fun isBRouterInstalled(): Boolean {
+        return try {
+            packageManager.getPackageInfo("btools.routingapp", 0)
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    private fun getBRouterRoute(
+        lats: DoubleArray,
+        lons: DoubleArray,
+        profile: String,
+        result: MethodChannel.Result
+    ) {
+        val intent = Intent().apply {
+            component = ComponentName("btools.routingapp", "btools.routingapp.BRouterService")
+        }
+
+        var replied = false
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                Thread {
+                    var track: String? = null
+                    try {
+                        val params = Bundle().apply {
+                            putDoubleArray("lats", lats)
+                            putDoubleArray("lons", lons)
+                            putString("v", profile)
+                            putString("trackFormat", "gpx")
+                            putString("maxRunningTime", "15")
+                        }
+                        if (service != null) {
+                            val data = Parcel.obtain()
+                            val reply = Parcel.obtain()
+                            try {
+                                data.writeInterfaceToken("btools.routingapp.IBRouterService")
+                                data.writeInt(1)
+                                params.writeToParcel(data, 0)
+                                service.transact(IBinder.FIRST_CALL_TRANSACTION, data, reply, 0)
+                                reply.readException()
+                                track = reply.readString()
+                            } finally {
+                                reply.recycle()
+                                data.recycle()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "BRouter getTrackFromParams error", e)
+                    } finally {
+                        try {
+                            unbindService(this)
+                        } catch (_: Exception) {
+                        }
+                    }
+                    runOnUiThread {
+                        if (!replied) {
+                            replied = true
+                            result.success(track)
+                        }
+                    }
+                }.start()
+            }
+
+            override fun onServiceDisconnected(name: ComponentName?) {
+                if (!replied) {
+                    replied = true
+                    result.success(null)
+                }
+            }
+        }
+
+        val bound = try {
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "BRouter bindService failed", e)
+            false
+        }
+
+        if (!bound) {
+            try {
+                unbindService(connection)
+            } catch (_: Exception) {
+            }
+            if (!replied) {
+                replied = true
+                result.success(null)
+            }
         }
     }
 

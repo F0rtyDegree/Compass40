@@ -85,5 +85,6 @@
         <intent>
             <action android:name="android.intent.action.MAIN" />
         </intent>
+        <package android:name="btools.routingapp" />
     </queries>
 </manifest>

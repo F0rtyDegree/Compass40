@@ -13,6 +13,7 @@ import '../widgets/map_scale_badge.dart';
 import '../widgets/map_zoom_buttons.dart';
 import '../widgets/map_action_buttons.dart';
 import 'help_viewer_screen.dart';
+import 'settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gps_info/gps_info.dart';
 import '../controllers/map_screen_controller.dart';
@@ -170,6 +171,24 @@ class _MapScreenState extends State<MapScreen> {
               tooltip: 'Загруженный трек',
             ),
             IconButton(
+              icon: const Icon(Icons.settings),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                ).then((_) async {
+                  await _logic.trackManager.loadLoadedTrackColor();
+                  await _logic.trackManager.loadTrackLineStyle();
+                  await _logic.trackManager.loadTrackColor();
+                  await _logic.trackManager.loadLoadedTrackLineStyle();
+                  await _logic.followController.loadRotateModeTimeout();
+                  await _logic.updateRouteForActiveTarget();
+                });
+              },
+            ),
+            IconButton(
               icon: const Icon(Icons.help_outline),
               onPressed: () {
                 Navigator.push(
@@ -294,6 +313,9 @@ class _MapScreenState extends State<MapScreen> {
                       : null,
                   previewDistanceMeters: _state.previewDistanceMeters,
                   previewBearingDegrees: _state.previewBearingDegrees,
+                  routeImagePoints: _state.routeImagePoints,
+                  routeDistanceMeters: _state.routeDistanceMeters,
+                  routeVersion: _state.routeVersion,
                   heading: _state.magneticHeading,
                   isGpsActive: _state.isGpsActive,
                   mapRotation: _state.mapRotation,
