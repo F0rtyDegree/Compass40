@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import '../utils/geo_utils.dart';
 import '../utils/gpx_parser.dart';
+import 'navigation_method_service.dart';
 
 class BRouterRouteResult {
   final List<Offset> gpsPoints;
@@ -10,6 +11,14 @@ class BRouterRouteResult {
     required this.gpsPoints,
     required this.distanceMeters,
   });
+}
+
+class BRouterResponse {
+  final BRouterRouteResult? route;
+  final String? errorReason;
+
+  const BRouterResponse.success(this.route) : errorReason = null;
+  const BRouterResponse.failure(this.errorReason) : route = null;
 }
 
 class BRouterService {
@@ -26,28 +35,46 @@ class BRouterService {
     }
   }
 
-  static Future<BRouterRouteResult?> getRoute({
+  static Future<BRouterResponse> getRoute({
     required double startLat,
     required double startLon,
     required double targetLat,
     required double targetLon,
-    required String profile,
+    required NavigationMethod method,
   }) async {
     try {
-      final gpxString = await _channel.invokeMethod<String>('getRoute', {
+      final args = <String, dynamic>{
         'lats': <double>[startLat, targetLat],
         'lons': <double>[startLon, targetLon],
-        'v': profile,
-      });
+        if (method.isCustom && method.customFilePath != null)
+          'remoteProfilePath': method.customFilePath
+        else
+          'v': method.profileName ?? 'foot',
+      };
 
-      if (gpxString == null || gpxString.isEmpty) return null;
-      final trimmed = gpxString.trimLeft();
-      if (!trimmed.startsWith('<?xml') && !trimmed.startsWith('<gpx')) {
-        return null;
+      final responseString =
+          await _channel.invokeMethod<String>('getRoute', args);
+
+      if (responseString == null || responseString.isEmpty) {
+        return const BRouterResponse.failure('BRouter не вернул маршрут');
       }
 
-      final points = parseTrackFromGpx(gpxString);
-      if (points.length < 2) return null;
+      final trimmed = responseString.trimLeft();
+      if (!trimmed.startsWith('<?xml') && !trimmed.startsWith('<gpx')) {
+        final cleanError = trimmed
+            .replaceFirst(RegExp(r'^Error:\s*', caseSensitive: false), '')
+            .trim();
+        return BRouterResponse.failure(
+          cleanError.isNotEmpty
+              ? cleanError
+              : 'Не удалось построить маршрут в BRouter',
+        );
+      }
+
+      final points = parseTrackFromGpx(responseString);
+      if (points.length < 2) {
+        return const BRouterResponse.failure('BRouter вернул пустой трек');
+      }
 
       double totalDistance = 0.0;
       for (int i = 1; i < points.length; i++) {
@@ -59,12 +86,14 @@ class BRouterService {
         );
       }
 
-      return BRouterRouteResult(
-        gpsPoints: points,
-        distanceMeters: totalDistance,
+      return BRouterResponse.success(
+        BRouterRouteResult(
+          gpsPoints: points,
+          distanceMeters: totalDistance,
+        ),
       );
-    } catch (_) {
-      return null;
+    } catch (e) {
+      return BRouterResponse.failure('Ошибка BRouter: $e');
     }
   }
 }

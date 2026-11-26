@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/map_transform_state.dart';
 import '../services/map_storage_service.dart';
+import '../services/navigation_method_service.dart';
 import '../controllers/map_screen_state.dart';
 import '../controllers/map_screen_logic.dart';
 import '../widgets/map_crosshair.dart';
@@ -143,14 +144,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: _state.plannedTarget == null,
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _state.plannedTarget != null) {
-          _logic.cancelPlannedTarget();
-        }
-      },
-      child: Scaffold(
+    return Scaffold(
         appBar: AppBar(
           centerTitle: true,
           actions: [
@@ -184,7 +178,9 @@ class _MapScreenState extends State<MapScreen> {
                   await _logic.trackManager.loadTrackColor();
                   await _logic.trackManager.loadLoadedTrackLineStyle();
                   await _logic.followController.loadRotateModeTimeout();
-                  await _logic.updateRouteForActiveTarget();
+                  await _logic.updateRouteForActiveTarget(
+                    syncDefaultFromSettings: true,
+                  );
                 });
               },
             ),
@@ -216,8 +212,7 @@ class _MapScreenState extends State<MapScreen> {
           ],
         ),
         body: _buildBody(),
-      ),
-    );
+      );
   }
 
   Widget _buildBody() {
@@ -299,10 +294,9 @@ class _MapScreenState extends State<MapScreen> {
                   trackLineStyle: _state.trackLineStyle,
                   trackColor: _state.trackColor,
                   loadedTrackLineStyle: _state.loadedTrackLineStyle,
-                  targets: [
-                    ..._state.project?.targets ?? [],
-                    if (_state.plannedTarget != null) _state.plannedTarget!,
-                  ],
+                  targets: _state.activeTarget != null
+                      ? [_state.activeTarget!]
+                      : const [],
                   activeAnchorIds: _logic.activeAnchorIds ?? {},
                   currentUserImagePoint: _state.currentUserImagePoint,
                   activeTargetImagePoint: _state.activeTarget != null
@@ -352,10 +346,11 @@ class _MapScreenState extends State<MapScreen> {
                           child: Container(color: Colors.transparent),
                         ),
                       ),
-                      MapCrosshair(
-                        inCenter: _state.crosshairInCenter,
-                        feedback: _state.crosshairFeedback,
-                      ),
+                      if (!_state.followMode)
+                        MapCrosshair(
+                          inCenter: _state.crosshairInCenter,
+                          feedback: _state.crosshairFeedback,
+                        ),
                     ],
                   );
                 },
@@ -436,15 +431,10 @@ class _MapScreenState extends State<MapScreen> {
                     onHereFromClipboard: () => _logic.showHereOptions(context),
                     hereEnabled: !_state.followMode,
                     onTargetPressed: _state.canPlaceTarget && !_state.followMode
-                        ? (_state.plannedTarget == null
-                              ? _logic.placePlannedTargetAtCrosshair
-                              : _logic.setTargetAndStartNavigation)
+                        ? () => _logic.startNewTargetAtCrosshair()
                         : null,
-                    onTargetLongPressed:
-                        _state.canPlaceTarget && !_state.followMode
-                        ? _logic.placeTargetFromClipboard
-                        : null,
-                    targetText: _state.plannedTarget == null ? 'ЦЕЛЬ' : 'ГОУ',
+                    onTargetLongPressed: () => _handleTargetLongPress(context),
+                    hasActiveTarget: _state.activeTarget != null,
                     targetEnabled: _state.canPlaceTarget && !_state.followMode,
                   ),
                 ),
@@ -921,6 +911,96 @@ class _MapScreenState extends State<MapScreen> {
             shadows: [Shadow(color: Colors.black, blurRadius: 2)],
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _handleTargetLongPress(BuildContext context) async {
+    final isTargetActive = _state.canPlaceTarget && !_state.followMode;
+    final hasCurrentTarget = _state.activeTarget != null;
+
+    // Случай Б: кнопка ЦЕЛЬ не активна (followMode == true)
+    if (!isTargetActive) {
+      if (!hasCurrentTarget) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Цветовая дифференциация штанов отсутствует'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+
+      final methods = await NavigationMethodService.getAvailableMethods();
+      if (!context.mounted) return;
+
+      await showDialog(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('Пересчитать маршрут'),
+          children: [
+            ...methods.map(
+              (m) => SimpleDialogOption(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _logic.recalculateCurrentTargetWithMethod(m.id);
+                },
+                child: Text(m.title),
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _logic.stopTargetNavigation();
+              },
+              child: const Text(
+                'Остановить ведение',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Случай А: кнопка ЦЕЛЬ активна (followMode == false)
+    final methods = await NavigationMethodService.getAvailableMethods();
+    if (!context.mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Цель'),
+        children: [
+          ...methods.map(
+            (m) => SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _logic.startNewTargetAtCrosshair(methodId: m.id);
+              },
+              child: Text(m.title),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _logic.startTargetFromClipboard();
+            },
+            child: const Text('Вставить из буфера'),
+          ),
+          if (hasCurrentTarget)
+            SimpleDialogOption(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _logic.stopTargetNavigation();
+              },
+              child: const Text(
+                'Остановить ведение',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+        ],
       ),
     );
   }

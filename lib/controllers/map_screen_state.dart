@@ -105,9 +105,9 @@ class MapScreenState {
   double? previewDistanceMeters;
   double? previewBearingDegrees;
 
-  // Цели
-  MapTarget? plannedTarget;
+  // Единственная активная цель и способ ведения на неё
   MapTarget? activeTarget;
+  String activeNavigationMethodId = AppConstants.navMethodDefault;
 
   Timer? rotateModeTimer; // Таймер автоматического отключения режима вращения
 

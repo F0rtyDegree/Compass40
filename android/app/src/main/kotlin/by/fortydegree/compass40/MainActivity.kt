@@ -130,11 +130,12 @@ class MainActivity : FlutterActivity() {
                             val lats = call.argument<List<Double>>("lats")?.toDoubleArray()
                             val lons = call.argument<List<Double>>("lons")?.toDoubleArray()
                             val profile = call.argument<String>("v") ?: "foot"
+                            val remoteProfilePath = call.argument<String>("remoteProfilePath")
                             if (lats == null || lons == null || lats.size < 2 || lons.size < 2) {
-                                result.success(null)
+                                result.success("Error: Некорректные координаты")
                                 return@setMethodCallHandler
                             }
-                            getBRouterRoute(lats, lons, profile, result)
+                            getBRouterRoute(lats, lons, profile, remoteProfilePath, result)
                         }
                         else -> result.notImplemented()
                     }
@@ -155,6 +156,7 @@ class MainActivity : FlutterActivity() {
         lats: DoubleArray,
         lons: DoubleArray,
         profile: String,
+        remoteProfilePath: String?,
         result: MethodChannel.Result
     ) {
         val intent = Intent().apply {
@@ -170,11 +172,23 @@ class MainActivity : FlutterActivity() {
                         val params = Bundle().apply {
                             putDoubleArray("lats", lats)
                             putDoubleArray("lons", lons)
-                            putString("v", profile)
                             putString("trackFormat", "gpx")
                             putString("maxRunningTime", "15")
+                            // Увеличиваем порог привязки к дороге с 250 м до 1000 м
+                            putString("extraParams", "waypointCatchingRange=1000")
+
+                            if (!remoteProfilePath.isNullOrBlank()) {
+                                val file = java.io.File(remoteProfilePath)
+                                if (!file.exists() || !file.canRead()) {
+                                    track = "Error: Файл профиля не найден (${file.name})"
+                                } else {
+                                    putString("remoteProfile", file.readText(Charsets.UTF_8))
+                                }
+                            } else {
+                                putString("v", profile)
+                            }
                         }
-                        if (service != null) {
+                        if (track == null && service != null) {
                             val data = Parcel.obtain()
                             val reply = Parcel.obtain()
                             try {
@@ -191,6 +205,7 @@ class MainActivity : FlutterActivity() {
                         }
                     } catch (e: Exception) {
                         Log.e("MainActivity", "BRouter getTrackFromParams error", e)
+                        track = "Error: ${e.message ?: "Ошибка вызова BRouter"}"
                     } finally {
                         try {
                             unbindService(this)
@@ -200,7 +215,7 @@ class MainActivity : FlutterActivity() {
                     runOnUiThread {
                         if (!replied) {
                             replied = true
-                            result.success(track)
+                            result.success(track ?: "Error: Пустой ответ BRouter")
                         }
                     }
                 }.start()
@@ -209,7 +224,7 @@ class MainActivity : FlutterActivity() {
             override fun onServiceDisconnected(name: ComponentName?) {
                 if (!replied) {
                     replied = true
-                    result.success(null)
+                    result.success("Error: Сервис BRouter отключился")
                 }
             }
         }
@@ -228,7 +243,7 @@ class MainActivity : FlutterActivity() {
             }
             if (!replied) {
                 replied = true
-                result.success(null)
+                result.success("Error: Не удалось запустить сервис BRouter")
             }
         }
     }

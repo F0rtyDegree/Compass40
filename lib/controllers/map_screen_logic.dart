@@ -17,6 +17,7 @@ import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
 import '../services/gps_compass_service.dart';
 import '../services/brouter_service.dart';
+import '../services/navigation_method_service.dart';
 import '../services/locus_calibration_service.dart';
 import '../services/locus_xml_auto_saver.dart';
 import 'map_screen_state.dart';
@@ -271,22 +272,6 @@ class MapScreenLogic {
       needsSave = true;
     }
 
-    // Активная цель при старте переводится в planned: сессия прервана,
-    // ведение не восстанавливается.
-    final hasActive = projectToUse.targets.any(
-      (t) => t.status == MapTargetStatus.active,
-    );
-    if (hasActive) {
-      final updatedTargets = projectToUse.targets.map((t) {
-        if (t.status == MapTargetStatus.active) {
-          return t.copyWith(status: MapTargetStatus.planned);
-        }
-        return t;
-      }).toList();
-      projectToUse = projectToUse.copyWith(targets: updatedTargets);
-      needsSave = true;
-    }
-
     if (needsSave) {
       await storageService.saveProject(projectToUse);
     }
@@ -298,10 +283,6 @@ class MapScreenLogic {
         state.transformState = savedTransform;
       }
       state.activeTarget = null;
-      // Если была active — она уже стала planned. Показываем как planned.
-      state.plannedTarget = projectToUse.targets.firstWhereOrNull(
-        (t) => t.status == MapTargetStatus.planned,
-      );
     });
 
     _calibrationService.updateAnchors(projectToUse.anchors);
@@ -330,6 +311,7 @@ class MapScreenLogic {
     _recalculateWorkingPairAndRotation(enableFollow: true);
     _recalculateCanPlaceTarget();
     await trackManager.loadLoadedTrackFromProject();
+    await targetManager.restorePersistedTargetIfAny();
   }
 
   /// Открывает файловый пикер, выбирает GPX, загружает трек.
@@ -472,7 +454,6 @@ class MapScreenLogic {
         state.workingPair = null;
         state.canPlaceTarget = false;
         state.transformState = const MapTransformState();
-        state.plannedTarget = null;
         state.activeTarget = null;
       });
 
@@ -533,7 +514,6 @@ class MapScreenLogic {
         state.workingPair = null;
         state.canPlaceTarget = false;
         state.transformState = const MapTransformState();
-        state.plannedTarget = null;
         state.activeTarget = null;
       });
 
@@ -577,7 +557,6 @@ class MapScreenLogic {
       state.lastAutoAnchorId = null;
       state.previewDistanceMeters = null;
       state.previewBearingDegrees = null;
-      state.plannedTarget = null;
       state.activeTarget = null;
       state.currentUserImagePoint = null;
       state.pendingAnchor = null;
@@ -633,27 +612,9 @@ class MapScreenLogic {
     _calibrationService.setPinnedAnchorIds([]);
     await recalculateTargetsAfterNewAnchor();
 
-    // Без привязки цель бесполезна, пусть уходит в историю.
-    final active = state.activeTarget;
-    if (active != null) {
-      final currentProject = state.project;
-      if (currentProject != null) {
-        final updatedTargets = currentProject.targets.map((t) {
-          if (t.id == active.id) {
-            return t.copyWith(status: MapTargetStatus.passed);
-          }
-          return t;
-        }).toList();
-        final updated = currentProject.copyWith(targets: updatedTargets);
-        await storageService.saveProject(updated);
-        setState(() {
-          state.project = updated;
-          state.activeTarget = null;
-        });
-        clearRoute();
-      }
-      // Синхронизируем с главным экраном: убираем строку цели.
-      onCancelNavigation?.call();
+    // Без привязки цель не может существовать на карте — останавливаем ведение.
+    if (state.activeTarget != null) {
+      await targetManager.stopNavigation(notifyHome: true);
     }
     //    showSnackBar('Все якоря удалены');
   }
@@ -1175,30 +1136,26 @@ class MapScreenLogic {
   // Цели
   // --------------------------------------------------------
 
-  void placePlannedTargetAtCrosshair() {
-    unawaited(targetManager.placePlannedTargetAtCrosshair());
+  Future<void> startNewTargetAtCrosshair({String? methodId}) async {
+    await targetManager.startNewTargetAtCrosshair(methodId: methodId);
   }
 
-  void cancelPlannedTarget() {
-    targetManager.cancelPlannedTarget();
+  Future<void> startTargetFromClipboard() async {
+    await targetManager.startTargetFromClipboard();
   }
 
-  Future<void> placeTargetFromClipboard() async {
-    await targetManager.placeTargetFromClipboard();
+  Future<void> recalculateCurrentTargetWithMethod(String methodId) async {
+    await targetManager.recalculateCurrentTargetWithMethod(methodId);
   }
 
-  Future<void> setTargetAndStartNavigation() async {
-    await targetManager.setTargetAndStartNavigation();
-  }
-
-  Future<void> markActiveTargetAsPassed() async {
-    await targetManager.markActiveTargetAsPassed();
+  Future<void> stopTargetNavigation() async {
+    await targetManager.stopNavigation(notifyHome: true);
   }
 
   /// Публичный метод для внешней отмены активной цели.
   /// Используется, когда строку цели смахивают на главном экране.
   Future<void> cancelActiveTarget() async {
-    await targetManager.markActiveTargetAsPassed();
+    await targetManager.stopNavigation(notifyHome: false);
   }
 
   // --------------------------------------------------------
@@ -1308,13 +1265,9 @@ class MapScreenLogic {
     final project = state.project;
     if (project == null) return;
 
-    // Пересчитываем активные и запланированные цели. Пройденные — история,
-    // их координаты фиксированы на момент прохождения.
+    // Пересчитываем единственную активную цель под новую привязку.
     final updatedTargets = project.targets.map((t) {
-      if (t.status != MapTargetStatus.active &&
-          t.status != MapTargetStatus.planned) {
-        return t;
-      }
+      if (t.status != MapTargetStatus.active) return t;
       final geo = _calibrationService.imagePointToGeoFromCurrent(
         Offset(t.imageX, t.imageY),
       );
@@ -1328,30 +1281,20 @@ class MapScreenLogic {
     final newActiveTarget = updatedTargets.firstWhereOrNull(
       (t) => t.status == MapTargetStatus.active,
     );
-    final newPlannedTarget = updatedTargets.firstWhereOrNull(
-      (t) => t.status == MapTargetStatus.planned,
-    );
 
-    // Планируемая цель, созданная кнопкой ЦЕЛЬ, но ещё не активированная,
-    // в project.targets отсутствует. Пересчитываем её отдельно.
-    MapTarget? plannedFromState = state.plannedTarget;
-    if (plannedFromState != null &&
-        !updatedTargets.any((t) => t.id == plannedFromState!.id)) {
-      final geo = _calibrationService.imagePointToGeoFromCurrent(
-        Offset(plannedFromState.imageX, plannedFromState.imageY),
+    if (newActiveTarget?.latitude != null && newActiveTarget?.longitude != null) {
+      await NavigationMethodService.saveActiveTarget(
+        PersistedTargetData(
+          latitude: newActiveTarget!.latitude!,
+          longitude: newActiveTarget.longitude!,
+          methodId: state.activeNavigationMethodId,
+        ),
       );
-      if (geo != null) {
-        plannedFromState = plannedFromState.copyWith(
-          latitude: geo.latitude,
-          longitude: geo.longitude,
-        );
-      }
     }
 
     setState(() {
       state.project = updatedProject;
       state.activeTarget = newActiveTarget;
-      state.plannedTarget = newPlannedTarget ?? plannedFromState;
     });
 
     // Пересчитываем пиксели трека и маршрута под новую привязку.
@@ -1383,18 +1326,32 @@ class MapScreenLogic {
     });
   }
 
-  Future<void> updateRouteForActiveTarget() async {
+  Future<void> updateRouteForActiveTarget({bool syncDefaultFromSettings = false}) async {
     final active = state.activeTarget;
     if (active == null || active.latitude == null || active.longitude == null) {
       clearRoute();
       return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final routingMode =
-        prefs.getInt(AppConstants.prefRoutingMode) ??
-            AppConstants.routingModeDefault;
-    if (routingMode != AppConstants.routingModeRoute) {
+    if (syncDefaultFromSettings) {
+      final defaultId = await NavigationMethodService.getDefaultMethodId();
+      setState(() {
+        state.activeNavigationMethodId = defaultId;
+      });
+      await NavigationMethodService.saveActiveTarget(
+        PersistedTargetData(
+          latitude: active.latitude!,
+          longitude: active.longitude!,
+          methodId: defaultId,
+        ),
+      );
+    }
+
+    final method = await NavigationMethodService.resolveMethodById(
+      state.activeNavigationMethodId,
+    );
+
+    if (method.isAzimuth) {
       clearRoute();
       return;
     }
@@ -1402,35 +1359,52 @@ class MapScreenLogic {
     final gps = _lastGpsData ?? gpsDataNotifier.value;
     if (gps.latitude == null || gps.longitude == null) {
       clearRoute();
+      showSnackBar('Нет сигнала GPS — ведение по азимуту');
+      await _fallbackToAzimuth(active);
       return;
     }
 
-    final profile =
-        prefs.getString(AppConstants.prefRoutingProfile) ??
-            AppConstants.routingProfileDefault;
-
-    final result = await BRouterService.getRoute(
+    final response = await BRouterService.getRoute(
       startLat: gps.latitude!,
       startLon: gps.longitude!,
       targetLat: active.latitude!,
       targetLon: active.longitude!,
-      profile: profile,
+      method: method,
     );
 
     if (state.isDisposed) return;
 
-    if (result == null) {
+    final route = response.route;
+    if (route == null) {
       clearRoute();
-      showSnackBar('Нет данных маршрута для региона');
+      showSnackBar(
+        '${response.errorReason ?? "Ошибка BRouter"} — ведение по азимуту',
+      );
+      await _fallbackToAzimuth(active);
       return;
     }
 
     setState(() {
-      state.routeGpsPoints = result.gpsPoints;
-      state.routeDistanceMeters = result.distanceMeters;
+      state.routeGpsPoints = route.gpsPoints;
+      state.routeDistanceMeters = route.distanceMeters;
     });
     _recalculateRouteImagePoints();
     _trimRouteToCurrentPosition(gps.latitude!, gps.longitude!);
+  }
+
+  Future<void> _fallbackToAzimuth(MapTarget active) async {
+    setState(() {
+      state.activeNavigationMethodId = AppConstants.navMethodAzimuth;
+    });
+    if (active.latitude != null && active.longitude != null) {
+      await NavigationMethodService.saveActiveTarget(
+        PersistedTargetData(
+          latitude: active.latitude!,
+          longitude: active.longitude!,
+          methodId: AppConstants.navMethodAzimuth,
+        ),
+      );
+    }
   }
 
   void _trimRouteToCurrentPosition(double userLat, double userLon) {

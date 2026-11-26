@@ -2,8 +2,9 @@ import 'package:flutter/services.dart';
 import '../models/map_target.dart';
 import '../services/map_calibration_service.dart';
 import '../services/map_storage_service.dart';
-import 'map_screen_state.dart';
+import '../services/navigation_method_service.dart';
 import '../utils/geo_utils.dart';
+import 'map_screen_state.dart';
 
 class MapTargetManager {
   final MapScreenState state;
@@ -30,79 +31,33 @@ class MapTargetManager {
     this.onTargetClearedForRoute,
   });
 
-  // Молча выходим, если нет привязки. Цель без координат бесполезна.
-  // Сообщение не показываем: обилие сообщений раздражает, а причина
-  // и так очевидна — если карта не привязана, координаты не вычислить.
-  /// Создаёт запланированную цель в позиции прицела.
-  /// Старая активная цель при этом переводится в passed: ведение
-  /// на неё прекращается сразу при первом тапе на кнопку ЦЕЛЬ.
-  Future<void> placePlannedTargetAtCrosshair() async {
+  /// Короткий тап по кнопке «ЦЕЛЬ» (или выбор способа из меню при active button):
+  /// удаляет предыдущий флаг, ставит новый в точку прицела и сразу запускает ведение.
+  Future<void> startNewTargetAtCrosshair({String? methodId}) async {
     if (!state.canPlaceTarget) return;
-    if (state.crosshairImagePoint == null) return;
+    final crosshair = state.crosshairImagePoint;
+    if (crosshair == null) return;
 
-    final geo = calibrationService.imagePointToGeoFromCurrent(
-      state.crosshairImagePoint!,
+    final geo = calibrationService.imagePointToGeoFromCurrent(crosshair);
+    if (geo == null) {
+      showSnackBar('Сначала привяжите карту');
+      return;
+    }
+
+    final resolvedMethodId =
+        methodId ?? await NavigationMethodService.getDefaultMethodId();
+
+    await _activateSingleTarget(
+      imagePoint: crosshair,
+      latitude: geo.latitude,
+      longitude: geo.longitude,
+      methodId: resolvedMethodId,
     );
-
-    final target = MapTarget(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      imageX: state.crosshairImagePoint!.dx,
-      imageY: state.crosshairImagePoint!.dy,
-      latitude: geo?.latitude,
-      longitude: geo?.longitude,
-      status: MapTargetStatus.planned,
-      createdAt: DateTime.now(),
-    );
-
-    await _passOldActiveTargets();
-
-    setState(() {
-      state.plannedTarget = target;
-    });
   }
 
-  /// Помечает текущую активную цель как пройденную и сохраняет проект.
-  /// Ведение на неё прекращается.
-  Future<void> _passOldActiveTargets() async {
-    final project = state.project;
-    if (project == null) return;
-    final hasActive =
-        project.targets.any((t) => t.status == MapTargetStatus.active);
-    if (!hasActive) return;
-
-    final updatedTargets = project.targets.map((t) {
-      if (t.status == MapTargetStatus.active) {
-        return t.copyWith(status: MapTargetStatus.passed);
-      }
-      return t;
-    }).toList();
-
-    final updated = project.copyWith(targets: updatedTargets);
-    await storageService.saveProject(updated);
-    setState(() {
-      state.project = updated;
-      state.activeTarget = null;
-    });
-    onTargetClearedForRoute?.call();
-    // Синхронизируем с главным экраном: убираем строку цели.
-    // Цепочка: HomeLogic.clearTarget → MapScreenController.cancelActiveTarget
-    // → markActiveTargetAsPassed. На этом шаге state.activeTarget уже null,
-    // markActiveTargetAsPassed выйдет сразу. Реентрантность безвредна.
-    // Тесты на closeMap и _reloadTrackImagePoints не пишем осознанно:
-    // оба метода завязаны на синглтоны MapCalibrationService и TrackRecorder,
-    // файловую систему и SharedPreferences. Юнит-тестирование потребует
-    // полноценного DI-рефакторинга, стоимость выше пользы. Логика проверяется
-    // вручную на устройстве. Возвращаться — только при реальных регрессиях.
-    onCancelNavigation?.call();
-  }
-
-  void cancelPlannedTarget() {
-    setState(() {
-      state.plannedTarget = null;
-    });
-  }
-
-  Future<void> placeTargetFromClipboard() async {
+  /// «Вставить из буфера» в меню кнопки «ЦЕЛЬ»:
+  /// парсит координаты, удаляет предыдущий флаг, ставит новый и запускает ведение способом по умолчанию.
+  Future<void> startTargetFromClipboard() async {
     if (!state.canPlaceTarget) {
       showSnackBar('Сначала привяжите карту');
       return;
@@ -126,111 +81,159 @@ class MapTargetManager {
       showSnackBar('Неверный формат. Ожидается: широта,долгота');
       return;
     }
-    final lat = geo.latitude;
-    final lon = geo.longitude;
 
-    final imagePoint = calibrationService.geoToImagePointFromCurrent(lat, lon);
+    final imagePoint = calibrationService.geoToImagePointFromCurrent(
+      geo.latitude,
+      geo.longitude,
+    );
     if (imagePoint == null) {
-      showSnackBar('Не удалось разместить цель на карте');
+      showSnackBar('Сначала привяжите карту');
       return;
     }
 
-    final target = MapTarget(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      imageX: imagePoint.dx,
-      imageY: imagePoint.dy,
-      latitude: lat,
-      longitude: lon,
-      status: MapTargetStatus.planned,
-      createdAt: DateTime.now(),
+    final defaultMethodId = await NavigationMethodService.getDefaultMethodId();
+
+    await _activateSingleTarget(
+      imagePoint: imagePoint,
+      latitude: geo.latitude,
+      longitude: geo.longitude,
+      methodId: defaultMethodId,
     );
-
-    await _passOldActiveTargets();
-
-    setState(() {
-      state.plannedTarget = target;
-    });
-//    showSnackBar('Цель установлена из буфера обмена');
   }
 
-  // Молча выходим, если у цели нет координат. Сообщение не показываем.
-  // См. комментарий в placePlannedTargetAtCrosshair.
-  Future<void> setTargetAndStartNavigation() async {
-    final planned = state.plannedTarget;
-    if (planned == null || planned.latitude == null || planned.longitude == null) {
+  /// Пересчитывает ведение на текущую активную цель новым способом (из меню в followMode).
+  Future<void> recalculateCurrentTargetWithMethod(String methodId) async {
+    final active = state.activeTarget;
+    if (active == null || active.latitude == null || active.longitude == null) {
       return;
     }
-    await _persistAndSetActiveTarget(copyCoords: false);
+
+    setState(() {
+      state.activeNavigationMethodId = methodId;
+    });
+
+    await NavigationMethodService.saveActiveTarget(
+      PersistedTargetData(
+        latitude: active.latitude!,
+        longitude: active.longitude!,
+        methodId: methodId,
+      ),
+    );
 
     if (onStartNavigation != null) {
-      await onStartNavigation!(planned.latitude!, planned.longitude!);
-//      showSnackBar('Ведение на цель в компасе запущено');
+      await onStartNavigation!(active.latitude!, active.longitude!);
     }
     await onTargetActivatedForRoute?.call();
   }
 
-  Future<void> _persistAndSetActiveTarget({required bool copyCoords}) async {
-    final planned = state.plannedTarget;
-    if (planned == null) return;
+  /// Останавливает ведение, удаляет красный флаг, очищает линию маршрута и сохранённую цель.
+  Future<void> stopNavigation({bool notifyHome = true}) async {
+    final project = state.project;
+    if (project != null && project.targets.isNotEmpty) {
+      final updatedProject = project.copyWith(targets: []);
+      await storageService.saveProject(updatedProject);
+      setState(() {
+        state.project = updatedProject;
+        state.activeTarget = null;
+      });
+    } else {
+      setState(() {
+        state.activeTarget = null;
+      });
+    }
 
+    await NavigationMethodService.clearActiveTarget();
+    onTargetClearedForRoute?.call();
+    if (notifyHome) {
+      onCancelNavigation?.call();
+    }
+  }
+
+  /// Восстанавливает активную цель при возврате с экрана компаса или после сбоя.
+  Future<void> restorePersistedTargetIfAny() async {
+    final persisted = await NavigationMethodService.loadActiveTarget();
+    if (persisted == null) return;
+
+    final imagePoint = calibrationService.geoToImagePointFromCurrent(
+      persisted.latitude,
+      persisted.longitude,
+    );
+    if (imagePoint == null) return;
+
+    final restoredTarget = MapTarget(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      imageX: imagePoint.dx,
+      imageY: imagePoint.dy,
+      latitude: persisted.latitude,
+      longitude: persisted.longitude,
+      status: MapTargetStatus.active,
+      createdAt: DateTime.now(),
+    );
+
+    final project = state.project;
+    if (project != null) {
+      final updatedProject = project.copyWith(targets: [restoredTarget]);
+      await storageService.saveProject(updatedProject);
+      setState(() {
+        state.project = updatedProject;
+        state.activeTarget = restoredTarget;
+        state.activeNavigationMethodId = persisted.methodId;
+      });
+    } else {
+      setState(() {
+        state.activeTarget = restoredTarget;
+        state.activeNavigationMethodId = persisted.methodId;
+      });
+    }
+
+    onRecalculatePreview();
+    if (onStartNavigation != null) {
+      await onStartNavigation!(persisted.latitude, persisted.longitude);
+    }
+    await onTargetActivatedForRoute?.call();
+  }
+
+  Future<void> _activateSingleTarget({
+    required Offset imagePoint,
+    required double latitude,
+    required double longitude,
+    required String methodId,
+  }) async {
     final project = state.project;
     if (project == null) return;
 
-    if (planned.latitude == null || planned.longitude == null) {
-      showSnackBar('Координаты цели не определены — добавьте привязку');
-      return;
-    }
+    final newTarget = MapTarget(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      imageX: imagePoint.dx,
+      imageY: imagePoint.dy,
+      latitude: latitude,
+      longitude: longitude,
+      status: MapTargetStatus.active,
+      createdAt: DateTime.now(),
+    );
 
-    if (copyCoords) {
-      final lat = planned.latitude!.toStringAsFixed(6);
-      final lon = planned.longitude!.toStringAsFixed(6);
-      await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
-      showSnackBar('Координаты цели скопированы в буфер обмена');
-    }
-
-    final updatedTargets = project.targets.map((t) {
-      if (t.status == MapTargetStatus.active) {
-        return t.copyWith(status: MapTargetStatus.passed);
-      }
-      return t;
-    }).toList();
-
-    final activeTarget = planned.copyWith(status: MapTargetStatus.active);
-    updatedTargets.add(activeTarget);
-
-    final updatedProject = project.copyWith(targets: updatedTargets);
+    final updatedProject = project.copyWith(targets: [newTarget]);
     await storageService.saveProject(updatedProject);
+
+    await NavigationMethodService.saveActiveTarget(
+      PersistedTargetData(
+        latitude: latitude,
+        longitude: longitude,
+        methodId: methodId,
+      ),
+    );
 
     setState(() {
       state.project = updatedProject;
-      state.activeTarget = activeTarget;
-      state.plannedTarget = null;
+      state.activeTarget = newTarget;
+      state.activeNavigationMethodId = methodId;
     });
 
     onRecalculatePreview();
-  }
 
-  Future<void> markActiveTargetAsPassed() async {
-    final active = state.activeTarget;
-    if (active == null) return;
-
-    final project = state.project;
-    if (project == null) return;
-
-    final updatedTargets = project.targets.map((t) {
-      if (t.id == active.id) {
-        return t.copyWith(status: MapTargetStatus.passed);
-      }
-      return t;
-    }).toList();
-
-    final updatedProject = project.copyWith(targets: updatedTargets);
-    await storageService.saveProject(updatedProject);
-
-    setState(() {
-      state.project = updatedProject;
-      state.activeTarget = null;
-    });
-    onTargetClearedForRoute?.call();
+    if (onStartNavigation != null) {
+      await onStartNavigation!(latitude, longitude);
+    }
+    await onTargetActivatedForRoute?.call();
   }
 }

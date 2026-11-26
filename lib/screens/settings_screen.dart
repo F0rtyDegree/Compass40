@@ -1,3 +1,5 @@
+  import 'dart:io';
+  import 'package:filesystem_picker/filesystem_picker.dart';
   import 'package:flutter/material.dart';
   import 'package:provider/provider.dart';
   import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +10,7 @@
   import '../controllers/home_state.dart';
   import '../services/brouter_service.dart';
   import '../services/compass_service.dart';
+  import '../services/navigation_method_service.dart';
 
   class SettingsScreen extends StatefulWidget {
     const SettingsScreen({super.key});
@@ -30,8 +33,8 @@
     int _trackLineStyle = AppConstants.trackLineStyleDefault;
     int _trackColor = AppConstants.trackColorDefault;
     int _loadedTrackLineStyle = AppConstants.loadedTrackLineStyleDefault;
-    int _routingMode = AppConstants.routingModeDefault;
-    String _routingProfile = AppConstants.routingProfileDefault;
+    String _defaultNavMethodId = AppConstants.navMethodDefault;
+    List<NavigationMethod> _navigationMethods = NavigationMethod.builtInMethods;
     bool _isBRouterInstalled = false;
     double _compassSmoothness = AppConstants.compassSmoothnessDefault.toDouble();
     CompassMode _compassMode = CompassMode.magnetic;
@@ -88,20 +91,10 @@
               AppConstants.loadedTrackLineStyleDefault;
 
       _isBRouterInstalled = await BRouterService.isInstalled();
-      final savedRoutingMode =
-          prefs.getInt(AppConstants.prefRoutingMode) ??
-              AppConstants.routingModeDefault;
-      _routingMode = _isBRouterInstalled
-          ? savedRoutingMode
-          : AppConstants.routingModeAzimuth;
-
-      final savedProfile =
-          prefs.getString(AppConstants.prefRoutingProfile) ??
-              AppConstants.routingProfileDefault;
-      const validProfiles = ['foot', 'trekking', 'car-fast'];
-      _routingProfile = validProfiles.contains(savedProfile)
-          ? savedProfile
-          : AppConstants.routingProfileDefault;
+      _navigationMethods = await NavigationMethodService.getAllMethods();
+      _defaultNavMethodId = await NavigationMethodService.getDefaultMethodId(
+        isBrouterInstalled: _isBRouterInstalled,
+      );
 
       _compassSmoothness =
           (prefs.getInt(AppConstants.prefCompassSmoothness) ??
@@ -165,8 +158,7 @@
       await prefs.setInt(AppConstants.prefTrackLineStyle, _trackLineStyle);
       await prefs.setInt(AppConstants.prefTrackColor, _trackColor);
       await prefs.setInt(AppConstants.prefLoadedTrackLineStyle, _loadedTrackLineStyle);
-      await prefs.setInt(AppConstants.prefRoutingMode, _routingMode);
-      await prefs.setString(AppConstants.prefRoutingProfile, _routingProfile);
+      await NavigationMethodService.setDefaultMethodId(_defaultNavMethodId);
 
       await prefs.setBool(
           AppConstants.prefAnnounceTargetEnabled, _announceTargetEnabled);
@@ -270,6 +262,58 @@
           _loadedTrackColor = selected;
         });
       }
+    }
+    Future<void> _pickCustomBrfProfile(BuildContext context) async {
+      Directory rootDir = Directory(AppConstants.brouterProfilesDir);
+      if (!await rootDir.exists()) {
+        rootDir = Directory('/storage/emulated/0');
+      }
+      if (!await rootDir.exists()) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет доступа к папке профилей BRouter')),
+        );
+        return;
+      }
+
+      if (!context.mounted) return;
+      final String? pickedPath = await FilesystemPicker.open(
+        title: 'Выберите профиль .brf',
+        context: context,
+        rootDirectory: rootDir,
+        fsType: FilesystemType.file,
+        allowedExtensions: ['.brf'],
+        fileTileSelectMode: FileTileSelectMode.wholeTile,
+      );
+
+      if (pickedPath == null) return;
+
+      final addedMethod =
+          await NavigationMethodService.addCustomProfile(pickedPath);
+      final updatedMethods = await NavigationMethodService.getAllMethods();
+
+      if (!mounted) return;
+      setState(() {
+        _navigationMethods = updatedMethods;
+        _defaultNavMethodId = addedMethod.id;
+      });
+    }
+
+    Future<void> _removeCustomBrfProfile(NavigationMethod method) async {
+      final path = method.customFilePath;
+      if (path == null) return;
+
+      await NavigationMethodService.removeCustomProfile(path);
+      final updatedMethods = await NavigationMethodService.getAllMethods();
+      final updatedDefault = await NavigationMethodService.getDefaultMethodId(
+        isBrouterInstalled: _isBRouterInstalled,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _navigationMethods = updatedMethods;
+        _defaultNavMethodId = updatedDefault;
+      });
     }
 
     Widget _buildTextFieldRow(
@@ -617,78 +661,98 @@
                         suffix: 'мс',
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Ведение на цель:',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          DropdownButton<int>(
-                            value: _routingMode,
-                            items: [
-                              const DropdownMenuItem(
-                                value: AppConstants.routingModeAzimuth,
-                                child: Text('По азимуту'),
-                              ),
-                              DropdownMenuItem(
-                                value: AppConstants.routingModeRoute,
-                                enabled: _isBRouterInstalled,
-                                child: Text(
-                                  'По маршруту',
-                                  style: TextStyle(
-                                    color: _isBRouterInstalled
-                                        ? null
-                                        : Colors.grey,
+                      Text(
+                        'Ведение на цель (по умолчанию):',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 6),
+                      ..._navigationMethods.map((method) {
+                        final isEnabled =
+                            method.isAzimuth || _isBRouterInstalled;
+                        final isSelected = _defaultNavMethodId == method.id;
+
+                        return InkWell(
+                          onTap: isEnabled
+                              ? () {
+                                  setState(() {
+                                    _defaultNavMethodId = method.id;
+                                  });
+                                }
+                              : null,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4.0),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isSelected
+                                      ? Icons.radio_button_checked
+                                      : Icons.radio_button_unchecked,
+                                  size: 20,
+                                  color: !isEnabled
+                                      ? Colors.grey
+                                      : (isSelected
+                                          ? Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                          : null),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    method.title,
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: isEnabled ? null : Colors.grey,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
                                   ),
+                                ),
+                                if (method.isCustom)
+                                  IconButton(
+                                    icon: const Icon(Icons.close, size: 20),
+                                    color:
+                                        isEnabled ? Colors.red : Colors.grey,
+                                    tooltip: 'Удалить профиль',
+                                    constraints: const BoxConstraints(),
+                                    padding: const EdgeInsets.all(4),
+                                    onPressed: isEnabled
+                                        ? () =>
+                                            _removeCustomBrfProfile(method)
+                                        : null,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                      InkWell(
+                        onTap: _isBRouterInstalled
+                            ? () => _pickCustomBrfProfile(context)
+                            : null,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6.0),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.folder_open,
+                                size: 20,
+                                color: _isBRouterInstalled ? null : Colors.grey,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Другой (load)',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color:
+                                      _isBRouterInstalled ? null : Colors.grey,
                                 ),
                               ),
                             ],
-                            onChanged: (v) {
-                              if (v == null) return;
-                              if (v == AppConstants.routingModeRoute &&
-                                  !_isBRouterInstalled) {
-                                return;
-                              }
-                              setState(() => _routingMode = v);
-                            },
                           ),
-                        ],
-                      ),
-                      if (_routingMode == AppConstants.routingModeRoute &&
-                          _isBRouterInstalled) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Профиль маршрута:',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            DropdownButton<String>(
-                              value: _routingProfile,
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'foot',
-                                  child: Text('Пешком'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'trekking',
-                                  child: Text('Велосипед'),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'car-fast',
-                                  child: Text('Автомобиль'),
-                                ),
-                              ],
-                              onChanged: (v) {
-                                if (v == null) return;
-                                setState(() => _routingProfile = v);
-                              },
-                            ),
-                          ],
                         ),
-                      ],
+                      ),
                       const SizedBox(height: 10),
                       Text('Активный трек',
                           style: Theme.of(context).textTheme.titleSmall),

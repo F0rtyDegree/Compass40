@@ -21,6 +21,7 @@ import '../utils/announce_utils.dart';
 import '../utils/app_constants.dart';
 import 'announcer_controller.dart';
 import 'map_screen_controller.dart';
+import '../services/navigation_method_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeLogic {
@@ -303,8 +304,7 @@ Future<void> setCompassMode(CompassMode mode) async {
       state.distanceToTarget.value = null;
       state.bearingToTarget.value = null;
     });
-    // Синхронизируем с картой: если карта открыта и цель там активна,
-    // помечаем её как пройденную.
+    unawaited(NavigationMethodService.clearActiveTarget());
     MapScreenController().cancelActiveTarget();
   }
 

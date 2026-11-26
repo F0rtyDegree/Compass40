@@ -32,11 +32,14 @@ class AppConstants {
   static const String prefAnnounceScreenOffEnabled = 'announceScreenOffEnabled';
   static const String prefRoutingMode = 'routingMode';
   static const String prefRoutingProfile = 'routingProfile';
+  static const String prefDefaultNavigationMethod = 'defaultNavigationMethod';
+  static const String prefCustomBrfProfiles = 'customBrfProfiles';
+  static const String prefPersistedActiveTarget = 'persistedActiveTarget';
 
-  static const int routingModeAzimuth = 0;
-  static const int routingModeRoute = 1;
-  static const int routingModeDefault = routingModeAzimuth;
-  static const String routingProfileDefault = 'foot';
+  static const String navMethodAzimuth = 'azimuth';
+  static const String navMethodDefault = navMethodAzimuth;
+  static const String brouterProfilesDir =
+      '/sdcard/Android/media/btools.routingapp/brouter/profiles2';
 
   static const int loadedTrackColorDefault = 0xFF00BCD4;
   static const int trackColorDefault = 0xFFF44336;

@@ -5,7 +5,7 @@ class MapActionButtons extends StatelessWidget {
   final VoidCallback onHereFromClipboard;
   final VoidCallback? onTargetPressed;
   final VoidCallback? onTargetLongPressed;
-  final String targetText;
+  final bool hasActiveTarget;
   final bool targetEnabled;
   final bool hereEnabled;
 
@@ -15,7 +15,7 @@ class MapActionButtons extends StatelessWidget {
     required this.onHereFromClipboard,
     this.onTargetPressed,
     this.onTargetLongPressed,
-    this.targetText = 'ЦЕЛЬ',
+    this.hasActiveTarget = false,
     this.targetEnabled = false,
     this.hereEnabled = true,
   });
@@ -26,12 +26,13 @@ class MapActionButtons extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildSquareButton(
-          label: targetText,
+          label: 'ЦЕЛЬ',
           icon: Icons.flag,
-          color: targetText == 'ГОУ' ? Colors.red : Colors.amber[700]!,
+          color: hasActiveTarget ? Colors.red : Colors.amber[700]!,
           onTap: onTargetPressed,
           onLongPress: onTargetLongPressed,
           enabled: targetEnabled,
+          longPressEnabled: true,
         ),
         const SizedBox(height: 12),
         _buildSquareButton(
@@ -54,11 +55,6 @@ class MapActionButtons extends StatelessWidget {
     VoidCallback? onTap,
     VoidCallback? onLongPress,
     bool enabled = true,
-    // Короткий тап подчиняется enabled, длинный — longPressEnabled.
-    // Для кнопки Я ЗДЕСЬ это значит: в follow mode короткий тап заблокирован
-    // (якорь ложится в прицел, а прицел смещён), длинный доступен всегда,
-    // потому что меню Я ЗДЕСЬ (буфер, GPX, ФотоСевер, КП) от прицела не зависит.
-    // При рефакторинге не связывать longPressEnabled с enabled без причины.
     bool longPressEnabled = true,
   }) {
     return Opacity(
